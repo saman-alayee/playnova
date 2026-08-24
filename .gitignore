@@ -1,0 +1,51 @@
+# Root gitignore — PlayNova monorepo
+
+# Secrets & env
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencies
+**/vendor/
+**/node_modules/
+
+# Frontend build
+frontend/.nuxt/
+frontend/.output/
+frontend/dist/
+
+# Laravel
+PlayNova/public/hot
+PlayNova/public/storage
+PlayNova/storage/*.key
+PlayNova/storage/logs/*
+!PlayNova/storage/logs/.gitignore
+PlayNova/storage/framework/cache/data/*
+PlayNova/storage/framework/sessions/*
+PlayNova/storage/framework/views/*
+PlayNova/bootstrap/cache/*.php
+!PlayNova/bootstrap/cache/.gitignore
+
+# Local dumps / extracted copies / one-off scripts (not part of app)
+files/
+public_html/
+backup-all-once.php
+download-backup-once.php
+export-db-once.php
+zip-project-once.php
+*-status*.txt
+*-response*.txt
+compress-response.txt
+da-backup-response.txt
+
+# IDE / OS
+.idea/
+.vscode/
+.fleet/
+*.swp
+.DS_Store
+Thumbs.db
+*.log

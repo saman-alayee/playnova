@@ -1,0 +1,5 @@
+# Legacy path: redirect old PlayNova/public URLs to site root
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(.*)$ /$1 [L,R=301]
+</IfModule>
