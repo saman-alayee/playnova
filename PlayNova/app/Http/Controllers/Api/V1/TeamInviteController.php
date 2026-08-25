@@ -3,16 +3,17 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\V1\TeamInviteResource;
-use App\Jobs\SendUserNotificationJob;
+use App\Jobs\ExpireTeamInviteJob;
 use App\Models\Registration;
 use App\Models\TeamInvite;
 use App\Models\Tournament;
 use App\Models\User;
-use App\Services\JalaliService;
 use App\Services\TeamInviteService;
 use App\Services\TeamReservationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class TeamInviteController extends BaseApiController
 {
@@ -35,17 +36,29 @@ class TeamInviteController extends BaseApiController
     public function store(Request $request, Tournament $tournament, TeamReservationService $service): JsonResponse
     {
         $user = $request->user();
+        $requiredInvites = $tournament->requiredTeammateInvites();
 
-        $request->validate([
-            'teammate_cod_id' => 'required|string|max:100',
+        $rules = [
             'accept_rules' => 'required|accepted',
-        ], [
+        ];
+
+        if ($requiredInvites > 1) {
+            $rules['teammate_cod_ids'] = "required|array|size:{$requiredInvites}";
+            $rules['teammate_cod_ids.*'] = 'required|string|max:100|distinct';
+        } else {
+            $rules['teammate_cod_id'] = 'required|string|max:100';
+        }
+
+        $request->validate($rules, [
             'teammate_cod_id.required' => 'آیدی کالاف هم‌تیمی الزامی است.',
+            'teammate_cod_ids.required' => 'آیدی کالاف هم‌تیمی‌ها الزامی است.',
+            'teammate_cod_ids.size' => "برای این مسابقه {$requiredInvites} آیدی هم‌تیمی لازم است.",
+            'teammate_cod_ids.*.distinct' => 'آیدی‌های هم‌تیمی نباید تکراری باشند.',
             'accept_rules.accepted' => 'برای ثبت‌نام باید قوانین را بپذیرید.',
         ]);
 
-        if ($tournament->seatMode() < 2) {
-            return $this->error('رزرو تیمی فقط برای مسابقات دو نفره فعال است.', 422);
+        if (! $tournament->supportsTeamInvite()) {
+            return $this->error('رزرو تیمی فقط برای مسابقات چندنفره فعال است.', 422);
         }
 
         if (! $tournament->acceptsRegistration()) {
@@ -60,31 +73,46 @@ class TeamInviteController extends BaseApiController
             return $this->error('جایگاه تیمی خالی برای این مسابقه وجود ندارد.', 422);
         }
 
-        $codId = trim($request->teammate_cod_id);
-        $invitee = User::where('cod_id', $codId)->first();
-
-        if (! $invitee) {
-            return $this->error('کاربری با این آیدی کالاف یافت نشد.', 422);
-        }
+        $codIds = $requiredInvites > 1
+            ? array_map('trim', $request->input('teammate_cod_ids', []))
+            : [trim((string) $request->teammate_cod_id)];
 
         $userId = (int) $user->id;
-        $inviteeId = (int) $invitee->id;
+        $inviteeIds = [];
 
-        if ($inviteeId === $userId) {
-            return $this->error('نمی‌توانید خودتان را به عنوان هم‌تیمی انتخاب کنید.', 422);
+        foreach ($codIds as $codId) {
+            if ($codId === '') {
+                return $this->error('آیدی کالاف هم‌تیمی نمی‌تواند خالی باشد.', 422);
+            }
+
+            $invitee = User::where('cod_id', $codId)->first();
+            if (! $invitee) {
+                return $this->error("کاربری با آیدی «{$codId}» یافت نشد.", 422);
+            }
+
+            if ((int) $invitee->id === $userId) {
+                return $this->error('نمی‌توانید خودتان را به عنوان هم‌تیمی انتخاب کنید.', 422);
+            }
+
+            $inviteeIds[] = (int) $invitee->id;
+        }
+
+        if (count($inviteeIds) !== count(array_unique($inviteeIds))) {
+            return $this->error('هم‌تیمی‌های انتخاب‌شده نباید تکراری باشند.', 422);
         }
 
         Registration::where('user_id', $userId)
             ->where('tournament_id', $tournament->id)
             ->whereNull('seat_number')
-            ->where('status', 'waiting')
             ->where(function ($q) {
                 $q->where('reservation_type', 'solo')->orWhereNull('reservation_type');
             })
             ->delete();
 
+        $participantIds = array_merge([$userId], $inviteeIds);
+
         $existingReg = Registration::where('tournament_id', $tournament->id)
-            ->whereIn('user_id', [$userId, $inviteeId])
+            ->whereIn('user_id', $participantIds)
             ->where(function ($q) {
                 $q->whereNotNull('seat_number')
                     ->orWhere(function ($q2) {
@@ -95,16 +123,14 @@ class TeamInviteController extends BaseApiController
             ->exists();
 
         if ($existingReg) {
-            return $this->error('یکی از شما قبلاً در این مسابقه ثبت‌نام کرده است.', 422);
+            return $this->error('یکی از اعضای تیم قبلاً در این مسابقه ثبت‌نام کرده است.', 422);
         }
 
         $pendingInvite = TeamInvite::where('tournament_id', $tournament->id)
             ->where('status', TeamInvite::STATUS_PENDING)
-            ->where(function ($q) use ($userId, $inviteeId) {
-                $q->where('inviter_id', $userId)
-                    ->orWhere('invitee_id', $userId)
-                    ->orWhere('inviter_id', $inviteeId)
-                    ->orWhere('invitee_id', $inviteeId);
+            ->where(function ($q) use ($participantIds) {
+                $q->whereIn('inviter_id', $participantIds)
+                    ->orWhereIn('invitee_id', $participantIds);
             })
             ->exists();
 
@@ -113,44 +139,55 @@ class TeamInviteController extends BaseApiController
         }
 
         try {
-            Registration::create([
-                'user_id' => $user->id,
-                'tournament_id' => $tournament->id,
-                'status' => 'waiting',
-                'reservation_type' => 'team',
-            ]);
+            $invites = DB::transaction(function () use ($user, $tournament, $userId, $inviteeIds) {
+                Registration::create([
+                    'user_id' => $user->id,
+                    'tournament_id' => $tournament->id,
+                    'status' => 'waiting',
+                    'reservation_type' => 'team',
+                ]);
 
-            $invite = TeamInvite::create([
-                'tournament_id' => $tournament->id,
-                'inviter_id' => $userId,
-                'invitee_id' => $inviteeId,
-                'status' => TeamInvite::STATUS_PENDING,
-            ]);
+                $teamGroupId = (string) Str::uuid();
+                $expiresAt = now()->addSeconds(TeamInvite::INVITE_TTL_SECONDS);
+                $created = [];
+
+                foreach ($inviteeIds as $inviteeId) {
+                    $created[] = TeamInvite::create([
+                        'tournament_id' => $tournament->id,
+                        'team_group_id' => count($inviteeIds) > 1 ? $teamGroupId : null,
+                        'inviter_id' => $userId,
+                        'invitee_id' => $inviteeId,
+                        'status' => TeamInvite::STATUS_PENDING,
+                        'expires_at' => $expiresAt,
+                    ]);
+                }
+
+                return $created;
+            });
+
+            foreach ($invites as $invite) {
+                ExpireTeamInviteJob::dispatch($invite->id)->delay(now()->addSeconds(TeamInvite::INVITE_TTL_SECONDS));
+            }
         } catch (\Throwable $e) {
             report($e);
 
             return $this->error('ارسال درخواست رزرو تیمی ناموفق بود. لطفاً دوباره تلاش کنید.', 500);
         }
 
-        $startTime = $tournament->start_date
-            ? JalaliService::formatTime($tournament->start_date)
-            : 'زمان اعلام‌شده';
+        foreach ($participantIds as $participantId) {
+            $this->teamInvites->forgetForUser($participantId);
+        }
 
-        SendUserNotificationJob::dispatch(
-            $inviteeId,
-            'درخواست رزرو تیمی',
-            "{$user->username} ({$user->cod_id}) از شما برای شرکت در «{$tournament->title}» در ساعت {$startTime} با هزینه ورودی " . number_format($tournament->entry_fee) . " تومان درخواست داده است.",
-            'team_invite'
-        );
+        $firstInvite = $invites[0];
+        $firstInvite->load(['tournament', 'inviter', 'invitee']);
 
-        $this->teamInvites->forgetForUser($userId);
-        $this->teamInvites->forgetForUser($inviteeId);
-
-        $invite->load(['tournament', 'inviter', 'invitee']);
+        $message = count($invites) > 1
+            ? 'درخواست‌های رزرو تیمی برای ' . count($invites) . ' هم‌تیمی ارسال شد. پس از تأیید همه، جایگاه تیمی رزرو می‌شود.'
+            : "درخواست رزرو تیمی برای «{$firstInvite->invitee?->cod_id}» ارسال شد. پس از تأیید هم‌تیمی، جایگاه تیمی رزرو می‌شود.";
 
         return $this->success(
-            new TeamInviteResource($invite),
-            "درخواست رزرو تیمی برای «{$invitee->cod_id}» ارسال شد. پس از تأیید هم‌تیمی، جایگاه تیمی رزرو می‌شود.",
+            TeamInviteResource::collection(collect($invites)->each->load(['tournament', 'inviter', 'invitee'])),
+            $message,
             201
         );
     }
@@ -171,8 +208,7 @@ class TeamInviteController extends BaseApiController
             return $this->error('تأیید رزرو تیمی ناموفق بود. لطفاً دوباره تلاش کنید.', 500);
         }
 
-        $this->teamInvites->forgetForUser((int) $invite->inviter_id);
-        $this->teamInvites->forgetForUser((int) $invite->invitee_id);
+        $this->forgetInviteCaches($invite);
 
         if (! $result['ok']) {
             return $this->error($result['message'], 422);
@@ -183,7 +219,7 @@ class TeamInviteController extends BaseApiController
         return $this->success(new TeamInviteResource($invite), $result['message']);
     }
 
-    public function decline(Request $request, TeamInvite $invite): JsonResponse
+    public function decline(Request $request, TeamInvite $invite, TeamReservationService $service): JsonResponse
     {
         $user = $request->user();
 
@@ -192,33 +228,32 @@ class TeamInviteController extends BaseApiController
         }
 
         try {
-            $invite->update(['status' => TeamInvite::STATUS_DECLINED]);
+            if ($invite->team_group_id) {
+                $service->cancelGroup($invite->team_group_id, (int) $invite->inviter_id, (int) $invite->tournament_id);
+                TeamInvite::query()
+                    ->where('team_group_id', $invite->team_group_id)
+                    ->where('status', TeamInvite::STATUS_PENDING)
+                    ->update(['status' => TeamInvite::STATUS_DECLINED]);
+            } else {
+                $invite->update(['status' => TeamInvite::STATUS_DECLINED]);
 
-            Registration::where('user_id', $invite->inviter_id)
-                ->where('tournament_id', $invite->tournament_id)
-                ->whereNull('seat_number')
-                ->delete();
-
-            $tournament = $invite->tournament;
-            SendUserNotificationJob::dispatch(
-                $invite->inviter_id,
-                'رد درخواست تیمی',
-                "{$user->username} درخواست رزرو تیمی شما برای «{$tournament->title}» را رد کرد.",
-                'team_invite_declined'
-            );
+                Registration::where('user_id', $invite->inviter_id)
+                    ->where('tournament_id', $invite->tournament_id)
+                    ->whereNull('seat_number')
+                    ->delete();
+            }
         } catch (\Throwable $e) {
             report($e);
 
             return $this->error('رد درخواست تیمی ناموفق بود. لطفاً دوباره تلاش کنید.', 500);
         }
 
-        $this->teamInvites->forgetForUser((int) $invite->inviter_id);
-        $this->teamInvites->forgetForUser((int) $invite->invitee_id);
+        $this->forgetInviteCaches($invite);
 
         return $this->success(null, 'درخواست تیمی رد شد.');
     }
 
-    public function cancel(Request $request, TeamInvite $invite): JsonResponse
+    public function cancel(Request $request, TeamInvite $invite, TeamReservationService $service): JsonResponse
     {
         $user = $request->user();
 
@@ -227,28 +262,46 @@ class TeamInviteController extends BaseApiController
         }
 
         try {
-            $invite->update(['status' => TeamInvite::STATUS_CANCELLED]);
+            if ($invite->team_group_id) {
+                $service->cancelGroup($invite->team_group_id, (int) $user->id, (int) $invite->tournament_id);
+                TeamInvite::query()
+                    ->where('team_group_id', $invite->team_group_id)
+                    ->where('status', TeamInvite::STATUS_PENDING)
+                    ->update(['status' => TeamInvite::STATUS_CANCELLED]);
+            } else {
+                $invite->update(['status' => TeamInvite::STATUS_CANCELLED]);
 
-            Registration::where('user_id', $user->id)
-                ->where('tournament_id', $invite->tournament_id)
-                ->whereNull('seat_number')
-                ->delete();
-
-            SendUserNotificationJob::dispatch(
-                $invite->invitee_id,
-                'لغو درخواست تیمی',
-                "{$user->username} درخواست رزرو تیمی برای «{$invite->tournament->title}» را لغو کرد.",
-                'team_invite_cancelled'
-            );
+                Registration::where('user_id', $user->id)
+                    ->where('tournament_id', $invite->tournament_id)
+                    ->whereNull('seat_number')
+                    ->delete();
+            }
         } catch (\Throwable $e) {
             report($e);
 
             return $this->error('لغو درخواست تیمی ناموفق بود. لطفاً دوباره تلاش کنید.', 500);
         }
 
+        $this->forgetInviteCaches($invite);
+
+        return $this->success(null, 'درخواست تیمی لغو شد.');
+    }
+
+    protected function forgetInviteCaches(TeamInvite $invite): void
+    {
         $this->teamInvites->forgetForUser((int) $invite->inviter_id);
         $this->teamInvites->forgetForUser((int) $invite->invitee_id);
 
-        return $this->success(null, 'درخواست تیمی لغو شد.');
+        if ($invite->team_group_id) {
+            $relatedIds = TeamInvite::query()
+                ->where('team_group_id', $invite->team_group_id)
+                ->pluck('invitee_id')
+                ->merge(TeamInvite::query()->where('team_group_id', $invite->team_group_id)->pluck('inviter_id'))
+                ->unique();
+
+            foreach ($relatedIds as $relatedId) {
+                $this->teamInvites->forgetForUser((int) $relatedId);
+            }
+        }
     }
 }

@@ -12,17 +12,24 @@ const flash = useState<{ success?: string; error?: string; info?: string } | nul
 
 const step = ref<'rules' | 'type' | 'team'>('rules')
 const acceptRules = ref(false)
-const teammateCodId = ref('')
+const teammateCodIds = ref<string[]>([''])
 const loading = ref(false)
 const errorMessage = ref('')
 
 const rules = ref<RuleSection[]>([])
 
+const requiredInvites = computed(() => {
+  const mode = registerTournament.value?.seat_mode ?? 1
+  return Math.max(0, mode - 1)
+})
+
+const supportsTeam = computed(() => requiredInvites.value >= 1)
+
 watch(registerOpen, async (open) => {
   if (open) {
     step.value = 'rules'
     acceptRules.value = false
-    teammateCodId.value = ''
+    teammateCodIds.value = Array.from({ length: requiredInvites.value || 1 }, () => '')
     errorMessage.value = ''
     try {
       rules.value = await api.rules()
@@ -32,7 +39,10 @@ watch(registerOpen, async (open) => {
   }
 })
 
-const supportsTeam = computed(() => (registerTournament.value?.seat_mode ?? 1) >= 2)
+watch(requiredInvites, (count) => {
+  if (count <= 0) return
+  teammateCodIds.value = Array.from({ length: count }, (_, i) => teammateCodIds.value[i] ?? '')
+})
 
 function close() {
   closeRegisterModal()
@@ -60,13 +70,20 @@ async function registerSolo() {
   }
 }
 
+const teamFormValid = computed(() =>
+  teammateCodIds.value.length === requiredInvites.value
+  && teammateCodIds.value.every((id) => id.trim() !== '')
+  && new Set(teammateCodIds.value.map((id) => id.trim())).size === teammateCodIds.value.length,
+)
+
 async function submitTeamInvite() {
   const t = registerTournament.value
-  if (!t || !teammateCodId.value.trim()) return
+  if (!t || !teamFormValid.value) return
   loading.value = true
   errorMessage.value = ''
   try {
-    await api.tournaments.teamInvite(t.id, teammateCodId.value.trim())
+    const ids = teammateCodIds.value.map((id) => id.trim())
+    await api.tournaments.teamInvite(t.id, ids.length === 1 ? ids[0] : ids)
     close()
     flash.value = { success: 'درخواست رزرو تیمی ارسال شد.' }
     await navigateTo('/')
@@ -109,7 +126,7 @@ async function submitTeamInvite() {
               type="button"
               class="btn-glow-success flex-1 rounded-lg py-2 text-sm font-bold disabled:opacity-50"
               :disabled="!acceptRules"
-              @click="step = 'type'"
+              @click="step = supportsTeam ? 'type' : 'type'"
             >
               ادامه
             </button>
@@ -137,7 +154,7 @@ async function submitTeamInvite() {
               class="w-full bg-secondary hover:opacity-90 text-white rounded-lg py-3 text-sm font-bold"
               @click="step = 'team'"
             >
-              👥 رزرو تیمی — دعوت هم‌تیمی
+              👥 رزرو تیمی — دعوت {{ requiredInvites }} هم‌تیمی
             </button>
             <button type="button" class="w-full bg-gray-600 text-white rounded-lg py-2 text-sm font-bold" @click="step = 'rules'">
               بازگشت
@@ -148,22 +165,29 @@ async function submitTeamInvite() {
         <div v-else>
           <h3 class="font-bold text-primary mb-3">رزرو تیمی</h3>
           <p class="text-sm text-gray-400 mb-4">
-            آیدی کالاف هم‌تیمی خود را وارد کنید. در صورت تأیید، هر دو در یک تیم قرار می‌گیرید.
+            {{ requiredInvites === 1
+              ? 'آیدی کالاف هم‌تیمی خود را وارد کنید. در صورت تأیید، هر دو در یک تیم قرار می‌گیرید.'
+              : `آیدی کالاف ${requiredInvites} هم‌تیمی را وارد کنید. پس از تأیید همه، تیم ۴ نفره رزرو می‌شود.` }}
           </p>
-          <input
-            v-model="teammateCodId"
-            type="text"
-            placeholder="آیدی کالاف هم‌تیمی"
-            class="form-input w-full mb-2"
-          >
+          <div class="space-y-2 mb-2">
+            <input
+              v-for="(_, index) in teammateCodIds"
+              :key="index"
+              v-model="teammateCodIds[index]"
+              type="text"
+              :placeholder="`آیدی کالاف هم‌تیمی ${index + 1}`"
+              class="form-input w-full"
+            >
+          </div>
           <p class="text-xs text-yellow-400 mb-4">
             برای ارسال درخواست، موجودی شما باید حداقل {{ Number(registerTournament.entry_fee).toLocaleString('fa-IR') }} تومان باشد.
+            هر درخواست ۱۵ ثانیه برای پاسخ فرصت دارد.
           </p>
           <div class="flex gap-3">
             <button
               type="button"
               class="flex-1 bg-secondary text-white rounded-lg py-2 text-sm font-bold disabled:opacity-50"
-              :disabled="loading || !teammateCodId.trim()"
+              :disabled="loading || !teamFormValid"
               @click="submitTeamInvite"
             >
               {{ loading ? '...' : 'ارسال درخواست' }}

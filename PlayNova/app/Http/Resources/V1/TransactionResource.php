@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Support\IranDate;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,6 +21,7 @@ class TransactionResource extends JsonResource
             'rejection_reason' => $this->rejectionReason(),
             'displayed_at' => $this->displayedAt()?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
+            'created_at_display' => IranDate::formatString($this->created_at),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
     }

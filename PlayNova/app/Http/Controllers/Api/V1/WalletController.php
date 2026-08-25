@@ -7,6 +7,7 @@ use App\Http\Resources\V1\UserResource;
 use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Modules\Audit\Services\ActivityLogService;
 use App\Services\ZibalGatewayService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,8 +17,10 @@ use Illuminate\Support\Str;
 
 class WalletController extends BaseApiController
 {
-    public function __construct(protected ZibalGatewayService $zibal)
-    {
+    public function __construct(
+        protected ZibalGatewayService $zibal,
+        protected ActivityLogService $activity,
+    ) {
     }
 
     public function index(Request $request): JsonResponse
@@ -83,6 +86,11 @@ class WalletController extends BaseApiController
                     'description' => 'شارژ کیف پول (حالت شبیه‌سازی)',
                     'reference_id' => $referenceId,
                     'status' => 'completed',
+                ]);
+
+                $this->activity->logWallet($user, 'deposit', 'واریز به کیف پول (شبیه‌سازی)', [
+                    'amount' => $amount,
+                    'reference_id' => $referenceId,
                 ]);
 
                 if ($isFirstDeposit && $user->referred_by) {
@@ -164,29 +172,48 @@ class WalletController extends BaseApiController
 
         $transaction = null;
 
-        DB::transaction(function () use ($user, $amount, &$transaction) {
-            $user->wallet = round($user->wallet - $amount, 2);
-            $user->save();
+        try {
+            DB::transaction(function () use ($user, $amount, &$transaction) {
+                $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
 
-            $cardNumber = preg_replace('/\D+/', '', (string) $user->bank_card_number);
-            $accountName = trim((string) ($user->bank_account_name ?? ''));
-            $description = 'درخواست برداشت وجه';
-            if ($cardNumber !== '') {
-                $description .= ' | کارت: ' . $cardNumber;
-            }
-            if ($accountName !== '') {
-                $description .= ' | صاحب حساب: ' . $accountName;
+                if ($lockedUser->wallet < $amount) {
+                    throw new \RuntimeException('insufficient_balance');
+                }
+
+                $lockedUser->wallet = round($lockedUser->wallet - $amount, 2);
+                $lockedUser->save();
+
+                $cardNumber = preg_replace('/\D+/', '', (string) $lockedUser->bank_card_number);
+                $accountName = trim((string) ($lockedUser->bank_account_name ?? ''));
+                $description = 'درخواست برداشت وجه';
+                if ($cardNumber !== '') {
+                    $description .= ' | کارت: ' . $cardNumber;
+                }
+                if ($accountName !== '') {
+                    $description .= ' | صاحب حساب: ' . $accountName;
+                }
+
+                $transaction = $lockedUser->transactions()->create([
+                    'type' => 'withdraw',
+                    'amount' => $amount,
+                    'balance_after' => $lockedUser->wallet,
+                    'description' => $description,
+                    'reference_id' => 'WD-' . Str::upper(Str::random(10)),
+                    'status' => 'pending',
+                ]);
+
+                $this->activity->logWallet($lockedUser, 'withdraw_request', 'درخواست برداشت از کیف پول', [
+                    'amount' => $amount,
+                    'reference_id' => $transaction->reference_id,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'insufficient_balance') {
+                return $this->error('موجودی کیف پول شما کافی نیست.', 422);
             }
 
-            $transaction = $user->transactions()->create([
-                'type' => 'withdraw',
-                'amount' => $amount,
-                'balance_after' => $user->wallet,
-                'description' => $description,
-                'reference_id' => 'WD-' . Str::upper(Str::random(10)),
-                'status' => 'pending',
-            ]);
-        });
+            throw $e;
+        }
 
         $user->refresh();
 
@@ -272,7 +299,14 @@ class WalletController extends BaseApiController
         }
 
         DB::transaction(function () use ($user, $amount, $trackId, $transaction, $result, $pending) {
-            if ($transaction && $transaction->status === 'completed') {
+            $alreadyCompleted = Transaction::query()
+                ->where('reference_id', (string) $trackId)
+                ->where('type', 'deposit')
+                ->where('status', 'completed')
+                ->lockForUpdate()
+                ->exists();
+
+            if ($alreadyCompleted) {
                 return;
             }
 
@@ -280,11 +314,12 @@ class WalletController extends BaseApiController
                 $transaction->delete();
             }
 
-            $isFirstDeposit = ! $user->first_deposit_done;
+            $lockedUser = User::query()->whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $isFirstDeposit = ! $lockedUser->first_deposit_done;
 
-            $user->wallet = round($user->wallet + $amount, 2);
-            $user->first_deposit_done = true;
-            $user->save();
+            $lockedUser->wallet = round($lockedUser->wallet + $amount, 2);
+            $lockedUser->first_deposit_done = true;
+            $lockedUser->save();
 
             $refNumber = $result['ref_number'] ?? null;
             $description = 'شارژ کیف پول از طریق زیبال';
@@ -292,17 +327,23 @@ class WalletController extends BaseApiController
                 $description .= ' | ref: ' . $refNumber;
             }
 
-            $user->transactions()->create([
+            $lockedUser->transactions()->create([
                 'type' => 'deposit',
                 'amount' => $amount,
-                'balance_after' => $user->wallet,
+                'balance_after' => $lockedUser->wallet,
                 'description' => $description,
                 'reference_id' => (string) $trackId,
                 'status' => 'completed',
             ]);
 
-            if ($isFirstDeposit && $user->referred_by) {
-                $referrer = User::find($user->referred_by);
+            app(ActivityLogService::class)->logWallet($lockedUser, 'deposit', 'واریز به کیف پول', [
+                'amount' => $amount,
+                'reference_id' => (string) $trackId,
+                'gateway' => 'zibal',
+            ]);
+
+            if ($isFirstDeposit && $lockedUser->referred_by) {
+                $referrer = User::query()->whereKey($lockedUser->referred_by)->lockForUpdate()->first();
                 if ($referrer) {
                     $bonusPercent = (float) Setting::get('referral_bonus_percent', 5);
                     $bonus = round($amount * ($bonusPercent / 100), 2);
@@ -310,8 +351,8 @@ class WalletController extends BaseApiController
                         $referrer->creditWallet(
                             $bonus,
                             'referral_bonus',
-                            'پاداش معرفی کاربر: ' . $user->username,
-                            'referral_' . $user->id
+                            'پاداش معرفی کاربر: ' . $lockedUser->username,
+                            'referral_' . $lockedUser->id
                         );
                     }
                 }

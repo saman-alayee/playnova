@@ -26,14 +26,15 @@ async function submit() {
   errors.value = []
   try {
     const result = await api.auth.register({ ...form })
-    if (result.verify_token) {
-      await navigateTo(`/register/verify/${result.verify_token}`)
+    if (result.verification_required && result.token) {
+      await navigateTo(`/register/verify/${result.token}`)
       return
     }
-    if (result.token) {
+    if (result.token && result.user) {
       api.setToken(result.token)
-      await auth.fetchUser()
+      auth.setUser(result.user)
       await navigateTo('/')
+      return
     }
   } catch (e: unknown) {
     const err = e as { message?: string; data?: { errors?: Record<string, string[]> } }
@@ -49,7 +50,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="max-w-md mx-auto bg-dark-800 border border-dark-600 rounded-xl p-6">
+  <div class="auth-page max-w-md mx-auto bg-dark-800 border border-dark-600 rounded-xl p-6">
     <h1 class="text-2xl font-bold mb-6 text-center">ثبت‌نام</h1>
 
     <div v-if="errors.length" class="bg-danger/20 border border-danger/50 text-danger px-4 py-3 rounded-xl text-sm mb-4">

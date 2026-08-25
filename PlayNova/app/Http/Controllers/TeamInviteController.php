@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\SendUserNotificationJob;
 use App\Models\Registration;
 use App\Models\TeamInvite;
 use App\Models\Tournament;
@@ -153,17 +152,6 @@ class TeamInviteController extends Controller
             return back()->with('error', 'ارسال درخواست رزرو تیمی ناموفق بود. لطفاً دوباره تلاش کنید.');
         }
 
-        $startTime = $tournament->start_date
-            ? JalaliService::formatTime($tournament->start_date)
-            : 'زمان اعلام‌شده';
-
-        SendUserNotificationJob::dispatch(
-            $inviteeId,
-            'درخواست رزرو تیمی',
-            "{$user->username} ({$user->cod_id}) از شما برای شرکت در «{$tournament->title}» در ساعت {$startTime} با هزینه ورودی " . number_format($tournament->entry_fee) . " تومان درخواست داده است.",
-            'team_invite'
-        );
-
         $this->teamInvites->forgetForUser($userId);
         $this->teamInvites->forgetForUser($inviteeId);
 
@@ -213,14 +201,6 @@ class TeamInviteController extends Controller
                 ->where('tournament_id', $invite->tournament_id)
                 ->whereNull('seat_number')
                 ->delete();
-
-            $tournament = $invite->tournament;
-            SendUserNotificationJob::dispatch(
-                $invite->inviter_id,
-                'رد درخواست تیمی',
-                "{$user->username} درخواست رزرو تیمی شما برای «{$tournament->title}» را رد کرد.",
-                'team_invite_declined'
-            );
         } catch (\Throwable $e) {
             report($e);
 
@@ -248,13 +228,6 @@ class TeamInviteController extends Controller
                 ->where('tournament_id', $invite->tournament_id)
                 ->whereNull('seat_number')
                 ->delete();
-
-            SendUserNotificationJob::dispatch(
-                $invite->invitee_id,
-                'لغو درخواست تیمی',
-                "{$user->username} درخواست رزرو تیمی برای «{$invite->tournament->title}» را لغو کرد.",
-                'team_invite_cancelled'
-            );
         } catch (\Throwable $e) {
             report($e);
 

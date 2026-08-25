@@ -31,4 +31,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'avalai' => [
+        'api_key' => env('AVALAI_API_KEY'),
+        'base_url' => env('AVALAI_BASE_URL', 'https://api.avalai.ir/v1'),
+        'vision_model' => env('AVALAI_VISION_MODEL', 'gpt-4o'),
+        'timeout' => (int) env('AVALAI_TIMEOUT', 120),
+    ],
+
 ];

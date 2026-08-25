@@ -1,9 +1,9 @@
 <script setup lang="ts">
 const auth = useAuthStore()
-const config = useRuntimeConfig()
+const { mediaUrl } = useMediaUrl()
 const year = new Date().getFullYear()
 
-const logoUrl = computed(() => auth.logoUrl || `${config.public.backendUrl}/logo.png`)
+const logoUrl = computed(() => mediaUrl(auth.logoUrl))
 </script>
 
 <template>
@@ -12,7 +12,17 @@ const logoUrl = computed(() => auth.logoUrl || `${config.public.backendUrl}/logo
     <div class="container mx-auto px-4 max-w-7xl site-footer__inner">
       <div class="site-footer__grid">
         <div>
-          <img :src="logoUrl" alt="PlayNova" class="site-footer__logo">
+          <img
+            v-if="logoUrl"
+            :src="logoUrl"
+            alt="PlayNova"
+            class="site-footer__logo"
+            width="180"
+            height="64"
+            loading="lazy"
+            decoding="async"
+          >
+          <p v-else class="text-xl font-black text-gradient mb-3">PlayNova</p>
           <p class="site-footer__desc">
             پلتفرم برگزاری مسابقات آنلاین Call of Duty Mobile — رقابت، هیجان و جوایز نقدی.
           </p>
@@ -51,12 +61,17 @@ const logoUrl = computed(() => auth.logoUrl || `${config.public.backendUrl}/logo
             <a
               referrerpolicy="origin"
               target="_blank"
+              rel="noopener noreferrer"
               href="https://trustseal.enamad.ir/?id=766546&Code=sORWoyVCo0DL6d7gLFAqrTrHvwchtiBu"
             >
               <img
                 referrerpolicy="origin"
                 src="https://trustseal.enamad.ir/logo.aspx?id=766546&Code=sORWoyVCo0DL6d7gLFAqrTrHvwchtiBu"
                 alt="نماد اعتماد"
+                width="125"
+                height="136"
+                loading="lazy"
+                decoding="async"
                 style="cursor:pointer"
               >
             </a>

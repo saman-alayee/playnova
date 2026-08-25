@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Admin;
 
+use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
 use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Http\Resources\V1\TournamentResource;
 use App\Http\Resources\V1\TransactionResource;
@@ -17,6 +18,7 @@ use Illuminate\Http\Request;
 
 class ResourceController extends BaseApiController
 {
+    use AuthorizesAdmin;
     public function tournaments(): JsonResponse
     {
         $this->authorizeAdmin();
@@ -41,7 +43,14 @@ class ResourceController extends BaseApiController
             });
         }
 
-        $users = $query->orderByDesc('created_at')->paginate(30);
+        $users = $query
+            ->with(['registrations' => function ($q) {
+                $q->whereNotNull('seat_number')
+                    ->with('tournament:id,title,status')
+                    ->orderByDesc('updated_at');
+            }])
+            ->orderByDesc('created_at')
+            ->paginate(30);
 
         return $this->paginated($users, UserResource::class);
     }
@@ -117,13 +126,5 @@ class ResourceController extends BaseApiController
         ContentCacheService::forgetAll();
 
         return $this->success(null, 'تنظیمات سایت ذخیره شد.');
-    }
-
-    protected function authorizeAdmin(): void
-    {
-        $user = request()->user();
-        if (! $user || ! $user->isAdmin()) {
-            abort(403, 'دسترسی ادمین لازم است.');
-        }
     }
 }

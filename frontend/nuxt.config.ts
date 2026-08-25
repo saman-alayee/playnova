@@ -1,6 +1,6 @@
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
-  devtools: { enabled: true },
+  devtools: { enabled: process.env.NODE_ENV !== 'production' },
 
   modules: ['@pinia/nuxt', '@nuxtjs/tailwindcss'],
 
@@ -21,10 +21,11 @@ export default defineNuxtConfig({
       ],
       link: [
         { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
-        {
-          rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700;900&display=swap',
-        },
+        { rel: 'icon', type: 'image/png', href: '/favicon-48x48.png', sizes: '48x48' },
+        { rel: 'icon', type: 'image/png', href: '/favicon-96x96.png', sizes: '96x96' },
+        { rel: 'apple-touch-icon', href: '/favicon-192x192.png', sizes: '192x192' },
+        { rel: 'preload', href: '/fonts/vazirmatn-arabic.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
+        { rel: 'preload', href: '/fonts/vazirmatn-latin.woff2', as: 'font', type: 'font/woff2', crossorigin: 'anonymous' },
       ],
     },
   },
@@ -36,7 +37,35 @@ export default defineNuxtConfig({
     },
   },
 
+  experimental: {
+    payloadExtraction: true,
+    defaults: {
+      nuxtLink: {
+        prefetchOn: { visibility: true },
+      },
+    },
+  },
+
+  nitro: {
+    compressPublicAssets: true,
+  },
+
   routeRules: {
+    '/': { swr: 30 },
+    '/rules': { swr: 300 },
+    '/leaderboard': { swr: 60 },
+    '/history': { swr: 60 },
+    '/about': { swr: 3600 },
+    '/privacy': { swr: 3600 },
+    '/contact': { swr: 300 },
+    '/admin/**': { ssr: false },
+    '/profile': { ssr: false },
+    '/wallet': { ssr: false },
+    '/wallet/**': { ssr: false },
+    '/kyc': { ssr: false },
+    '/kyc/**': { ssr: false },
+    '/notifications': { ssr: false },
+    '/notifications/**': { ssr: false },
     '/faq': { redirect: { to: '/tickets', statusCode: 301 } },
     '/register/verify-mobile/**': { redirect: { to: '/register/verify/**', statusCode: 301 } },
     '/admin/settings/site': { redirect: { to: '/admin/site-settings', statusCode: 301 } },

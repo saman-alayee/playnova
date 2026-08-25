@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
 
 const auth = useAuthStore()
 const { openDescriptionModal, openGameLoginModalById, openRegisterModal } = useModals()
+const { formatDate: formatIranDate, formatTime: formatIranTime } = usePersianDateTime()
 
 const regCount = computed(() => {
   const count = props.tournament.registrations_count ?? props.tournament.registered_count ?? 0
@@ -37,12 +38,12 @@ function formatNumber(n: number) {
 
 function formatDate(date?: string | null) {
   if (!date) return '—'
-  return new Date(date).toLocaleDateString('fa-IR')
+  return formatIranDate(date)
 }
 
 function formatTime(date?: string | null) {
   if (!date) return '—'
-  return new Date(date).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })
+  return formatIranTime(date)
 }
 </script>
 

@@ -122,27 +122,36 @@ class TournamentController extends BaseAdminController
 
         DB::transaction(function () use ($request, $tournament) {
             $winner = User::findOrFail($request->winner_id);
+            $referenceId = 'prize_' . $tournament->id;
+
             $tournament->update([
                 'status' => 'ended',
                 'winner_id' => $winner->id,
             ]);
             $winner->increment('wins');
-            $winner->creditWallet(
-                (float) $tournament->prize_pool,
-                'prize',
-                'جایزه مسابقه: ' . $tournament->title,
-                'prize_' . $tournament->id
-            );
 
-            $participantIds = Registration::where('tournament_id', $tournament->id)
-                ->where('status', 'registered')
+            $alreadyPaid = Transaction::where('type', 'prize')
+                ->where('reference_id', $referenceId)
+                ->where('status', 'completed')
+                ->exists();
+
+            if (! $alreadyPaid) {
+                $winner->creditWallet(
+                    (float) $tournament->prize_pool,
+                    'prize',
+                    'جایزه مسابقه: ' . $tournament->title,
+                    $referenceId
+                );
+            }
+
+            $loserIds = Registration::where('tournament_id', $tournament->id)
+                ->whereIn('status', ['confirmed', 'registered'])
+                ->where('user_id', '!=', $winner->id)
                 ->pluck('user_id');
-            User::whereIn('id', $participantIds)
-                ->where('id', '!=', $winner->id)
-                ->increment('losses');
-            Registration::where('tournament_id', $tournament->id)
-                ->where('status', 'registered')
-                ->update(['status' => 'confirmed']);
+
+            if ($loserIds->isNotEmpty()) {
+                User::whereIn('id', $loserIds)->increment('losses');
+            }
         });
 
         $this->invalidateAdminDashboard();

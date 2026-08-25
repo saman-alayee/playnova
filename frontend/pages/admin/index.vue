@@ -16,9 +16,6 @@ const { data, pending, error } = await useAsyncData('admin-dashboard', () => api
     <h1 class="text-2xl font-bold mb-6 text-white">داشبورد مدیریت</h1>
 
     <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
-    <div v-else-if="error" class="bg-dark-800 border border-amber-600/40 rounded-xl p-6 text-amber-200">
-      API مدیریت هنوز در Laravel پیاده‌سازی نشده — این صفحه پس از اتصال `/api/v1/admin/dashboard` فعال می‌شود.
-    </div>
     <template v-else>
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-5">

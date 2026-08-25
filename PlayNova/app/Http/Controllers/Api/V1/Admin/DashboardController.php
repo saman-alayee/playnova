@@ -22,7 +22,10 @@ class DashboardController extends BaseApiController
         $this->authorizeAdmin();
 
         $stats = Cache::remember('admin:dashboard:stats', 300, function () {
-            $totalEntryFees = Transaction::where('type', 'entry_fee')->where('status', 'completed')->sum('amount');
+            $totalEntryFees = Transaction::query()
+                ->whereIn('type', ['fee', 'entry_fee'])
+                ->where('status', 'completed')
+                ->sum('amount');
             $totalPrizesPaid = Transaction::where('type', 'prize')->where('status', 'completed')->sum('amount');
 
             return [

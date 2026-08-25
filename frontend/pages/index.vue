@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { HomeData } from '~/types/api'
 
-definePageMeta({ layout: 'default' })
+definePageMeta({ layout: 'default', keepalive: true })
 
 useHead({ title: 'PlayNova | پلتفرم مسابقات آنلاین Call of Duty Mobile' })
 
 const config = useRuntimeConfig()
 const api = useApi()
+const auth = useAuthStore()
 
 const heroSlides = [
   `${config.public.backendUrl}/hero-slide-1.png`,
@@ -21,9 +22,10 @@ const leagueMeta = {
 }
 
 const activeSlide = ref(0)
+const failedSlides = ref<Record<number, boolean>>({})
 let slideTimer: ReturnType<typeof setInterval> | null = null
 
-const { data, error, pending } = await useAsyncData('home', () => api.home(), {
+const { data, error, pending, refresh } = await useAsyncData('home', () => api.home(), {
   default: () =>
     ({
       active_tournaments: [],
@@ -34,7 +36,18 @@ const { data, error, pending } = await useAsyncData('home', () => api.home(), {
 const activeTournaments = computed(() => data.value?.active_tournaments || [])
 const leagues = computed(() => data.value?.leagues || { beginner: [], intermediate: [], professional: [] })
 
+function shouldLoadSlide(index: number) {
+  return !failedSlides.value[index] && (index === 0 || Math.abs(activeSlide.value - index) <= 1)
+}
+
+function onSlideError(index: number) {
+  failedSlides.value = { ...failedSlides.value, [index]: true }
+}
+
 onMounted(() => {
+  if (auth.isAuthenticated) {
+    void refresh()
+  }
   slideTimer = setInterval(() => {
     activeSlide.value = (activeSlide.value + 1) % heroSlides.length
   }, 5000)
@@ -43,6 +56,10 @@ onMounted(() => {
 onUnmounted(() => {
   if (slideTimer) clearInterval(slideTimer)
 })
+
+watch(() => auth.isAuthenticated, (loggedIn) => {
+  if (loggedIn) void refresh()
+})
 </script>
 
 <template>
@@ -50,11 +67,22 @@ onUnmounted(() => {
     <section class="hero-carousel">
       <div
         v-for="(img, i) in heroSlides"
-        :key="i"
+        :key="img"
         class="hero-slide"
         :class="{ 'is-active': activeSlide === i }"
-        :style="{ backgroundImage: `url('${img}')` }"
       >
+        <img
+          v-if="shouldLoadSlide(i)"
+          :src="img"
+          alt=""
+          class="hero-slide__img"
+          width="1200"
+          height="420"
+          :fetchpriority="i === 0 ? 'high' : 'low'"
+          :loading="i === 0 ? 'eager' : 'lazy'"
+          decoding="async"
+          @error="onSlideError(i)"
+        >
         <div class="hero-content">
           <a href="#special" class="btn-glow-primary hero-cta">مشاهده مسابقات</a>
         </div>
@@ -99,8 +127,8 @@ onUnmounted(() => {
 
     <section id="special" class="mb-8 scroll-mt-24">
       <h2 class="text-lg font-bold mb-4 text-white">مسابقات ویژه</h2>
-      <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
-      <div v-else-if="error" class="text-center py-10 bg-dark-800/50 rounded-2xl border border-dark-600">
+      <div v-if="pending && !activeTournaments.length" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+      <div v-else-if="error && !activeTournaments.length" class="text-center py-10 bg-dark-800/50 rounded-2xl border border-dark-600">
         <p class="text-gray-500">بارگذاری مسابقات ممکن نشد.</p>
       </div>
       <div v-else-if="!activeTournaments.length" class="text-center py-10 bg-dark-800/50 rounded-2xl border border-dark-600">

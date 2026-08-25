@@ -6,6 +6,7 @@ const api = useApi()
 const auth = useAuthStore()
 const flash = useState<{ success?: string; error?: string; info?: string } | null>('flash')
 const { openRegisterModal, openGameLoginModalById } = useModals()
+const { formatDateTime } = usePersianDateTime()
 
 const id = computed(() => route.params.id as string)
 
@@ -96,7 +97,7 @@ const statusColor: Record<string, string> = {
           </div>
           <div class="bg-dark-700 rounded-lg p-3">
             <p class="text-gray-400">تاریخ شروع</p>
-            <p class="font-bold">{{ tournament.start_date ? new Date(tournament.start_date).toLocaleString('fa-IR') : '—' }}</p>
+            <p class="font-bold">{{ formatDateTime(tournament.start_date_display || tournament.start_date) }}</p>
           </div>
           <div class="bg-dark-700 rounded-lg p-3">
             <p class="text-gray-400">ظرفیت</p>

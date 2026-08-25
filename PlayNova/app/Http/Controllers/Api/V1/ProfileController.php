@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\V1\UserResource;
+use App\Modules\Audit\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -10,6 +11,10 @@ use Illuminate\Validation\Rule;
 
 class ProfileController extends BaseApiController
 {
+    public function __construct(protected ActivityLogService $activity)
+    {
+    }
+
     public function show(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -39,8 +44,11 @@ class ProfileController extends BaseApiController
 
         $newCodId = trim((string) ($validated['cod_id'] ?? ''));
         $currentCodId = trim((string) ($user->cod_id ?? ''));
+        $codIdChanged = false;
+        $profileFieldsChanged = [];
 
         if ($newCodId !== $currentCodId) {
+            $codIdChanged = true;
             if ($user->cod_id_changed && $currentCodId !== '') {
                 return $this->error('فقط یک‌بار امکان تغییر آیدی کالاف وجود دارد. برای تغییرات بیشتر تیکت ثبت کنید.', 422, [
                     'cod_id' => ['فقط یک‌بار امکان تغییر آیدی کالاف وجود دارد.'],
@@ -60,6 +68,18 @@ class ProfileController extends BaseApiController
             $user->cod_id = $newCodId !== '' ? $newCodId : null;
         }
 
+        if ($user->username !== $validated['username']) {
+            $profileFieldsChanged['username'] = ['from' => $user->username, 'to' => $validated['username']];
+        }
+
+        if (($user->email ?? '') !== ($validated['email'] ?? '')) {
+            $profileFieldsChanged['email'] = ['from' => $user->email, 'to' => $validated['email'] ?? null];
+        }
+
+        if (($user->mobile ?? '') !== ($validated['mobile'] ?? '')) {
+            $profileFieldsChanged['mobile'] = ['from' => $user->mobile, 'to' => $validated['mobile'] ?? null];
+        }
+
         $user->username = $validated['username'];
         $user->email = $validated['email'] ?? null;
         $user->mobile = $validated['mobile'] ?? null;
@@ -68,9 +88,21 @@ class ProfileController extends BaseApiController
 
         if (! empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);
+            $profileFieldsChanged['password'] = true;
         }
 
         $user->save();
+
+        if ($codIdChanged) {
+            $this->activity->logProfile($user, 'cod_id_changed', 'تغییر آیدی کالاف', [
+                'from' => $currentCodId ?: null,
+                'to' => $newCodId ?: null,
+            ]);
+        }
+
+        if ($profileFieldsChanged !== []) {
+            $this->activity->logProfile($user, 'profile_updated', 'به‌روزرسانی اطلاعات پروفایل', $profileFieldsChanged);
+        }
 
         return $this->success(new UserResource($user), 'اطلاعات پروفایل با موفقیت به‌روزرسانی شد.');
     }

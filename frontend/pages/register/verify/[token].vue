@@ -46,7 +46,7 @@ async function resend() {
 </script>
 
 <template>
-  <div class="max-w-md mx-auto bg-dark-800 border border-dark-600 rounded-xl p-6">
+  <div class="auth-page max-w-md mx-auto bg-dark-800 border border-dark-600 rounded-xl p-6">
     <h1 class="text-2xl font-bold mb-2 text-center">تأیید شماره موبایل</h1>
     <p class="text-sm text-gray-400 text-center mb-6">کد ۶ رقمی ارسال‌شده را وارد کنید.</p>
 

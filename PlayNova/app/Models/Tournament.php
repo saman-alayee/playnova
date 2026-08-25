@@ -24,6 +24,8 @@ class Tournament extends Model
         'status',
         'winner_id',
         'game_login_info',
+        'result_ai_system_prompt',
+        'result_ai_user_prompt',
     ];
 
     protected $casts = [
@@ -67,7 +69,18 @@ class Tournament extends Model
 
     public function isFull(): bool
     {
-        return (int) $this->registered_count >= $this->capacity;
+        return $this->confirmedRegistrationsCount() >= (int) $this->capacity;
+    }
+
+    /** Teammate invites required: solo=0, duo=1, squad=3 */
+    public function requiredTeammateInvites(): int
+    {
+        return max(0, $this->seatMode() - 1);
+    }
+
+    public function supportsTeamInvite(): bool
+    {
+        return $this->seatMode() >= 2;
     }
 
     public const GAME_LOGIN_PLACEHOLDER = 'اطلاعات ورود به مسابقه، رأس ساعت برگزاری از طریق همین بخش نمایش داده خواهد شد.';

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Support\IranDate;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,6 +17,7 @@ class NotificationResource extends JsonResource
             'type' => $this->type,
             'is_read' => (bool) $this->is_read,
             'created_at' => $this->created_at?->toIso8601String(),
+            'created_at_display' => IranDate::formatString($this->created_at),
         ];
     }
 }

@@ -13,6 +13,7 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->command('wallet:cleanup-stale-deposits')->hourly();
+        $schedule->command('team-invites:expire')->everyMinute();
     }
 
     /**

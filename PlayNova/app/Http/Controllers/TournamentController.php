@@ -4,11 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Registration;
 use App\Models\Tournament;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Modules\Content\Services\ContentCacheService;
 use App\Modules\Tournament\Services\TournamentListingService;
-use App\Modules\Tournament\Services\TournamentListingService;
+use App\Services\TournamentEntryFeeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -125,17 +124,27 @@ class TournamentController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate');
     }
 
-    public function storeSeat(Request $request, Tournament $tournament)
+    public function storeSeat(Request $request, Tournament $tournament, TournamentEntryFeeService $fees)
     {
         $request->validate([
             'seat_number' => 'required|integer|min:1|max:' . max(1, (int) $tournament->capacity),
         ]);
 
+        if (! $tournament->acceptsRegistration()) {
+            return back()->with('error', 'ثبت‌نام این مسابقه بسته شده است.');
+        }
+
         $user = Auth::user();
         $seatNumber = (int) $request->seat_number;
 
         try {
-            DB::transaction(function () use ($user, $tournament, $seatNumber) {
+            DB::transaction(function () use ($user, $tournament, $seatNumber, $fees) {
+                $lockedTournament = Tournament::query()->whereKey($tournament->id)->lockForUpdate()->firstOrFail();
+
+                if (! $lockedTournament->acceptsRegistration()) {
+                    throw new \RuntimeException('registration_closed');
+                }
+
                 $registration = Registration::where('user_id', $user->id)
                     ->where('tournament_id', $tournament->id)
                     ->lockForUpdate()
@@ -158,36 +167,18 @@ class TournamentController extends Controller
                     throw new \RuntimeException('seat_taken');
                 }
 
-                if ($tournament->isFull()) {
+                if ($lockedTournament->isFull()) {
                     throw new \RuntimeException('tournament_full');
                 }
 
-                $alreadyPaid = Transaction::where('user_id', $user->id)
-                    ->where('type', 'fee')
-                    ->where('status', 'completed')
-                    ->where('description', 'like', '%' . $tournament->title . '%')
-                    ->exists();
-
-                if (! $alreadyPaid) {
-                    $lockedUser = User::where('id', $user->id)->lockForUpdate()->first();
-
-                    if ($lockedUser->wallet < $tournament->entry_fee) {
+                if (! $fees->hasPaid($user, $lockedTournament)) {
+                    try {
+                        $fees->charge($user, $lockedTournament);
+                    } catch (\InvalidArgumentException) {
                         throw new \RuntimeException('insufficient_wallet');
                     }
 
-                    $lockedUser->wallet -= $tournament->entry_fee;
-                    $lockedUser->save();
-
-                    Transaction::create([
-                        'user_id' => $lockedUser->id,
-                        'type' => 'fee',
-                        'amount' => $tournament->entry_fee,
-                        'balance_after' => $lockedUser->wallet,
-                        'description' => "هزینه ثبت‌نام در مسابقه: {$tournament->title}",
-                        'status' => 'completed',
-                    ]);
-
-                    $tournament->increment('registered_count');
+                    $lockedTournament->increment('registered_count');
                 }
 
                 $registration->update([
@@ -197,6 +188,7 @@ class TournamentController extends Controller
             });
         } catch (\RuntimeException $e) {
             return match ($e->getMessage()) {
+                'registration_closed' => back()->with('error', 'ثبت‌نام این مسابقه بسته شده است.'),
                 'not_registered' => back()->with('error', 'ابتدا در این مسابقه ثبت‌نام کنید.'),
                 'already_selected' => redirect()->route('home')
                     ->with('info', 'جایگاه شما قبلاً انتخاب شده است.'),
@@ -214,12 +206,12 @@ class TournamentController extends Controller
             ->with('success', 'ثبت‌نام شما با موفقیت تکمیل شد. جایگاه ' . $tournament->seatDisplayLabel($seatNumber) . ' برای شما ثبت شد.');
     }
 
-    public function cancelPendingRegistration(Tournament $tournament)
+    public function cancelPendingRegistration(Tournament $tournament, TournamentEntryFeeService $fees)
     {
         $user = Auth::user();
 
         try {
-            DB::transaction(function () use ($user, $tournament) {
+            DB::transaction(function () use ($user, $tournament, $fees) {
                 $registration = Registration::where('user_id', $user->id)
                     ->where('tournament_id', $tournament->id)
                     ->whereNull('seat_number')
@@ -230,30 +222,8 @@ class TournamentController extends Controller
                     throw new \RuntimeException('no_pending');
                 }
 
-                $feeTx = Transaction::where('user_id', $user->id)
-                    ->where('type', 'fee')
-                    ->where('status', 'completed')
-                    ->where('description', 'like', '%' . $tournament->title . '%')
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($feeTx) {
-                    $lockedUser = User::where('id', $user->id)->lockForUpdate()->first();
-                    $lockedUser->wallet += $feeTx->amount;
-                    $lockedUser->save();
-
-                    Transaction::create([
-                        'user_id' => $lockedUser->id,
-                        'type' => 'deposit',
-                        'amount' => $feeTx->amount,
-                        'balance_after' => $lockedUser->wallet,
-                        'description' => "بازگشت هزینه ثبت‌نام (انصراف): {$tournament->title}",
-                        'status' => 'completed',
-                    ]);
-
-                    if ($tournament->registered_count > 0) {
-                        $tournament->decrement('registered_count');
-                    }
+                if ($fees->refundIfPaid($user, $tournament) && $tournament->registered_count > 0) {
+                    $tournament->decrement('registered_count');
                 }
 
                 $registration->delete();

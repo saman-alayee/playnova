@@ -20,10 +20,12 @@ class NotificationController extends Controller
 
         if (Auth::check()) {
             $notifications = Notification::where('user_id', Auth::id())
+                ->visibleInInbox()
                 ->orderByDesc('created_at')
                 ->paginate(20);
 
             $unreadCount = Notification::where('user_id', Auth::id())
+                ->visibleInInbox()
                 ->where('is_read', false)
                 ->count();
         }
@@ -41,7 +43,10 @@ class NotificationController extends Controller
 
     public function markAllAsRead()
     {
-        Notification::where('user_id', Auth::id())->where('is_read', false)->update(['is_read' => true]);
+        Notification::where('user_id', Auth::id())
+            ->visibleInInbox()
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
 
         return back()->with('success', 'همه اعلان‌ها به عنوان خوانده‌شده علامت‌گذاری شدند.');
     }

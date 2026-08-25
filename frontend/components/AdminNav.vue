@@ -68,6 +68,9 @@ function isActive(path: string) {
     <NuxtLink to="/admin/sms-settings" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/sms-settings') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       📱 پیامک
     </NuxtLink>
+    <NuxtLink to="/admin/ai-settings" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/ai-settings') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
+      🤖 هوش مصنوعی
+    </NuxtLink>
     <NuxtLink to="/admin/referral-settings" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/referral-settings') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       🔗 تنظیمات دعوت
     </NuxtLink>

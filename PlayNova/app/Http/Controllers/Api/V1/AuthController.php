@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\V1\UserResource;
 use App\Jobs\SendOtpSmsJob;
+use App\Models\Notification;
 use App\Models\Setting;
 use App\Models\User;
+use App\Modules\Audit\Services\ActivityLogService;
 use App\Modules\User\Services\AuthRegistrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +19,10 @@ class AuthController extends BaseApiController
 {
     private const RESET_OTP_TTL_SECONDS = 120;
 
-    public function __construct(protected AuthRegistrationService $registration) {}
+    public function __construct(
+        protected AuthRegistrationService $registration,
+        protected ActivityLogService $activity,
+    ) {}
 
     public function login(Request $request): JsonResponse
     {
@@ -36,16 +41,15 @@ class AuthController extends BaseApiController
             return $this->error('اطلاعات ورود نامعتبر است.', 422, $validator->errors());
         }
 
-        $user = User::where('email', $login)
-            ->orWhere('mobile', $login)
-            ->orWhere('username', $login)
-            ->first();
+        $user = User::findByLogin($login);
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             return $this->error('اطلاعات ورود صحیح نیست.', 401);
         }
 
         $token = $user->createToken('api')->plainTextToken;
+
+        $this->activity->logAuth($user, 'login', 'ورود به حساب کاربری');
 
         return $this->success([
             'user' => new UserResource($user),
@@ -171,7 +175,9 @@ class AuthController extends BaseApiController
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()?->delete();
+        $user = $request->user();
+        $this->activity->logAuth($user, 'logout', 'خروج از حساب کاربری');
+        $user->currentAccessToken()?->delete();
 
         return $this->success(null, 'با موفقیت خارج شدید.');
     }
@@ -179,12 +185,11 @@ class AuthController extends BaseApiController
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
-        $user->load(['registrations' => function ($query) {
-            $query->whereNotNull('seat_number')
-                ->whereHas('tournament', fn ($q) => $q->whereNotIn('status', ['ended', 'cancelled']))
-                ->with('tournament')
-                ->orderByDesc('updated_at');
-        }]);
+        $user->unread_notifications_count = Notification::query()
+            ->where('user_id', $user->id)
+            ->visibleInInbox()
+            ->where('is_read', false)
+            ->count();
 
         return $this->success(new UserResource($user));
     }

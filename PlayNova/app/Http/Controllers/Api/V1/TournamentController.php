@@ -10,10 +10,12 @@ use App\Http\Resources\V1\UserResource;
 use App\Models\Registration;
 use App\Models\TeamInvite;
 use App\Models\Tournament;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Modules\Content\Services\ContentCacheService;
 use App\Modules\Tournament\Services\TournamentListingService;
+use App\Modules\Tournament\Services\TournamentRegistrationGuard;
+use App\Modules\Tournament\Services\TournamentRegistrationService;
+use App\Services\TournamentEntryFeeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -138,43 +140,22 @@ class TournamentController extends BaseApiController
         ]);
     }
 
-    public function register(Request $request, Tournament $tournament): JsonResponse
+    public function register(Request $request, Tournament $tournament, TournamentRegistrationService $registrations, TournamentRegistrationGuard $guard): JsonResponse
     {
         $user = $request->user();
 
-        if (! $tournament->acceptsRegistration()) {
-            return $this->error('ثبت‌نام این مسابقه بسته شده است.', 422);
+        try {
+            $guard->assertCanRegister($tournament);
+            $registration = $registrations->createPendingIntent($user, $tournament);
+        } catch (\RuntimeException $e) {
+            return match ($e->getMessage()) {
+                'registration_closed' => $this->error('ثبت‌نام این مسابقه بسته شده است.', 422),
+                'tournament_full' => $this->error('ظرفیت مسابقه تکمیل شده است.', 422),
+                'already_registered' => $this->error('شما قبلاً در این مسابقه ثبت‌نام کرده‌اید.', 422),
+                'insufficient_wallet' => $this->error('موجودی کیف پول کافی نیست.', 422),
+                default => $this->error('ثبت‌نام ناموفق بود.', 422),
+            };
         }
-
-        if ($tournament->isFull()) {
-            return $this->error('ظرفیت مسابقه تکمیل شده است.', 422);
-        }
-
-        $existing = Registration::where('user_id', $user->id)
-            ->where('tournament_id', $tournament->id)
-            ->first();
-
-        if ($existing) {
-            if ($existing->seat_number === null) {
-                return $this->success([
-                    'registration' => new RegistrationResource($existing),
-                    'next_step' => 'select_seat',
-                ], 'ابتدا جایگاه خود را انتخاب و تأیید کنید.');
-            }
-
-            return $this->error('شما قبلاً در این مسابقه ثبت‌نام کرده‌اید.', 422);
-        }
-
-        if ($user->wallet < $tournament->entry_fee) {
-            return $this->error('موجودی کیف پول کافی نیست.', 422);
-        }
-
-        $registration = Registration::create([
-            'user_id' => $user->id,
-            'tournament_id' => $tournament->id,
-            'status' => 'waiting',
-            'reservation_type' => 'solo',
-        ]);
 
         return $this->success([
             'registration' => new RegistrationResource($registration),
@@ -182,9 +163,16 @@ class TournamentController extends BaseApiController
         ], 'برای تکمیل ثبت‌نام، جایگاه خود را انتخاب و تأیید کنید.', 201);
     }
 
-    public function selectSeat(Tournament $tournament): JsonResponse
+    public function selectSeat(Tournament $tournament, TournamentRegistrationGuard $guard): JsonResponse
     {
         $user = Auth::user();
+
+        try {
+            $guard->assertCanRegister($tournament);
+        } catch (\RuntimeException) {
+            return $this->error('ثبت‌نام این مسابقه بسته شده است.', 422);
+        }
+
         $registration = Registration::where('user_id', $user->id)
             ->where('tournament_id', $tournament->id)
             ->first();
@@ -226,7 +214,7 @@ class TournamentController extends BaseApiController
         ]);
     }
 
-    public function storeSeat(Request $request, Tournament $tournament): JsonResponse
+    public function storeSeat(Request $request, Tournament $tournament, TournamentRegistrationService $registrations, TournamentRegistrationGuard $guard): JsonResponse
     {
         $request->validate([
             'seat_number' => 'required|integer|min:1|max:' . max(1, (int) $tournament->capacity),
@@ -236,68 +224,11 @@ class TournamentController extends BaseApiController
         $seatNumber = (int) $request->seat_number;
 
         try {
-            DB::transaction(function () use ($user, $tournament, $seatNumber) {
-                $registration = Registration::where('user_id', $user->id)
-                    ->where('tournament_id', $tournament->id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (! $registration) {
-                    throw new \RuntimeException('not_registered');
-                }
-
-                if ($registration->seat_number !== null) {
-                    throw new \RuntimeException('already_selected');
-                }
-
-                $taken = Registration::where('tournament_id', $tournament->id)
-                    ->where('seat_number', $seatNumber)
-                    ->lockForUpdate()
-                    ->exists();
-
-                if ($taken) {
-                    throw new \RuntimeException('seat_taken');
-                }
-
-                if ($tournament->isFull()) {
-                    throw new \RuntimeException('tournament_full');
-                }
-
-                $alreadyPaid = Transaction::where('user_id', $user->id)
-                    ->where('type', 'fee')
-                    ->where('status', 'completed')
-                    ->where('description', 'like', '%' . $tournament->title . '%')
-                    ->exists();
-
-                if (! $alreadyPaid) {
-                    $lockedUser = User::where('id', $user->id)->lockForUpdate()->first();
-
-                    if ($lockedUser->wallet < $tournament->entry_fee) {
-                        throw new \RuntimeException('insufficient_wallet');
-                    }
-
-                    $lockedUser->wallet -= $tournament->entry_fee;
-                    $lockedUser->save();
-
-                    Transaction::create([
-                        'user_id' => $lockedUser->id,
-                        'type' => 'fee',
-                        'amount' => $tournament->entry_fee,
-                        'balance_after' => $lockedUser->wallet,
-                        'description' => "هزینه ثبت‌نام در مسابقه: {$tournament->title}",
-                        'status' => 'completed',
-                    ]);
-
-                    $tournament->increment('registered_count');
-                }
-
-                $registration->update([
-                    'seat_number' => $seatNumber,
-                    'status' => 'confirmed',
-                ]);
-            });
+            $guard->assertCanRegister($tournament);
+            $registration = $registrations->confirmSoloSeat($user, $tournament, $seatNumber);
         } catch (\RuntimeException $e) {
             return match ($e->getMessage()) {
+                'registration_closed' => $this->error('ثبت‌نام این مسابقه بسته شده است.', 422),
                 'not_registered' => $this->error('ابتدا در این مسابقه ثبت‌نام کنید.', 422),
                 'already_selected' => $this->success([
                     'seat_label' => $tournament->seatDisplayLabel($seatNumber),
@@ -308,10 +239,6 @@ class TournamentController extends BaseApiController
                 default => $this->error('انتخاب جایگاه ناموفق بود.', 422),
             };
         }
-
-        $registration = Registration::where('user_id', $user->id)
-            ->where('tournament_id', $tournament->id)
-            ->first();
 
         TournamentListingService::forgetHomeCache();
 
@@ -349,12 +276,18 @@ class TournamentController extends BaseApiController
         ]);
     }
 
-    public function cancelPending(Tournament $tournament): JsonResponse
+    public function cancelPending(Tournament $tournament, TournamentEntryFeeService $fees, TournamentRegistrationService $registrations): JsonResponse
     {
         $user = Auth::user();
 
         try {
-            DB::transaction(function () use ($user, $tournament) {
+            DB::transaction(function () use ($user, $tournament, $fees, $registrations) {
+                TeamInvite::query()
+                    ->where('inviter_id', $user->id)
+                    ->where('tournament_id', $tournament->id)
+                    ->where('status', TeamInvite::STATUS_PENDING)
+                    ->update(['status' => TeamInvite::STATUS_CANCELLED]);
+
                 $registration = Registration::where('user_id', $user->id)
                     ->where('tournament_id', $tournament->id)
                     ->whereNull('seat_number')
@@ -365,30 +298,8 @@ class TournamentController extends BaseApiController
                     throw new \RuntimeException('no_pending');
                 }
 
-                $feeTx = Transaction::where('user_id', $user->id)
-                    ->where('type', 'fee')
-                    ->where('status', 'completed')
-                    ->where('description', 'like', '%' . $tournament->title . '%')
-                    ->lockForUpdate()
-                    ->first();
-
-                if ($feeTx) {
-                    $lockedUser = User::where('id', $user->id)->lockForUpdate()->first();
-                    $lockedUser->wallet += $feeTx->amount;
-                    $lockedUser->save();
-
-                    Transaction::create([
-                        'user_id' => $lockedUser->id,
-                        'type' => 'deposit',
-                        'amount' => $feeTx->amount,
-                        'balance_after' => $lockedUser->wallet,
-                        'description' => "بازگشت هزینه ثبت‌نام (انصراف): {$tournament->title}",
-                        'status' => 'completed',
-                    ]);
-
-                    if ($tournament->registered_count > 0) {
-                        $tournament->decrement('registered_count');
-                    }
+                if ($fees->refundIfPaid($user, $tournament)) {
+                    $registrations->syncRegisteredCount($tournament);
                 }
 
                 $registration->delete();

@@ -3,9 +3,9 @@ defineEmits<{ 'open-sidebar': [] }>()
 
 const route = useRoute()
 const auth = useAuthStore()
-const config = useRuntimeConfig()
+const { mediaUrl } = useMediaUrl()
 
-const logoUrl = computed(() => auth.logoUrl || `${config.public.backendUrl}/logo.png`)
+const logoUrl = computed(() => mediaUrl(auth.logoUrl))
 const logoFailed = ref(false)
 
 function isActive(path: string) {
@@ -31,10 +31,13 @@ function isActive(path: string) {
           </button>
           <NuxtLink to="/" class="site-header-logo">
             <img
-              v-if="!logoFailed"
+              v-if="logoUrl && !logoFailed"
               :src="logoUrl"
               class="site-logo"
               alt="PlayNova"
+              width="160"
+              height="56"
+              decoding="async"
               @error="logoFailed = true"
             >
             <span v-else class="text-lg font-black text-gradient whitespace-nowrap">PlayNova</span>

@@ -19,10 +19,12 @@ class NotificationController extends BaseApiController
             ->get();
 
         $notifications = Notification::where('user_id', $request->user()->id)
+            ->visibleInInbox()
             ->orderByDesc('created_at')
             ->paginate(20);
 
         $unreadCount = Notification::where('user_id', $request->user()->id)
+            ->visibleInInbox()
             ->where('is_read', false)
             ->count();
 
@@ -52,10 +54,24 @@ class NotificationController extends BaseApiController
     public function markAllRead(Request $request): JsonResponse
     {
         Notification::where('user_id', $request->user()->id)
+            ->visibleInInbox()
             ->where('is_read', false)
             ->update(['is_read' => true]);
 
         return $this->success(null, 'همه اعلان‌ها به عنوان خوانده‌شده علامت‌گذاری شدند.');
+    }
+
+    public function popup(Request $request): JsonResponse
+    {
+        $notification = Notification::where('user_id', $request->user()->id)
+            ->visibleInInbox()
+            ->where('is_read', false)
+            ->orderByDesc('created_at')
+            ->first();
+
+        return $this->success(
+            $notification ? new NotificationResource($notification) : null
+        );
     }
 
     public function delete(Request $request, int $id): JsonResponse

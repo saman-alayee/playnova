@@ -60,7 +60,9 @@ export interface Tournament {
   registered_count?: number
   registrations_count?: number
   start_date?: string | null
+  start_date_display?: string | null
   end_date?: string | null
+  end_date_display?: string | null
   status: 'upcoming' | 'active' | 'ongoing' | 'ended' | 'cancelled' | string
   status_label?: string
   seat_mode?: number
@@ -88,8 +90,9 @@ export interface NewsItem {
 }
 
 export interface LeaderboardEntry {
-  rank: number
-  user_id: number
+  rank?: number
+  id?: number
+  user_id?: number
   username: string
   kills: number
   wins?: number
@@ -130,8 +133,10 @@ export interface Notification {
   title: string
   body?: string
   message?: string
+  type?: string | null
   is_read: boolean
   created_at: string
+  created_at_display?: string
 }
 
 export interface RuleSection {
@@ -189,6 +194,8 @@ export interface TeamInvite {
   inviter_username?: string
   invitee_username?: string
   status: string
+  seconds_remaining?: number
+  team_group_id?: string | null
   direction?: 'incoming' | 'outgoing'
 }
 
@@ -251,6 +258,86 @@ export interface ProfileData {
     wins?: number
     kills?: number
   }
+}
+
+export interface TournamentPrizeEntry {
+  id: number
+  user_id: number
+  username?: string
+  cod_id?: string | null
+  rank?: number | null
+  team_label?: string | null
+  seat_number?: number | null
+  kills?: number | null
+  prize_amount: number
+}
+
+export interface TournamentPrizeBatch {
+  id: number
+  tournament_id: number
+  tournament_title?: string
+  status: string
+  status_label: string
+  total_amount: number
+  winner?: { id: number; username: string } | null
+  approved_by?: { id: number; username: string } | null
+  approved_at?: string | null
+  approved_at_display?: string | null
+  paid_at?: string | null
+  paid_at_display?: string | null
+  created_at_display?: string | null
+  entries: TournamentPrizeEntry[]
+}
+
+export interface TournamentResultPlayer {
+  rank: number
+  name?: string | null
+  uid?: string | null
+  kills?: number | null
+  score?: number | null
+}
+
+export interface TournamentResultMatched {
+  rank: number
+  detected_name?: string | null
+  detected_uid?: string | null
+  kills?: number | null
+  user_id: number
+  username: string
+  cod_id?: string | null
+  match_method?: string
+}
+
+export interface TournamentResultUnmatched {
+  rank: number
+  detected_name?: string | null
+  detected_uid?: string | null
+  kills?: number | null
+}
+
+export interface TournamentResultParticipant {
+  user_id: number
+  username: string
+  cod_id?: string | null
+  seat_number?: number | null
+}
+
+export interface TournamentResultAiConfig {
+  system_prompt: string
+  user_prompt: string
+  seat_mode_label: string
+  has_saved_prompt: boolean
+}
+
+export interface TournamentResultAnalysis {
+  tournament_id: number
+  tournament_title: string
+  players: TournamentResultPlayer[]
+  matched: TournamentResultMatched[]
+  unmatched: TournamentResultUnmatched[]
+  suggested_winner_user_id?: number | null
+  participants: TournamentResultParticipant[]
+  raw_excerpt?: string
 }
 
 export interface ApiError extends Error {

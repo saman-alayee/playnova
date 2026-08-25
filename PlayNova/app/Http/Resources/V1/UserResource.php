@@ -29,6 +29,7 @@ class UserResource extends JsonResource
             'first_deposit_done' => (bool) $this->first_deposit_done,
             'is_admin' => (bool) $this->is_admin,
             'is_seat_admin' => (bool) $this->is_seat_admin,
+            'unread_notifications_count' => (int) ($this->unread_notifications_count ?? 0),
             'active_seats' => RegistrationResource::collection($this->whenLoaded('registrations')),
             'created_at' => $this->created_at?->toIso8601String(),
         ];

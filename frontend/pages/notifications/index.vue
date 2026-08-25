@@ -4,6 +4,7 @@ useHead({ title: 'اعلانات | PlayNova' })
 
 const api = useApi()
 const auth = useAuthStore()
+const { formatDateTime } = usePersianDateTime()
 
 const { data, pending, refresh } = await useAsyncData('notifications', () => api.notifications.list(), {
   default: () => ({ notifications: [], news: [], unread_count: 0 }),
@@ -54,7 +55,7 @@ async function remove(id: number) {
         >
           <h3 class="font-bold text-white">{{ item.title }}</h3>
           <p class="text-sm text-gray-300 mt-2 whitespace-pre-line">{{ item.body }}</p>
-          <p v-if="item.created_at" class="text-xs text-gray-500 mt-2">{{ new Date(item.created_at).toLocaleString('fa-IR') }}</p>
+          <p v-if="item.created_at" class="text-xs text-gray-500 mt-2">{{ formatDateTime(item.created_at_display || item.created_at) }}</p>
         </article>
       </div>
     </section>
@@ -76,7 +77,7 @@ async function remove(id: number) {
           <div>
             <h3 class="font-bold text-white">{{ n.title }}</h3>
             <p class="text-sm text-gray-300 mt-1 whitespace-pre-line">{{ n.body || n.message }}</p>
-            <p class="text-xs text-gray-500 mt-2">{{ new Date(n.created_at).toLocaleString('fa-IR') }}</p>
+            <p class="text-xs text-gray-500 mt-2">{{ formatDateTime(n.created_at_display || n.created_at) }}</p>
           </div>
           <div class="flex flex-col gap-2 shrink-0">
             <button v-if="!n.is_read" type="button" class="text-xs text-secondary" @click="markRead(n.id)">خواندم</button>

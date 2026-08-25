@@ -5,9 +5,130 @@ definePageMeta({ middleware: 'admin', layout: 'admin' })
 useHead({ title: 'مدیریت مسابقات | PlayNova' })
 
 const api = useApi()
-const { data, pending, error } = await useAsyncData('admin-tournaments', () => api.admin.tournaments(), {
-  default: () => [] as Tournament[],
+const flash = useState<{ success?: string; error?: string } | null>('flash')
+
+const { data, pending, error, refresh } = await useAsyncData('admin-tournaments', () =>
+  api.admin.tournaments(),
+)
+
+const tournaments = computed(() => data.value?.items ?? [])
+
+const createForm = reactive({
+  title: '',
+  game: 'Call of Duty Mobile',
+  league: 'intermediate',
+  entry_fee: '',
+  prize_pool: '',
+  capacity: '',
+  seat_mode: '2',
+  start_date: '',
+  description: '',
+  game_login_info: '',
 })
+
+const creating = ref(false)
+const actionLoading = ref<number | null>(null)
+const winnerSelections = reactive<Record<number, number | ''>>({})
+const statusSelections = reactive<Record<number, string>>({})
+
+watch(tournaments, (list) => {
+  for (const t of list) {
+    if (!statusSelections[t.id]) statusSelections[t.id] = t.status
+  }
+}, { immediate: true })
+
+async function createTournament() {
+  creating.value = true
+  try {
+    await api.admin.createTournament({
+      ...createForm,
+      entry_fee: Number(createForm.entry_fee),
+      prize_pool: Number(createForm.prize_pool),
+      capacity: Number(createForm.capacity),
+      seat_mode: Number(createForm.seat_mode),
+    })
+    flash.value = { success: 'مسابقه ایجاد شد.' }
+    Object.assign(createForm, {
+      title: '', entry_fee: '', prize_pool: '', capacity: '', start_date: '', description: '', game_login_info: '',
+    })
+    await refresh()
+  } catch (e: unknown) {
+    flash.value = { error: (e as Error).message }
+  } finally {
+    creating.value = false
+  }
+}
+
+async function updateStatus(t: Tournament) {
+  actionLoading.value = t.id
+  try {
+    await api.admin.updateTournamentStatus(t.id, statusSelections[t.id] || t.status)
+    flash.value = { success: 'وضعیت به‌روز شد.' }
+    await refresh()
+  } catch (e: unknown) {
+    flash.value = { error: (e as Error).message }
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+async function recordResult(t: Tournament) {
+  const winnerId = winnerSelections[t.id]
+  if (!winnerId) return
+  actionLoading.value = t.id
+  try {
+    await api.admin.recordTournamentResult(t.id, Number(winnerId))
+    flash.value = { success: 'نتیجه ثبت شد.' }
+    await refresh()
+  } catch (e: unknown) {
+    flash.value = { error: (e as Error).message }
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+async function payPrize(t: Tournament) {
+  if (!confirm(`جایزه ${Number(t.prize_pool).toLocaleString('fa-IR')} تومان واریز شود؟`)) return
+  actionLoading.value = t.id
+  try {
+    await api.admin.payTournamentPrize(t.id)
+    flash.value = { success: 'جایزه واریز شد.' }
+    await refresh()
+  } catch (e: unknown) {
+    flash.value = { error: (e as Error).message }
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+async function deleteTournament(t: Tournament) {
+  if (!confirm('آیا از حذف این مسابقه مطمئن هستید؟')) return
+  actionLoading.value = t.id
+  try {
+    await api.admin.deleteTournament(t.id)
+    flash.value = { success: 'مسابقه حذف شد.' }
+    await refresh()
+  } catch (e: unknown) {
+    flash.value = { error: (e as Error).message }
+  } finally {
+    actionLoading.value = null
+  }
+}
+
+const participantsCache = reactive<Record<number, { user_id: number; username: string }[]>>({})
+
+async function loadParticipants(tournamentId: number) {
+  if (participantsCache[tournamentId]) return
+  try {
+    participantsCache[tournamentId] = await api.admin.tournamentParticipants(tournamentId)
+  } catch {
+    participantsCache[tournamentId] = []
+  }
+}
+
+function prizePaid(t: Tournament): boolean {
+  return !!(t.winner_id && (t as Tournament & { prize_paid?: boolean }).prize_paid)
+}
 </script>
 
 <template>
@@ -18,24 +139,87 @@ const { data, pending, error } = await useAsyncData('admin-tournaments', () => a
     </div>
 
     <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
-    <div v-else-if="error" class="bg-dark-800 border border-amber-600/40 rounded-xl p-6 text-amber-200">
-      API `/api/v1/admin/tournaments` در دسترس نیست — پس از پیاده‌سازی Laravel فعال می‌شود.
+    <div v-else-if="error" class="bg-dark-800 border border-red-600/40 rounded-xl p-6 text-red-300">
+      {{ (error as Error).message || 'خطا در بارگذاری' }}
     </div>
-    <div v-else-if="!data?.length" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
-      مسابقه‌ای یافت نشد.
-    </div>
-    <div v-else class="space-y-3">
-      <div
-        v-for="t in data"
-        :key="t.id"
-        class="bg-dark-800 border border-dark-600 rounded-xl p-4 flex items-center justify-between gap-3"
-      >
-        <div>
-          <p class="font-bold text-white">{{ t.title }}</p>
-          <p class="text-xs text-gray-400">{{ t.status_label || t.status }} · {{ Number(t.prize_pool).toLocaleString('fa-IR') }} تومان</p>
-        </div>
-        <NuxtLink :to="`/tournaments/${t.id}`" class="text-sm text-secondary">مشاهده</NuxtLink>
+
+    <template v-else>
+      <div class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6">
+        <h2 class="font-bold text-white mb-4">ایجاد مسابقه جدید</h2>
+        <form class="grid sm:grid-cols-2 gap-3" @submit.prevent="createTournament">
+          <input v-model="createForm.title" type="text" placeholder="عنوان مسابقه" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <input v-model="createForm.game" type="text" placeholder="نام بازی" class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <select v-model="createForm.league" class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+            <option value="beginner">مبتدی</option>
+            <option value="intermediate">متوسط</option>
+            <option value="professional">حرفه‌ای</option>
+          </select>
+          <input v-model="createForm.entry_fee" type="number" min="0" placeholder="مبلغ ورودی" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <input v-model="createForm.prize_pool" type="number" min="0" placeholder="جایزه کل" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <input v-model="createForm.capacity" type="number" min="1" placeholder="ظرفیت" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <select v-model="createForm.seat_mode" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+            <option value="1">چیدمان یک‌نفره</option>
+            <option value="2">چیدمان دو‌نفره</option>
+            <option value="4">چیدمان چهارنفره</option>
+          </select>
+          <input v-model="createForm.start_date" type="datetime-local" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <textarea v-model="createForm.description" placeholder="توضیحات" class="sm:col-span-2 bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" />
+          <textarea v-model="createForm.game_login_info" rows="2" placeholder="اطلاعات ورود به مسابقه (اختیاری)" class="sm:col-span-2 bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" />
+          <button type="submit" class="sm:col-span-2 bg-success hover:bg-green-700 text-white rounded py-2 font-bold" :disabled="creating">
+            {{ creating ? '...' : 'ایجاد مسابقه' }}
+          </button>
+        </form>
       </div>
-    </div>
+
+      <div class="space-y-4">
+        <div v-for="t in tournaments" :key="t.id" class="bg-dark-800 border border-dark-600 rounded-xl p-4">
+          <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
+            <h3 class="font-bold text-white">{{ t.title }}</h3>
+            <span class="text-xs px-2 py-1 rounded bg-dark-700 text-gray-300">{{ t.status_label || t.status }}</span>
+          </div>
+          <p class="text-xs text-gray-400 mb-3">
+            ظرفیت: {{ t.registered_count }}/{{ t.capacity }} — جایزه: {{ Number(t.prize_pool).toLocaleString('fa-IR') }} تومان
+            <span v-if="t.winner"> — 🏆 برنده: <span class="text-secondary font-bold">{{ (t.winner as { username?: string })?.username }}</span></span>
+          </p>
+
+          <div class="flex flex-wrap gap-2 items-center">
+            <select v-model="statusSelections[t.id]" class="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs text-white">
+              <option value="upcoming">آینده</option>
+              <option value="active">فعال</option>
+              <option value="ongoing">در حال برگزاری</option>
+              <option value="ended">پایان یافته</option>
+              <option value="cancelled">لغو شده</option>
+            </select>
+            <button class="text-xs bg-success text-white px-2 py-1 rounded font-bold" :disabled="actionLoading === t.id" @click="updateStatus(t)">بروزرسانی وضعیت</button>
+
+            <NuxtLink :to="`/admin/tournament-seats/${t.id}`" class="text-xs bg-secondary text-white px-2 py-1 rounded font-bold">🗺️ جایگاه‌ها</NuxtLink>
+            <NuxtLink :to="`/admin/tournaments/${t.id}/result`" class="text-xs bg-purple-600 text-white px-2 py-1 rounded font-bold">🤖 AI</NuxtLink>
+
+            <template v-if="t.status !== 'ended'">
+              <select
+                v-model="winnerSelections[t.id]"
+                class="bg-dark-700 border border-dark-600 rounded px-2 py-1 text-xs w-40 text-white"
+                @focus="loadParticipants(t.id)"
+              >
+                <option value="">انتخاب برنده...</option>
+                <option v-for="p in participantsCache[t.id] || []" :key="p.user_id" :value="p.user_id">{{ p.username }}</option>
+              </select>
+              <button class="text-xs bg-success text-white px-2 py-1 rounded font-bold" :disabled="actionLoading === t.id || !winnerSelections[t.id]" @click="recordResult(t)">ثبت نتیجه</button>
+            </template>
+
+            <NuxtLink
+              v-if="t.winner_id"
+              :to="`/admin/tournaments/${t.id}/prizes`"
+              class="text-xs bg-secondary text-white px-2 py-1 rounded font-bold inline-block"
+            >
+              💰 تأیید جوایز
+            </NuxtLink>
+
+            <NuxtLink :to="`/admin/tournaments/${t.id}/edit`" class="text-xs bg-secondary/20 text-secondary px-2 py-1 rounded font-bold">✏️ ویرایش</NuxtLink>
+            <button class="text-xs bg-danger text-white px-2 py-1 rounded font-bold" :disabled="actionLoading === t.id" @click="deleteTournament(t)">🗑️ حذف</button>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>

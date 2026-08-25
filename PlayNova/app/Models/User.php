@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
@@ -110,8 +111,51 @@ class User extends Authenticatable
         return $code;
     }
 
+    public static function findByLogin(string $login): ?self
+    {
+        $login = trim($login);
+        if ($login === '') {
+            return null;
+        }
+
+        return self::query()
+            ->where(function ($query) use ($login) {
+                $query->where('email', $login)
+                    ->orWhere('mobile', $login)
+                    ->orWhere('username', $login);
+            })
+            ->first();
+    }
+
+    public function refreshWalletLock(): void
+    {
+        if (DB::transactionLevel() === 0) {
+            return;
+        }
+
+        $locked = static::query()->whereKey($this->id)->lockForUpdate()->first();
+        if ($locked) {
+            $this->wallet = $locked->wallet;
+            $this->first_deposit_done = $locked->first_deposit_done;
+        }
+    }
+
     public function creditWallet(float $amount, string $type, string $description, ?string $referenceId = null): void
     {
+        if ($referenceId) {
+            $alreadyCredited = $this->transactions()
+                ->where('reference_id', $referenceId)
+                ->where('type', $type)
+                ->where('status', 'completed')
+                ->exists();
+
+            if ($alreadyCredited) {
+                return;
+            }
+        }
+
+        $this->refreshWalletLock();
+
         $this->wallet = round($this->wallet + $amount, 2);
         $this->save();
 
@@ -125,9 +169,23 @@ class User extends Authenticatable
         ]);
     }
 
-    public function debitWallet(float $amount, string $type, string $description, ?string $referenceId = null): void
+    public function debitWallet(float $amount, string $type, string $description, ?string $referenceId = null, bool $allowNegative = false): void
     {
-        if ($this->wallet < $amount) {
+        if ($referenceId) {
+            $alreadyDebited = $this->transactions()
+                ->where('reference_id', $referenceId)
+                ->where('type', $type)
+                ->where('status', 'completed')
+                ->exists();
+
+            if ($alreadyDebited) {
+                return;
+            }
+        }
+
+        $this->refreshWalletLock();
+
+        if (! $allowNegative && $this->wallet < $amount) {
             throw new \InvalidArgumentException('موجودی کیف پول کافی نیست.');
         }
 

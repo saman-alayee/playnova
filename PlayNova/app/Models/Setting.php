@@ -284,6 +284,118 @@ class Setting extends Model
         return (float) self::get('referral_bonus_percent', 5);
     }
 
+    public static function getAvalAiApiKey(): ?string
+    {
+        $fromDb = trim((string) self::get('avalai_api_key', ''));
+        if ($fromDb !== '') {
+            return $fromDb;
+        }
+
+        $fromEnv = trim((string) config('services.avalai.api_key', ''));
+
+        return $fromEnv !== '' ? $fromEnv : null;
+    }
+
+    public static function getAvalAiBaseUrl(): string
+    {
+        $fromDb = trim((string) self::get('avalai_base_url', ''));
+        if ($fromDb !== '') {
+            return rtrim($fromDb, '/');
+        }
+
+        return rtrim((string) config('services.avalai.base_url', 'https://api.avalai.ir/v1'), '/');
+    }
+
+    public static function getAvalAiVisionModel(): string
+    {
+        $fromDb = trim((string) self::get('avalai_vision_model', ''));
+        if ($fromDb !== '') {
+            return $fromDb;
+        }
+
+        return (string) config('services.avalai.vision_model', 'gpt-4o');
+    }
+
+    public static function getAvalAiTimeout(): int
+    {
+        $fromDb = self::get('avalai_timeout');
+        if ($fromDb !== null && $fromDb !== '') {
+            return max(30, (int) $fromDb);
+        }
+
+        return max(30, (int) config('services.avalai.timeout', 120));
+    }
+
+    public static function isAvalAiActive(): bool
+    {
+        if (self::get('avalai_active') === null) {
+            return true;
+        }
+
+        return filter_var(self::get('avalai_active', true), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    public static function isAvalAiConfigured(): bool
+    {
+        return self::isAvalAiActive() && filled(self::getAvalAiApiKey());
+    }
+
+    /** @return 'database'|'env'|'none' */
+    public static function avalAiApiKeySource(): string
+    {
+        if (filled(trim((string) self::get('avalai_api_key', '')))) {
+            return 'database';
+        }
+
+        if (filled(trim((string) config('services.avalai.api_key', '')))) {
+            return 'env';
+        }
+
+        return 'none';
+    }
+
+    public static function getResultAiSystemPromptDefault(): string
+    {
+        $stored = trim((string) self::get('result_ai_system_prompt', ''));
+
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        return <<<'PROMPT'
+You extract structured data from Call of Duty Mobile match result screenshots (scoreboard / leaderboard / post-match screen).
+
+Return ONLY a JSON array. No markdown, no explanation.
+
+Each item: {"rank":1,"player_name":"Name","uid":"123456789012345678","kills":12}
+
+- rank: integer position (1 = winner / first place)
+- player_name: in-game name as shown
+- uid: numeric Call of Duty player ID / UID if visible (digits only string), else null
+- kills: kill count or score if visible, else null
+
+Sort by rank ascending. Include every visible row on the scoreboard.
+PROMPT;
+    }
+
+    public static function getResultAiUserPromptTemplate(): string
+    {
+        $stored = trim((string) self::get('result_ai_user_prompt_template', ''));
+
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        return <<<'PROMPT'
+Tournament: {tournament_title}
+Mode: {seat_mode_label}
+Registered participants (for reference):
+{participants}
+
+Extract the scoreboard from this media.
+PROMPT;
+    }
+
     public static function logoUrl(): string
     {
         $logo = self::get('logo');

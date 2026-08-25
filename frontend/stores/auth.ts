@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 import type { User, SiteSettings } from '~/types/api'
 
+const TOKEN_KEY = 'playnova_token'
+const USER_KEY = 'playnova_user'
+let initPromise: Promise<void> | null = null
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null as User | null,
@@ -20,10 +24,33 @@ export const useAuthStore = defineStore('auth', {
   },
 
   actions: {
-    setUser(user: User | null) {
+    hydrateFromStorage() {
+      if (!import.meta.client) return
+      const storedToken = localStorage.getItem(TOKEN_KEY)
+      if (storedToken) {
+        this.token = storedToken
+      }
+      const cachedUser = localStorage.getItem(USER_KEY)
+      if (cachedUser) {
+        try {
+          this.setUser(JSON.parse(cachedUser) as User, false)
+        } catch {
+          localStorage.removeItem(USER_KEY)
+        }
+      }
+    },
+
+    setUser(user: User | null, persist = true) {
       this.user = user
       if (user?.unread_notifications_count !== undefined) {
         this.unreadNotifications = user.unread_notifications_count
+      }
+      if (persist && import.meta.client) {
+        if (user) {
+          localStorage.setItem(USER_KEY, JSON.stringify(user))
+        } else {
+          localStorage.removeItem(USER_KEY)
+        }
       }
     },
 
@@ -46,7 +73,7 @@ export const useAuthStore = defineStore('auth', {
         return user
       } catch {
         api.setToken(null)
-        this.user = null
+        this.setUser(null)
         return null
       } finally {
         this.initialized = true
@@ -54,6 +81,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async fetchSettings() {
+      if (this.settings) return this.settings
       const api = useApi()
       try {
         const settings = await api.settings()
@@ -69,6 +97,7 @@ export const useAuthStore = defineStore('auth', {
       const result = await api.auth.login(mobile, password, remember)
       api.setToken(result.token)
       this.setUser(result.user)
+      this.initialized = true
       return result
     },
 
@@ -80,20 +109,24 @@ export const useAuthStore = defineStore('auth', {
         // ignore logout errors
       } finally {
         api.setToken(null)
-        this.user = null
+        this.setUser(null)
+        this.initialized = true
         await navigateTo('/login')
       }
     },
 
     async init() {
-      if (import.meta.client) {
-        const api = useApi()
-        const stored = localStorage.getItem('playnova_token')
-        if (stored) {
-          this.token = stored
-        }
+      if (this.initialized) return
+      if (initPromise) return initPromise
+
+      this.hydrateFromStorage()
+
+      initPromise = this.fetchUser().then(() => undefined)
+      try {
+        await initPromise
+      } finally {
+        initPromise = null
       }
-      await Promise.all([this.fetchSettings(), this.fetchUser()])
     },
   },
 })

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Support\IranDate;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -28,7 +29,9 @@ class TournamentResource extends JsonResource
             'allows_game_login' => $this->allowsGameLogin(),
             'has_published_game_login' => $this->hasPublishedGameLogin(),
             'start_date' => $this->start_date?->toIso8601String(),
+            'start_date_display' => IranDate::formatString($this->start_date),
             'end_date' => $this->end_date?->toIso8601String(),
+            'end_date_display' => IranDate::formatString($this->end_date),
             'winner' => new UserResource($this->whenLoaded('winner')),
             'registrations_count' => $this->when(
                 isset($this->registrations_count),

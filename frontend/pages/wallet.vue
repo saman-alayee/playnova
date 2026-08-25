@@ -4,6 +4,7 @@ useHead({ title: 'کیف پول | PlayNova' })
 
 const api = useApi()
 const flash = useState('flash')
+const { formatDateTime } = usePersianDateTime()
 
 const { data, pending, refresh } = await useAsyncData('wallet', () => api.wallet.show())
 
@@ -132,7 +133,7 @@ async function withdraw() {
           >
             <div>
               <p class="font-bold">{{ tx.type_label || typeLabels[tx.type] || tx.type }}</p>
-              <p class="text-xs text-gray-500">{{ new Date(tx.created_at).toLocaleString('fa-IR') }}</p>
+              <p class="text-xs text-gray-500">{{ formatDateTime(tx.created_at_display || tx.created_at) }}</p>
             </div>
             <div class="text-left">
               <p class="font-bold" :class="Number(tx.amount) >= 0 ? 'text-success' : 'text-danger'">

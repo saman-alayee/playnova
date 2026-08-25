@@ -196,10 +196,7 @@ class AuthController extends Controller
             return \App\Services\CaptchaService::failResponse();
         }
 
-        $user = User::where('email', $login)
-            ->orWhere('mobile', $login)
-            ->orWhere('username', $login)
-            ->first();
+        $user = User::findByLogin($login);
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             return back()->withErrors(['mobile' => 'اطلاعات ورود صحیح نیست.'])->withInput();

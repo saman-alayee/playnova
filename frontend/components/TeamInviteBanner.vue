@@ -6,12 +6,10 @@ const api = useApi()
 
 const pending = ref<TeamInvite[]>([])
 const sent = ref<TeamInvite[]>([])
-const loading = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 async function refresh(force = false) {
-  if (!auth.isAuthenticated) return
-  loading.value = true
+  if (!auth.isAuthenticated || (import.meta.client && document.hidden && !force)) return
   try {
     const data = await api.teamInvites.banner()
     pending.value = data.pending || []
@@ -21,8 +19,28 @@ async function refresh(force = false) {
       pending.value = []
       sent.value = []
     }
-  } finally {
-    loading.value = false
+  }
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function startPolling() {
+  stopPolling()
+  if (!auth.isAuthenticated) return
+  void refresh(true)
+  pollTimer = setInterval(() => refresh(false), 3000)
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    stopPolling()
+  } else {
+    startPolling()
   }
 }
 
@@ -39,21 +57,22 @@ async function handleAction(action: 'accept' | 'decline' | 'cancel', id: number)
 }
 
 onMounted(() => {
-  if (auth.isAuthenticated) {
-    refresh(true)
-    pollTimer = setInterval(() => refresh(false), 12000)
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) refresh(true)
-    })
-  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  startPolling()
 })
 
 onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  stopPolling()
 })
 
 watch(() => auth.isAuthenticated, (val) => {
-  if (val) refresh(true)
+  if (val) startPolling()
+  else {
+    stopPolling()
+    pending.value = []
+    sent.value = []
+  }
 })
 </script>
 
@@ -69,6 +88,9 @@ watch(() => auth.isAuthenticated, (val) => {
         شما را به مسابقه
         <strong>{{ invite.tournament_title }}</strong>
         دعوت کرده است.
+        <span v-if="invite.seconds_remaining" class="text-yellow-400 text-xs block mt-1">
+          {{ invite.seconds_remaining }} ثانیه باقی‌مانده
+        </span>
       </p>
       <div class="flex gap-2">
         <button

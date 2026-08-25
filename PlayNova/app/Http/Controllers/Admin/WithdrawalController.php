@@ -79,9 +79,9 @@ class WithdrawalController extends BaseAdminController
             $reason = trim((string) $request->input('rejection_reason', ''));
 
             DB::transaction(function () use ($transaction, $reason) {
-                $user = $transaction->user;
-                $user->wallet = round($user->wallet + $transaction->amount, 2);
-                $user->save();
+                $lockedUser = User::query()->whereKey($transaction->user_id)->lockForUpdate()->firstOrFail();
+                $lockedUser->wallet = round($lockedUser->wallet + $transaction->amount, 2);
+                $lockedUser->save();
 
                 $description = $transaction->description . ' (رد شده — مبلغ بازگردانده شد)';
                 if ($reason !== '') {

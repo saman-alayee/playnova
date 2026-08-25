@@ -2,6 +2,7 @@
 import type { HistoryItem } from '~/types/api'
 
 useHead({ title: 'تاریخچه مسابقات | PlayNova' })
+definePageMeta({ keepalive: true })
 
 const api = useApi()
 const { data, pending, error } = await useAsyncData('history', () => api.history(), {

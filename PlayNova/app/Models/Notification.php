@@ -22,4 +22,24 @@ class Notification extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /** @return list<string> */
+    public static function teamInviteTypes(): array
+    {
+        return [
+            'team_invite',
+            'team_invite_accepted',
+            'team_invite_declined',
+            'team_invite_cancelled',
+            'team_invite_failed',
+        ];
+    }
+
+    public function scopeVisibleInInbox($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('type')
+                ->orWhereNotIn('type', self::teamInviteTypes());
+        });
+    }
 }
