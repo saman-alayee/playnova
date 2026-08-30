@@ -1,4 +1,5 @@
 import type { ApiResponse, ApiError } from '~/types/api'
+import { captureClientError } from '~/utils/sentry'
 
 const TOKEN_KEY = 'playnova_token'
 
@@ -104,6 +105,11 @@ export function useApi() {
       ) as ApiError
       err.status = fetchError.status
       err.data = fetchError.data
+
+      if ((fetchError.status ?? 0) >= 500) {
+        captureClientError(err, { path, method })
+      }
+
       throw err
     }
   }
@@ -422,12 +428,29 @@ export function useApi() {
       sendBroadcast: (data: { title: string; message: string }) =>
         api.post<void>('/admin/broadcast', data),
 
-      broadcasts: () => api.paginated<import('~/types/api').Notification>('/admin/broadcasts'),
+      sendPersonalNotification: (data: { title: string; message: string; user_id?: number; search?: string }) =>
+        api.post<void>('/admin/notifications/personal', data),
 
-      updateBroadcast: (id: number, data: { title: string; message: string }) =>
-        api.put<void>(`/admin/broadcasts/${id}`, data),
+      broadcasts: () => api.paginated<import('~/types/api').AdminBroadcastCampaign>('/admin/broadcasts'),
 
-      deleteBroadcast: (id: number) => api.delete<void>(`/admin/broadcasts/${id}`),
+      personalNotifications: () =>
+        api.paginated<import('~/types/api').Notification>('/admin/notifications/personal'),
+
+      updateBroadcast: (groupId: string, data: { title: string; message: string }) =>
+        api.put<void>(`/admin/broadcasts/${groupId}`, data),
+
+      deleteBroadcast: (groupId: string) => api.delete<{ deleted_count: number }>(`/admin/broadcasts/${groupId}`),
+
+      bulkDeleteBroadcasts: (groupIds: string[]) =>
+        api.post<{ deleted_count: number }>('/admin/broadcasts/bulk-delete', { group_ids: groupIds }),
+
+      updatePersonalNotification: (id: number, data: { title: string; message: string }) =>
+        api.put<void>(`/admin/notifications/personal/${id}`, data),
+
+      deletePersonalNotification: (id: number) => api.delete<void>(`/admin/notifications/personal/${id}`),
+
+      bulkDeletePersonalNotifications: (ids: number[]) =>
+        api.post<{ deleted_count: number }>('/admin/notifications/personal/bulk-delete', { ids }),
 
       rules: () => api.get<import('~/types/api').RuleSection[]>('/admin/rules'),
 
@@ -489,6 +512,17 @@ export function useApi() {
       addSeatAdmin: (email: string) => api.post<void>('/admin/seat-admins', { email }),
 
       removeSeatAdmin: (userId: number) => api.delete<void>(`/admin/seat-admins/${userId}`),
+
+      apiErrors: (query?: Record<string, string | number | boolean | undefined>) =>
+        api.paginated<import('~/types/api').ApiErrorLog>('/admin/api-errors', query),
+
+      apiError: (id: number) => api.get<import('~/types/api').ApiErrorLog>(`/admin/api-errors/${id}`),
+
+      apiErrorStats: () => api.get<import('~/types/api').ApiErrorLogStats>('/admin/api-errors/stats'),
+
+      resolveApiError: (id: number) => api.put<void>(`/admin/api-errors/${id}/resolve`),
+
+      resolveAllApiErrors: () => api.put<{ count: number }>('/admin/api-errors/resolve-all'),
 
       tournamentSeats: () => api.get<import('~/types/api').Tournament[]>('/admin/tournament-seats'),
 

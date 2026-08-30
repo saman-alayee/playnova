@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Http\Resources\V1\TournamentResource;
 use App\Http\Resources\V1\TransactionResource;
 use App\Http\Resources\V1\UserResource;
+use App\Models\ApiErrorLog;
 use App\Models\KycSubmission;
 use App\Models\Ticket;
 use App\Models\Tournament;
@@ -41,6 +42,7 @@ class DashboardController extends BaseApiController
                 'net_revenue' => $totalEntryFees - $totalPrizesPaid,
                 'open_tickets' => Ticket::where('status', 'open')->count(),
                 'pending_kyc' => KycSubmission::where('status', 'pending')->count(),
+                'unresolved_api_errors' => ApiErrorLog::whereNull('resolved_at')->count(),
             ];
         });
 

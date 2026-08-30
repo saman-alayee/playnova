@@ -369,10 +369,13 @@ Return ONLY a JSON array. No markdown, no explanation.
 
 Each item: {"rank":1,"player_name":"Name","uid":"123456789012345678","kills":12}
 
+Rules:
 - rank: integer position (1 = winner / first place)
-- player_name: in-game name as shown
-- uid: numeric Call of Duty player ID / UID if visible (digits only string), else null
+- player_name: copy the in-game name EXACTLY as shown, including special symbols, fancy Unicode letters, emoji, and stylized fonts
+- uid: numeric Call of Duty player ID / UID if visible (digits only string), else null. Prefer UID over name when both are visible.
 - kills: kill count or score if visible, else null
+- If a row shows both clan tag and player name, include the full visible label in player_name
+- Do not "clean up" or latinize names; preserve what appears on screen
 
 Sort by rank ascending. Include every visible row on the scoreboard.
 PROMPT;
@@ -389,10 +392,12 @@ PROMPT;
         return <<<'PROMPT'
 Tournament: {tournament_title}
 Mode: {seat_mode_label}
-Registered participants (for reference):
+Registered participants (match by UID first; names may contain special Unicode characters):
 {participants}
 
 Extract the scoreboard from this media.
+When UID is visible on screen, it is the most reliable identifier.
+Copy player_name exactly as displayed, even with fancy symbols or non-Latin characters.
 PROMPT;
     }
 

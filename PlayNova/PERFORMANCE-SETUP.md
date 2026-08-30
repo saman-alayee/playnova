@@ -44,6 +44,13 @@ This guide applies the Phase A performance optimizations added on 2026-08-21.
 - Nuxt select-seat: golden theme parity with legacy Blade
 - Production deploy assets: `deploy/supervisor-playnova-worker.conf`, `deploy/docker-compose.redis.yml`
 
+### Phase H (2026-08-30)
+
+- Production Redis queue/cache/session defaults (`deploy/.env.production.example`)
+- `GET /api/v1/health` endpoint (DB, cache, queue, redis checks)
+- Sentry Laravel SDK (`sentry/sentry-laravel`) + Nuxt `@sentry/nuxt`
+- `deploy/setup-production.sh` one-shot production bootstrap script
+
 ## 1. Database migrations (safe — no data loss)
 
 ```bash

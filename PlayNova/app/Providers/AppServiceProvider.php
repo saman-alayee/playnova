@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\TeamInviteService;
+use App\Support\ProductionConfig;
 use App\Support\SchemaFeatures;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        ProductionConfig::assertReady();
+
         view()->composer('layouts.app', function ($view) {
             if (! auth()->check() || ! SchemaFeatures::hasTeamInvitesTable()) {
                 $view->with([

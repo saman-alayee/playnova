@@ -143,6 +143,20 @@ export interface Notification {
   is_read: boolean
   created_at: string
   created_at_display?: string
+  group_id?: string
+  recipient_count?: number
+  user?: { id: number; username?: string; mobile?: string; email?: string }
+}
+
+export interface AdminBroadcastCampaign {
+  id: number
+  group_id: string
+  title: string
+  message: string
+  recipient_count: number
+  created_at?: string
+  created_at_display?: string
+  type: 'broadcast'
 }
 
 export interface RuleSection {
@@ -274,6 +288,30 @@ export interface AdminDashboard {
   net_revenue?: number
   open_tickets?: number
   pending_kyc?: number
+  unresolved_api_errors?: number
+}
+
+export interface ApiErrorLog {
+  id: number
+  status_code: number
+  method: string
+  endpoint: string
+  message: string
+  exception_class?: string | null
+  stack_trace?: string | null
+  context?: Record<string, unknown> | null
+  user?: { id: number; username?: string; email?: string } | null
+  ip_address?: string | null
+  is_resolved: boolean
+  resolved_at?: string | null
+  resolved_by?: { id: number; username?: string } | null
+  created_at?: string
+  created_at_display?: string
+}
+
+export interface ApiErrorLogStats {
+  unresolved_count: number
+  last_24h_count: number
 }
 
 export interface PageContent {
@@ -339,6 +377,7 @@ export interface TournamentResultMatched {
   username: string
   cod_id?: string | null
   match_method?: string
+  match_score?: number
 }
 
 export interface TournamentResultUnmatched {

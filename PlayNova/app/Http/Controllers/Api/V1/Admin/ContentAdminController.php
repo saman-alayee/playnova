@@ -4,10 +4,8 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
-use App\Jobs\BroadcastNotificationJob;
 use App\Models\Discount;
 use App\Models\News;
-use App\Models\Notification;
 use App\Models\Rule;
 use App\Modules\Content\Services\ContentCacheService;
 use Illuminate\Http\JsonResponse;
@@ -91,63 +89,6 @@ class ContentAdminController extends BaseApiController
         ContentCacheService::forgetAll();
 
         return $this->success(null, 'خبر حذف شد.');
-    }
-
-    public function broadcast(Request $request): JsonResponse
-    {
-        $this->authorizeAdmin();
-
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'message' => 'required|string|max:2000',
-        ]);
-
-        BroadcastNotificationJob::dispatch($request->title, $request->message);
-
-        return $this->success(null, 'پیام همگانی در صف ارسال قرار گرفت.');
-    }
-
-    public function broadcasts(): JsonResponse
-    {
-        $this->authorizeAdmin();
-
-        $notifications = Notification::where('type', 'broadcast')->orderByDesc('created_at')->paginate(25);
-
-        return $this->paginated($notifications);
-    }
-
-    public function updateBroadcast(Request $request, Notification $notification): JsonResponse
-    {
-        $this->authorizeAdmin();
-
-        if ($notification->type !== 'broadcast') {
-            abort(404);
-        }
-
-        $request->validate([
-            'title' => 'required|string|max:255',
-            'message' => 'required|string|max:2000',
-        ]);
-
-        $notification->update([
-            'title' => $request->title,
-            'message' => $request->message,
-        ]);
-
-        return $this->success($notification->fresh(), 'پیام ویرایش شد.');
-    }
-
-    public function deleteBroadcast(Notification $notification): JsonResponse
-    {
-        $this->authorizeAdmin();
-
-        if ($notification->type !== 'broadcast') {
-            abort(404);
-        }
-
-        $notification->delete();
-
-        return $this->success(null, 'پیام حذف شد.');
     }
 
     public function rules(): JsonResponse

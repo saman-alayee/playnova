@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\ApiErrorLogAdminController;
+use App\Http\Controllers\Api\V1\Admin\NotificationAdminController;
 use App\Http\Controllers\Api\V1\Admin\ContentAdminController;
 use App\Http\Controllers\Api\V1\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Api\V1\Admin\KycAdminController;
@@ -13,6 +15,7 @@ use App\Http\Controllers\Api\V1\Admin\TournamentSeatAdminController;
 use App\Http\Controllers\Api\V1\Admin\UserAdminController;
 use App\Http\Controllers\Api\V1\Admin\WithdrawalAdminController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\HistoryController;
 use App\Http\Controllers\Api\V1\KycController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -23,6 +26,8 @@ use App\Http\Controllers\Api\V1\TeamInviteController;
 use App\Http\Controllers\Api\V1\TournamentController;
 use App\Http\Controllers\Api\V1\WalletController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('health', [HealthController::class, 'index']);
 
 Route::prefix('auth')->middleware('throttle:auth')->group(function () {
     Route::get('captcha', [AuthController::class, 'captcha']);
@@ -95,6 +100,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::prefix('admin')->middleware(['admin', 'admin.cache.invalidate'])->group(function () {
         Route::get('dashboard', [AdminDashboardController::class, 'index']);
+        Route::get('api-errors', [ApiErrorLogAdminController::class, 'index']);
+        Route::get('api-errors/stats', [ApiErrorLogAdminController::class, 'stats']);
+        Route::put('api-errors/resolve-all', [ApiErrorLogAdminController::class, 'resolveAll']);
+        Route::get('api-errors/{apiErrorLog}', [ApiErrorLogAdminController::class, 'show']);
+        Route::put('api-errors/{apiErrorLog}/resolve', [ApiErrorLogAdminController::class, 'resolve']);
         Route::get('tournaments', [AdminResourceController::class, 'tournaments']);
         Route::post('tournaments', [TournamentAdminController::class, 'store']);
         Route::get('tournaments/{tournament}', [TournamentAdminController::class, 'show']);
@@ -150,10 +160,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('news', [ContentAdminController::class, 'storeNews']);
         Route::delete('news/{news}', [ContentAdminController::class, 'deleteNews']);
 
-        Route::post('broadcast', [ContentAdminController::class, 'broadcast']);
-        Route::get('broadcasts', [ContentAdminController::class, 'broadcasts']);
-        Route::put('broadcasts/{notification}', [ContentAdminController::class, 'updateBroadcast']);
-        Route::delete('broadcasts/{notification}', [ContentAdminController::class, 'deleteBroadcast']);
+        Route::post('broadcast', [NotificationAdminController::class, 'sendBroadcast']);
+        Route::get('broadcasts', [NotificationAdminController::class, 'broadcasts']);
+        Route::post('broadcasts/bulk-delete', [NotificationAdminController::class, 'bulkDeleteBroadcasts']);
+        Route::put('broadcasts/{groupId}', [NotificationAdminController::class, 'updateBroadcast']);
+        Route::delete('broadcasts/{groupId}', [NotificationAdminController::class, 'deleteBroadcast']);
+
+        Route::post('notifications/personal', [NotificationAdminController::class, 'sendPersonal']);
+        Route::get('notifications/personal', [NotificationAdminController::class, 'personalNotifications']);
+        Route::post('notifications/personal/bulk-delete', [NotificationAdminController::class, 'bulkDeletePersonal']);
+        Route::put('notifications/personal/{notification}', [NotificationAdminController::class, 'updatePersonal']);
+        Route::delete('notifications/personal/{notification}', [NotificationAdminController::class, 'deletePersonal']);
 
         Route::get('rules', [ContentAdminController::class, 'rules']);
         Route::post('rules', [ContentAdminController::class, 'storeRule']);

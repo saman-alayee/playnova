@@ -189,7 +189,12 @@ class TournamentResultVisionService
             : Setting::getResultAiUserPromptTemplate();
 
         $participantHint = collect($participants)
-            ->map(fn (array $p) => "{$p['username']} | UID: {$p['cod_id']}")
+            ->map(function (array $p) {
+                $seat = $p['seat_number'] ? "seat {$p['seat_number']}" : 'seat ?';
+                $uid = $p['cod_id'] ?: 'unknown';
+
+                return "{$p['username']} | UID: {$uid} | {$seat}";
+            })
             ->implode("\n");
 
         return str_replace(
@@ -362,9 +367,10 @@ class TournamentResultVisionService
         $matched = [];
         $unmatched = [];
         $suggestedWinnerUserId = null;
+        $usedUserIds = [];
 
         foreach ($players as $player) {
-            $user = $this->findParticipant($player, $participants);
+            $user = $this->findParticipant($player, $participants, $usedUserIds);
 
             if ($user) {
                 $entry = [
@@ -376,6 +382,7 @@ class TournamentResultVisionService
                     'username' => $user['username'],
                     'cod_id' => $user['cod_id'],
                     'match_method' => $user['match_method'],
+                    'match_score' => $user['match_score'] ?? null,
                 ];
                 $matched[] = $entry;
 
@@ -406,59 +413,26 @@ class TournamentResultVisionService
     /**
      * @param  array{rank:int,name:?string,uid:?string,kills:?int,score:?int}  $player
      * @param  list<array{user_id:int,username:string,cod_id:?string,seat_number:?int}>  $participants
-     * @return array{user_id:int,username:string,cod_id:?string,match_method:string}|null
+     * @param  array<int, true>  $usedUserIds
+     * @return array{user_id:int,username:string,cod_id:?string,seat_number:?int,match_method:string,match_score?:float}|null
      */
-    protected function findParticipant(array $player, array $participants): ?array
+    protected function findParticipant(array $player, array $participants, array &$usedUserIds): ?array
     {
-        $detectedUid = $this->normalizeUid($player['uid']);
-        $detectedName = $this->normalizeName($player['name']);
-
-        if ($detectedUid) {
-            foreach ($participants as $p) {
-                if ($this->normalizeUid($p['cod_id']) === $detectedUid) {
-                    return array_merge($p, ['match_method' => 'uid']);
-                }
-            }
-        }
-
-        if ($detectedName) {
-            foreach ($participants as $p) {
-                if ($this->normalizeName($p['username']) === $detectedName) {
-                    return array_merge($p, ['match_method' => 'username']);
-                }
-            }
-
-            foreach ($participants as $p) {
-                $username = $this->normalizeName($p['username']);
-                if ($username && (str_contains($username, $detectedName) || str_contains($detectedName, $username))) {
-                    return array_merge($p, ['match_method' => 'username_partial']);
-                }
-            }
-        }
-
-        return null;
+        return PlayerNameMatcher::findBestMatch(
+            is_string($player['name'] ?? null) ? $player['name'] : null,
+            $player['uid'] ?? null,
+            $participants,
+            $usedUserIds,
+        );
     }
 
     protected function normalizeUid(mixed $value): ?string
     {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $digits = preg_replace('/\D+/', '', (string) $value);
-
-        return $digits !== '' ? $digits : null;
+        return PlayerNameMatcher::normalizeUid($value);
     }
 
     protected function normalizeName(mixed $value): ?string
     {
-        if (! is_string($value) || trim($value) === '') {
-            return null;
-        }
-
-        $name = mb_strtolower(trim($value));
-        $name = preg_replace('/\s+/', '', $name);
-
-        return $name !== '' ? $name : null;
+        return PlayerNameMatcher::normalizeName($value);
     }
 }

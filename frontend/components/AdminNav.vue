@@ -32,6 +32,9 @@ function isActive(path: string) {
     <NuxtLink to="/admin/kyc" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/kyc') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       احراز هویت
     </NuxtLink>
+    <NuxtLink to="/admin/errors" class="px-3 py-1.5 rounded transition relative" :class="isActive('/admin/errors') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
+      ⚠️ خطاهای API
+    </NuxtLink>
     <NuxtLink to="/admin/site-settings" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/site-settings') || isActive('/admin/settings/site') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       تنظیمات سایت
     </NuxtLink>
@@ -42,10 +45,10 @@ function isActive(path: string) {
       اخبار
     </NuxtLink>
     <NuxtLink to="/admin/broadcast" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/broadcast') && !route.path.includes('manage') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
-      ارسال پیام
+      📣 ارسال اعلان
     </NuxtLink>
     <NuxtLink to="/admin/broadcast-manage" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/broadcast-manage') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
-      📋 مدیریت پیام‌ها
+      📋 مدیریت اعلان‌ها
     </NuxtLink>
     <NuxtLink to="/admin/tickets" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/tickets') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       تیکت‌ها

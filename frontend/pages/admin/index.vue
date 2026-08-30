@@ -82,6 +82,16 @@ function formatCount(value?: number) {
           <p class="text-xs text-gray-400">KYC معلق</p>
           <p class="text-2xl font-black text-amber-300">{{ formatCount(data?.pending_kyc) }}</p>
         </div>
+        <NuxtLink
+          to="/admin/errors"
+          class="bg-dark-800 border rounded-xl p-5 transition"
+          :class="(data?.unresolved_api_errors ?? 0) > 0 ? 'border-red-500/40 hover:border-red-400/60' : 'border-dark-600 hover:border-dark-500'"
+        >
+          <p class="text-xs text-gray-400">خطاهای API بررسی‌نشده</p>
+          <p class="text-2xl font-black" :class="(data?.unresolved_api_errors ?? 0) > 0 ? 'text-red-400' : 'text-white'">
+            {{ formatCount(data?.unresolved_api_errors) }}
+          </p>
+        </NuxtLink>
       </div>
 
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -96,6 +106,9 @@ function formatCount(value?: number) {
         </NuxtLink>
         <NuxtLink to="/admin/kyc" class="bg-dark-800 border border-dark-600 rounded-xl p-4 hover:border-primary/40 transition">
           احراز هویت
+        </NuxtLink>
+        <NuxtLink to="/admin/errors" class="bg-dark-800 border border-dark-600 rounded-xl p-4 hover:border-red-400/40 transition">
+          خطاهای API
         </NuxtLink>
         <NuxtLink to="/admin/site-settings" class="bg-dark-800 border border-dark-600 rounded-xl p-4 hover:border-primary/40 transition">
           تنظیمات سایت

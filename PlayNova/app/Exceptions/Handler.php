@@ -2,6 +2,7 @@
 
 namespace App\Exceptions;
 
+use App\Services\ApiErrorLogService;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
 
@@ -42,7 +43,13 @@ class Handler extends ExceptionHandler
     public function register(): void
     {
         $this->reportable(function (Throwable $e) {
-            //
+            if (request()->is('api/*') && $this->shouldReport($e)) {
+                ApiErrorLogService::logException(request(), $e);
+            }
+
+            if (app()->bound('sentry') && $this->shouldReport($e)) {
+                app('sentry')->captureException($e);
+            }
         });
     }
 }

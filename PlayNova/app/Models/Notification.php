@@ -11,6 +11,7 @@ class Notification extends Model
         'title',
         'message',
         'type',
+        'broadcast_group_id',
         'is_read',
     ];
 

@@ -34,6 +34,7 @@ interface RankRow {
   detected_name?: string | null
   detected_uid?: string | null
   match_method?: string | null
+  match_score?: number | null
 }
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -127,6 +128,7 @@ function buildRankedRows(result: TournamentResultAnalysis) {
       detected_name: row.detected_name,
       detected_uid: row.detected_uid,
       match_method: row.match_method,
+      match_score: row.match_score ?? null,
     })
   }
 
@@ -245,6 +247,27 @@ function removeRow(index: number) {
 }
 
 const winnerPreview = computed(() => rankedRows.value[0] ?? null)
+
+function matchMethodLabel(method?: string | null) {
+  switch (method) {
+    case 'uid':
+      return 'تطبیق UID'
+    case 'uid_suffix':
+      return 'تطبیق بخشی UID'
+    case 'username':
+      return 'تطبیق دقیق نام'
+    case 'username_skeleton':
+      return 'تطبیق نام (بدون نماد)'
+    case 'name_fuzzy_high':
+      return 'تطبیق نزدیک نام'
+    case 'name_fuzzy':
+      return 'تطبیق تقریبی نام'
+    case 'username_partial':
+      return 'تطبیق جزئی نام'
+    default:
+      return method || ''
+  }
+}
 
 async function applyResult() {
   const winner = rankedRows.value[0]
@@ -440,7 +463,13 @@ onBeforeUnmount(() => {
           <span class="text-gray-500 text-lg shrink-0">⠿</span>
           <div class="flex-1 min-w-[180px]">
             <p class="text-white font-bold">{{ row.username || '—' }}</p>
-            <p v-if="row.detected_name" class="text-xs text-gray-400">تشخیص: {{ row.detected_name }}</p>
+            <p v-if="row.detected_name" class="text-xs text-gray-400">
+              تشخیص: {{ row.detected_name }}
+              <span v-if="row.match_method" class="text-gray-500">
+                — {{ matchMethodLabel(row.match_method) }}
+                <span v-if="row.match_score"> ({{ Math.round(row.match_score * 100) }}%)</span>
+              </span>
+            </p>
           </div>
           <span class="text-xs text-gray-500" dir="ltr">{{ row.cod_id || '—' }}</span>
           <input
