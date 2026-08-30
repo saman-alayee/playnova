@@ -86,39 +86,22 @@ php artisan serve --host=127.0.0.1 --port=8000
 
 - API: http://127.0.0.1:8000/api/v1  
 
-### Production (Redis + Queue + Sentry)
+### Production (Redis + Queue + Sentry — بدون Docker)
 
 ```bash
-# 1. Copy production env template
-cp deploy/.env.production.example PlayNova/.env
-# Edit DB, APP_KEY, SENTRY_LARAVEL_DSN, etc.
-
-# 2. One-shot bootstrap (Redis, migrate, cache, frontend build)
-bash deploy/setup-production.sh
-
-# 3. Supervisor worker
-# copy deploy/supervisor-playnova-worker.conf → /etc/supervisor/conf.d/
-
-# 4. Health check
-curl https://api.your-domain.com/api/v1/health
+# روی سرور
+cd /home/playnnu/domains/playnova.ir/public_html
+bash deploy/deploy.sh
 ```
 
-See `deploy/MONITORING.md` for Sentry setup (Laravel + Nuxt DSN).
+Redis native:
 
-Key `PlayNova/.env` values:
-
-```env
-CACHE_DRIVER=redis
-SESSION_DRIVER=redis
-QUEUE_CONNECTION=redis
-SENTRY_LARAVEL_DSN=https://...
+```bash
+sudo apt install redis-server php-redis
+sudo systemctl enable --now redis-server
 ```
 
-Key `frontend/.env` values:
-
-```env
-NUXT_PUBLIC_SENTRY_DSN=https://...
-```
+See `deploy/MONITORING.md` for full setup.
 
 ### ۳) Nuxt Frontend
 

@@ -5,13 +5,19 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="${ROOT_DIR}/PlayNova"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 
-echo "==> PlayNova production setup"
+echo "==> PlayNova production setup (native — no Docker)"
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker not found. Install Redis manually or via your hosting panel."
+if ! command -v redis-cli >/dev/null 2>&1; then
+  echo "WARNING: redis-cli not found. Install Redis on the server:"
+  echo "  Ubuntu/Debian: sudo apt install redis-server php-redis"
+  echo "  CentOS:        sudo yum install redis php-redis"
 else
-  echo "==> Starting Redis"
-  docker compose -f "${ROOT_DIR}/deploy/docker-compose.redis.yml" up -d
+  if redis-cli ping >/dev/null 2>&1; then
+    echo "==> Redis is running"
+  else
+    echo "WARNING: Redis is installed but not responding. Start it:"
+    echo "  sudo systemctl enable --now redis-server"
+  fi
 fi
 
 cd "${BACKEND_DIR}"
