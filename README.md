@@ -8,7 +8,7 @@ Nuxt 3 (frontend)  →  Laravel API v1  →  MySQL
 
 - **Backend:** Laravel 10 + Sanctum (`PlayNova/`)
 - **Frontend:** Nuxt 3 + Pinia + Tailwind (`frontend/`)
-- **Blade:** هنوز فعال است برای مقایسه / fallback
+- **Deploy:** `deploy/` — Redis docker-compose + Supervisor worker config
 
 ---
 
@@ -84,8 +84,25 @@ php artisan storage:link
 php artisan serve --host=127.0.0.1 --port=8000
 ```
 
-- Blade UI: http://127.0.0.1:8000  
 - API: http://127.0.0.1:8000/api/v1  
+
+### Production (Redis + Queue)
+
+```bash
+# Redis (optional local / required production)
+docker compose -f deploy/docker-compose.redis.yml up -d
+
+# PlayNova/.env
+CACHE_DRIVER=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=database
+
+php artisan migrate
+php artisan config:cache
+php artisan route:cache
+
+# Supervisor: copy deploy/supervisor-playnova-worker.conf → /etc/supervisor/conf.d/
+```
 
 ### ۳) Nuxt Frontend
 

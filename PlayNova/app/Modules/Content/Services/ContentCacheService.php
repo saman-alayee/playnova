@@ -5,6 +5,7 @@ namespace App\Modules\Content\Services;
 use App\Models\Rule;
 use App\Models\Setting;
 use App\Services\FaqData;
+use App\Modules\Tournament\Services\TournamentListingService;
 use Illuminate\Support\Facades\Cache;
 
 class ContentCacheService
@@ -66,6 +67,12 @@ class ContentCacheService
         foreach (['content:privacy', 'content:about', 'content:contact', 'content:rules'] as $key) {
             Cache::forget($key);
         }
+
+        foreach (array_keys(FaqData::categories()) as $category) {
+            Cache::forget('content:faq:' . $category);
+        }
+
         Cache::forget('content:faq:all');
+        TournamentListingService::forgetHomeCache();
     }
 }

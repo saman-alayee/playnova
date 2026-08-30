@@ -35,10 +35,12 @@ class DashboardController extends BaseApiController
                 'total_deposits' => Transaction::where('type', 'deposit')->where('status', 'completed')->sum('amount'),
                 'total_withdraws_completed' => Transaction::where('type', 'withdraw')->where('status', 'completed')->sum('amount'),
                 'pending_withdraws' => Transaction::where('type', 'withdraw')->where('status', 'pending')->sum('amount'),
+                'pending_withdrawals_count' => Transaction::where('type', 'withdraw')->where('status', 'pending')->count(),
                 'total_entry_fees' => $totalEntryFees,
                 'total_prizes_paid' => $totalPrizesPaid,
                 'net_revenue' => $totalEntryFees - $totalPrizesPaid,
                 'open_tickets' => Ticket::where('status', 'open')->count(),
+                'pending_kyc' => KycSubmission::where('status', 'pending')->count(),
             ];
         });
 

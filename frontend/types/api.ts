@@ -66,6 +66,7 @@ export interface Tournament {
   status: 'upcoming' | 'active' | 'ongoing' | 'ended' | 'cancelled' | string
   status_label?: string
   seat_mode?: number
+  seat_mode_label?: string
   winner_id?: number | null
   game_login_info?: string | null
   is_registered?: boolean
@@ -214,10 +215,30 @@ export interface Registration {
   tournament?: Tournament
 }
 
+export interface SeatGridSlot {
+  seat_number: number
+  label: string
+  slot: number
+}
+
+export interface SeatGridTeam {
+  team: number
+  slots: SeatGridSlot[]
+}
+
+export interface OccupiedSeatInfo {
+  seat_number: number
+  seat_label: string
+  user?: User
+}
+
 export interface SeatSelectionData {
   tournament: Tournament
-  taken_seats: number[]
-  user_registration?: Registration | null
+  registration?: Registration
+  teams_grid?: SeatGridTeam[]
+  occupied_seats?: Record<string, OccupiedSeatInfo>
+  taken_seats?: number[]
+  seat_label?: string
 }
 
 export interface GameLoginInfo {
@@ -236,11 +257,18 @@ export interface KycSubmission {
 }
 
 export interface AdminDashboard {
-  users_count?: number
-  tournaments_count?: number
-  pending_withdrawals?: number
+  total_users?: number
+  total_tournaments?: number
+  active_tournaments?: number
+  total_deposits?: number
+  total_withdraws_completed?: number
+  pending_withdraws?: number
+  pending_withdrawals_count?: number
+  total_entry_fees?: number
+  total_prizes_paid?: number
+  net_revenue?: number
+  open_tickets?: number
   pending_kyc?: number
-  recent_transactions?: Transaction[]
 }
 
 export interface PageContent {

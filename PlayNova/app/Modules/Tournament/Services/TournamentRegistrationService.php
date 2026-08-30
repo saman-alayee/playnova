@@ -61,7 +61,7 @@ class TournamentRegistrationService
                 throw new RuntimeException('seat_taken');
             }
 
-            if ($this->seatedCount($lockedTournament->id) >= (int) $lockedTournament->capacity) {
+            if ($this->seatedCountForTournament($lockedTournament) >= (int) $lockedTournament->capacity) {
                 throw new RuntimeException('tournament_full');
             }
 
@@ -100,7 +100,7 @@ class TournamentRegistrationService
                 throw new RuntimeException('registration_closed');
             }
 
-            if ($this->seatedCount($lockedTournament->id) >= (int) $lockedTournament->capacity) {
+            if ($this->seatedCountForTournament($lockedTournament) >= (int) $lockedTournament->capacity) {
                 throw new RuntimeException('tournament_full');
             }
 
@@ -139,6 +139,11 @@ class TournamentRegistrationService
             ->where('tournament_id', $tournamentId)
             ->whereNotNull('seat_number')
             ->count();
+    }
+
+    protected function seatedCountForTournament(Tournament $tournament): int
+    {
+        return max(0, (int) ($tournament->registered_count ?? $this->seatedCount($tournament->id)));
     }
 
     public function syncRegisteredCount(Tournament $tournament): void

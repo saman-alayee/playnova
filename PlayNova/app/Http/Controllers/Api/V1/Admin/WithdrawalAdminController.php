@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
 use App\Http\Resources\V1\TransactionResource;
 use App\Http\Traits\InvalidatesAdminDashboard;
+use App\Jobs\SendUserNotificationJob;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -58,6 +59,13 @@ class WithdrawalAdminController extends BaseApiController
 
             $this->invalidateAdminDashboard();
 
+            SendUserNotificationJob::dispatch(
+                (int) $transaction->user_id,
+                'برداشت رد شد',
+                'درخواست برداشت شما رد شد و مبلغ به کیف پول بازگردانده شد.',
+                'withdrawal',
+            );
+
             return $this->success(TransactionResource::make($transaction->fresh('user')), 'برداشت رد شد و مبلغ بازگردانده شد.');
         }
 
@@ -68,6 +76,13 @@ class WithdrawalAdminController extends BaseApiController
             ])->save();
 
             $this->invalidateAdminDashboard();
+
+            SendUserNotificationJob::dispatch(
+                (int) $transaction->user_id,
+                'برداشت تأیید شد',
+                'درخواست برداشت شما تأیید و پردازش شد.',
+                'withdrawal',
+            );
 
             return $this->success(TransactionResource::make($transaction->fresh('user')), 'برداشت تأیید شد.');
         }

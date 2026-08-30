@@ -34,9 +34,13 @@ class ResourceController extends BaseApiController
 
         $query = User::query();
         if ($request->filled('search')) {
-            $search = $request->search;
+            $search = trim((string) $request->search);
             $query->where(function ($q) use ($search) {
-                $q->where('username', 'like', "%{$search}%")
+                $q->where('mobile', $search)
+                    ->orWhere('cod_id', $search)
+                    ->orWhere('username', 'like', "{$search}%")
+                    ->orWhere('email', 'like', "{$search}%")
+                    ->orWhere('username', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('mobile', 'like', "%{$search}%")
                     ->orWhere('cod_id', 'like', "%{$search}%");

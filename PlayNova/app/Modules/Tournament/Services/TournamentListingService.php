@@ -21,39 +21,53 @@ class TournamentListingService
             $hasLeague = SchemaFeatures::tournamentsHaveLeagueColumn();
             $confirmedRegistrations = fn ($query) => $query->whereNotNull('seat_number');
 
-            $allForLeagues = Tournament::whereIn('status', ['active', 'upcoming', 'ongoing'])
-                ->withCount(['registrations as registrations_count' => $confirmedRegistrations])
-                ->orderBy('start_date')
-                ->get();
-
-            $activeTournaments = $allForLeagues
-                ->filter(fn ($tournament) => in_array($tournament->status, ['active', 'ongoing'], true))
-                ->when($hasLeague, fn ($collection) => $collection->where('league', 'professional'))
-                ->sortByDesc('prize_pool')
-                ->sortBy('start_date')
-                ->values();
-
-            $leagues = [
-                'beginner' => collect(),
-                'intermediate' => collect(),
-                'professional' => collect(),
-            ];
-
-            if ($hasLeague) {
-                foreach ($allForLeagues as $tournament) {
-                    $key = in_array($tournament->league, array_keys($leagues), true)
-                        ? $tournament->league
-                        : 'intermediate';
-                    $leagues[$key]->push($tournament);
-                }
-            } else {
-                $leagues['intermediate'] = $allForLeagues;
-            }
+            $baseQuery = fn () => Tournament::query()
+                ->whereIn('status', ['active', 'upcoming', 'ongoing'])
+                ->withCount(['registrations as registrations_count' => $confirmedRegistrations]);
 
             $news = News::where('is_published', true)
                 ->orderByDesc('created_at')
                 ->take(5)
                 ->get();
+
+            if ($hasLeague) {
+                $activeTournaments = $baseQuery()
+                    ->whereIn('status', ['active', 'ongoing'])
+                    ->where('league', 'professional')
+                    ->orderByDesc('prize_pool')
+                    ->orderBy('start_date')
+                    ->get()
+                    ->values();
+
+                $leagues = [
+                    'beginner' => $baseQuery()
+                        ->where('league', 'beginner')
+                        ->orderBy('start_date')
+                        ->get(),
+                    'intermediate' => $baseQuery()
+                        ->where('league', 'intermediate')
+                        ->orderBy('start_date')
+                        ->get(),
+                    'professional' => $baseQuery()
+                        ->where('league', 'professional')
+                        ->orderBy('start_date')
+                        ->get(),
+                ];
+            } else {
+                $all = $baseQuery()->orderBy('start_date')->get();
+
+                $activeTournaments = $all
+                    ->filter(fn ($tournament) => in_array($tournament->status, ['active', 'ongoing'], true))
+                    ->sortByDesc('prize_pool')
+                    ->sortBy('start_date')
+                    ->values();
+
+                $leagues = [
+                    'beginner' => collect(),
+                    'intermediate' => $all,
+                    'professional' => collect(),
+                ];
+            }
 
             return compact('activeTournaments', 'leagues', 'news');
         });

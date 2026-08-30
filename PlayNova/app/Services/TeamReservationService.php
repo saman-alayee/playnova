@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\SendUserNotificationJob;
 use App\Models\Registration;
 use App\Models\TeamInvite;
 use App\Models\Tournament;
@@ -180,6 +181,13 @@ class TeamReservationService
                 $labelInvitee = $tournament->seatDisplayLabel($seatInvitee);
 
                 TournamentListingService::forgetHomeCache();
+
+                SendUserNotificationJob::dispatch(
+                    (int) $lockedInvite->inviter_id,
+                    'تأیید دعوت تیمی',
+                    sprintf('هم‌تیمی شما در مسابقه «%s» دعوت را پذیرفت.', $tournament->title),
+                    'team_invite',
+                );
 
                 return [
                     'ok' => true,
@@ -370,6 +378,13 @@ class TeamReservationService
         }
 
         TournamentListingService::forgetHomeCache();
+
+        SendUserNotificationJob::dispatch(
+            (int) $groupInvites->first()->inviter_id,
+            'تأیید تیم کامل',
+            sprintf('همه هم‌تیمی‌های شما در مسابقه «%s» دعوت را پذیرفتند.', $lockedTournament->title),
+            'team_invite',
+        );
 
         $labels = collect($teamSeats)->map(fn ($s) => $lockedTournament->seatDisplayLabel($s))->join('، ');
 

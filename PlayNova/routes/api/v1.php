@@ -46,7 +46,7 @@ Route::get('settings', [SettingsController::class, 'index'])->middleware('api.ca
 Route::get('home', [TournamentController::class, 'home'])->middleware('api.cache.public');
 Route::get('leaderboard', [TournamentController::class, 'leaderboard'])->middleware('api.cache.public');
 Route::get('rules', [TournamentController::class, 'rules'])->middleware('api.cache.public');
-Route::get('history', [HistoryController::class, 'index']);
+Route::get('history', [HistoryController::class, 'index'])->middleware('api.cache.public');
 Route::get('tournaments/{tournament}', [TournamentController::class, 'show']);
 
 Route::prefix('pages')->middleware('api.cache.public')->group(function () {
@@ -92,7 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('admin/tournament-seats', [TournamentSeatAdminController::class, 'index']);
     Route::get('admin/tournament-seats/{tournament}', [TournamentSeatAdminController::class, 'show']);
 
-    Route::prefix('admin')->middleware('admin')->group(function () {
+    Route::prefix('admin')->middleware(['admin', 'admin.cache.invalidate'])->group(function () {
         Route::get('dashboard', [AdminDashboardController::class, 'index']);
         Route::get('tournaments', [AdminResourceController::class, 'tournaments']);
         Route::post('tournaments', [TournamentAdminController::class, 'store']);

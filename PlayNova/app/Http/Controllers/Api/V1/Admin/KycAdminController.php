@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
+use App\Jobs\SendUserNotificationJob;
 use App\Models\KycSubmission;
 use App\Services\KycEncryptionService;
 use Illuminate\Http\JsonResponse;
@@ -35,9 +36,23 @@ class KycAdminController extends BaseApiController
             if ($request->status === 'approved') {
                 $user->kyc_verified_at = now();
                 $user->save();
+
+                SendUserNotificationJob::dispatch(
+                    (int) $user->id,
+                    'احراز هویت تأیید شد',
+                    'مدارک احراز هویت شما تأیید شد.',
+                    'kyc',
+                );
             } elseif ($request->status === 'rejected') {
                 $user->kyc_verified_at = null;
                 $user->save();
+
+                SendUserNotificationJob::dispatch(
+                    (int) $user->id,
+                    'احراز هویت رد شد',
+                    'مدارک احراز هویت شما رد شد. لطفاً مدارک را اصلاح و دوباره ارسال کنید.',
+                    'kyc',
+                );
             }
         }
 

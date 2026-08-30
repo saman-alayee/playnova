@@ -25,6 +25,25 @@ This guide applies the Phase A performance optimizations added on 2026-08-21.
 - Additional safe indexes migration (`2026_08_23_000001_add_remaining_performance_indexes.php`)
 - Admin list pages paginated (tickets, broadcasts, tournaments, news, discounts)
 
+### Phase F (2026-08-28)
+
+- `admin.cache.invalidate` middleware wired on all admin routes
+- Home cache bust on content/news mutations via `ContentCacheService::forgetAll()`
+- `SendUserNotificationJob` dispatched for team invites, withdrawals, and KYC status changes
+- Home page league filtering moved to SQL queries
+- `registered_count` used for capacity checks during registration
+- Admin user search prefers exact/prefix matches (uses new username/email indexes)
+- New query performance indexes migration (`2026_08_28_000001_add_query_performance_indexes.php`)
+- `/history` endpoint cached via `api.cache.public` middleware
+- Redundant `registrations` duplicate indexes removed
+
+### Phase G (2026-08-30)
+
+- Admin dashboard API: `pending_kyc`, `pending_withdrawals_count`
+- Nuxt admin dashboard: full financial report UI
+- Nuxt select-seat: golden theme parity with legacy Blade
+- Production deploy assets: `deploy/supervisor-playnova-worker.conf`, `deploy/docker-compose.redis.yml`
+
 ## 1. Database migrations (safe — no data loss)
 
 ```bash

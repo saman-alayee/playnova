@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\V1\TeamInviteResource;
 use App\Jobs\ExpireTeamInviteJob;
+use App\Jobs\SendUserNotificationJob;
 use App\Models\Registration;
 use App\Models\TeamInvite;
 use App\Models\Tournament;
@@ -80,12 +81,19 @@ class TeamInviteController extends BaseApiController
         $userId = (int) $user->id;
         $inviteeIds = [];
 
-        foreach ($codIds as $codId) {
-            if ($codId === '') {
-                return $this->error('آیدی کالاف هم‌تیمی نمی‌تواند خالی باشد.', 422);
-            }
+        $normalizedCodIds = array_values(array_filter(array_map('trim', $codIds), fn (string $codId) => $codId !== ''));
 
-            $invitee = User::where('cod_id', $codId)->first();
+        if (count($normalizedCodIds) !== count($codIds)) {
+            return $this->error('آیدی کالاف هم‌تیمی نمی‌تواند خالی باشد.', 422);
+        }
+
+        $inviteesByCodId = User::query()
+            ->whereIn('cod_id', $normalizedCodIds)
+            ->get()
+            ->keyBy('cod_id');
+
+        foreach ($normalizedCodIds as $codId) {
+            $invitee = $inviteesByCodId->get($codId);
             if (! $invitee) {
                 return $this->error("کاربری با آیدی «{$codId}» یافت نشد.", 422);
             }
@@ -167,6 +175,13 @@ class TeamInviteController extends BaseApiController
 
             foreach ($invites as $invite) {
                 ExpireTeamInviteJob::dispatch($invite->id)->delay(now()->addSeconds(TeamInvite::INVITE_TTL_SECONDS));
+
+                SendUserNotificationJob::dispatch(
+                    (int) $invite->invitee_id,
+                    'دعوت به تیم',
+                    sprintf('شما به تیم «%s» در مسابقه «%s» دعوت شده‌اید.', $user->username, $tournament->title),
+                    'team_invite',
+                );
             }
         } catch (\Throwable $e) {
             report($e);
@@ -249,6 +264,15 @@ class TeamInviteController extends BaseApiController
         }
 
         $this->forgetInviteCaches($invite);
+        $invite->loadMissing('tournament');
+        $tournamentTitle = $invite->tournament?->title ?? 'مسابقه';
+
+        SendUserNotificationJob::dispatch(
+            (int) $invite->inviter_id,
+            'رد دعوت تیمی',
+            sprintf('دعوت تیمی شما در مسابقه «%s» رد شد.', $tournamentTitle),
+            'team_invite',
+        );
 
         return $this->success(null, 'درخواست تیمی رد شد.');
     }
@@ -283,6 +307,31 @@ class TeamInviteController extends BaseApiController
         }
 
         $this->forgetInviteCaches($invite);
+        $invite->loadMissing('tournament');
+        $tournamentTitle = $invite->tournament?->title ?? 'مسابقه';
+
+        if ($invite->team_group_id) {
+            $inviteeIds = TeamInvite::query()
+                ->where('team_group_id', $invite->team_group_id)
+                ->pluck('invitee_id')
+                ->unique();
+
+            foreach ($inviteeIds as $inviteeId) {
+                SendUserNotificationJob::dispatch(
+                    (int) $inviteeId,
+                    'لغو دعوت تیمی',
+                    sprintf('دعوت تیمی شما در مسابقه «%s» لغو شد.', $tournamentTitle),
+                    'team_invite',
+                );
+            }
+        } else {
+            SendUserNotificationJob::dispatch(
+                (int) $invite->invitee_id,
+                'لغو دعوت تیمی',
+                sprintf('دعوت تیمی شما در مسابقه «%s» لغو شد.', $tournamentTitle),
+                'team_invite',
+            );
+        }
 
         return $this->success(null, 'درخواست تیمی لغو شد.');
     }
