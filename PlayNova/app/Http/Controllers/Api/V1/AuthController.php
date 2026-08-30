@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\User;
 use App\Modules\Audit\Services\ActivityLogService;
 use App\Modules\User\Services\AuthRegistrationService;
+use App\Services\CaptchaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,21 +25,34 @@ class AuthController extends BaseApiController
         protected ActivityLogService $activity,
     ) {}
 
+    public function captcha(): JsonResponse
+    {
+        return $this->success(CaptchaService::issue());
+    }
+
     public function login(Request $request): JsonResponse
     {
         $login = trim((string) ($request->input('login') ?: $request->input('mobile')));
         $request->merge(['login' => $login]);
 
-        $validator = Validator::make($request->all(), [
-            'login' => 'required|string',
-            'password' => 'required|string',
-        ], [
-            'login.required' => 'نام کاربری یا موبایل الزامی است.',
-            'password.required' => 'رمز عبور الزامی است.',
-        ]);
+        $validator = Validator::make(
+            $request->all(),
+            array_merge([
+                'login' => 'required|string',
+                'password' => 'required|string',
+            ], CaptchaService::apiRules()),
+            array_merge([
+                'login.required' => 'نام کاربری یا موبایل الزامی است.',
+                'password.required' => 'رمز عبور الزامی است.',
+            ], CaptchaService::messages())
+        );
 
         if ($validator->fails()) {
             return $this->error('اطلاعات ورود نامعتبر است.', 422, $validator->errors());
+        }
+
+        if (! CaptchaService::validateWithKey($request->input('captcha_key'), $request->input('captcha'))) {
+            return $this->error('کد امنیتی صحیح نیست.', 422, ['captcha' => ['کد امنیتی صحیح نیست.']]);
         }
 
         $user = User::findByLogin($login);
@@ -64,10 +78,18 @@ class AuthController extends BaseApiController
             return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, $inputError);
         }
 
-        $validator = $this->registration->makeRegistrationValidator($request);
+        $validator = Validator::make(
+            $request->all(),
+            array_merge($this->registration->registrationRules(), CaptchaService::apiRules()),
+            array_merge($this->registration->registrationMessages(), CaptchaService::messages())
+        );
 
         if ($validator->fails()) {
             return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, $validator->errors());
+        }
+
+        if (! CaptchaService::validateWithKey($request->input('captcha_key'), $request->input('captcha'))) {
+            return $this->error('کد امنیتی صحیح نیست.', 422, ['captcha' => ['کد امنیتی صحیح نیست.']]);
         }
 
         if (Setting::isSmsRegisterVerifyEnabled()) {

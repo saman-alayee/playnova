@@ -166,10 +166,23 @@ export function useApi() {
     ensureCsrfCookie,
 
     auth: {
-      login: (login: string, password: string, remember = false) =>
+      captcha: () => api.get<import('~/types/api').CaptchaChallenge>('/auth/captcha', undefined, false),
+
+      login: (
+        login: string,
+        password: string,
+        remember = false,
+        captcha?: { key: string; answer: string },
+      ) =>
         api.post<{ user: import('~/types/api').User; token: string }>(
           '/auth/login',
-          { login, password, remember },
+          {
+            login,
+            password,
+            remember,
+            captcha_key: captcha?.key,
+            captcha: captcha?.answer,
+          },
           { auth: false },
         ),
 

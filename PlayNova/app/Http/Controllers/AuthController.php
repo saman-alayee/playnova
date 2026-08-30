@@ -41,6 +41,10 @@ class AuthController extends Controller
             return back()->withErrors($validator)->withInput();
         }
 
+        if (! \App\Services\CaptchaService::validate($request->input('captcha'))) {
+            return \App\Services\CaptchaService::failResponse();
+        }
+
         $needsMobileVerify = Setting::isSmsRegisterVerifyEnabled();
 
         if ($needsMobileVerify) {

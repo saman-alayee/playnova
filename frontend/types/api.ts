@@ -1,3 +1,8 @@
+export interface CaptchaChallenge {
+  key: string
+  question: string
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean
   message?: string | null

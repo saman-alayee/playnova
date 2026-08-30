@@ -31,14 +31,28 @@ class AuthRegistrationService
 
     public function makeRegistrationValidator(Request $request)
     {
-        return Validator::make($request->all(), [
+        return Validator::make(
+            $request->all(),
+            $this->registrationRules(),
+            $this->registrationMessages()
+        );
+    }
+
+    public function registrationRules(): array
+    {
+        return [
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
             'mobile' => ['required', 'string', 'max:20', 'unique:users,mobile'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
             'cod_id' => ['required', 'string', 'max:100', 'unique:users,cod_id'],
             'referral_code' => ['nullable', 'string', 'exists:users,referral_code'],
             'accept_rules' => ['required', 'accepted'],
-        ], [
+        ];
+    }
+
+    public function registrationMessages(): array
+    {
+        return [
             'username.required' => 'نام کاربری الزامی است.',
             'username.unique' => 'این نام کاربری قبلاً ثبت شده است.',
             'mobile.required' => 'شماره موبایل الزامی است.',
@@ -47,7 +61,7 @@ class AuthRegistrationService
             'cod_id.unique' => 'این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.',
             'accept_rules.required' => 'برای ثبت‌نام باید قوانین و مقررات را بپذیرید.',
             'accept_rules.accepted' => 'برای ثبت‌نام باید قوانین و مقررات را بپذیرید.',
-        ]);
+        ];
     }
 
     public function ensureRegistrationAvailable(string $username, string $mobile, ?string $codId): ?array

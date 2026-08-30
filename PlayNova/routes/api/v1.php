@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\WalletController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->middleware('throttle:auth')->group(function () {
+    Route::get('captcha', [AuthController::class, 'captcha']);
     Route::post('login', [AuthController::class, 'login']);
     Route::post('register', [AuthController::class, 'register']);
     Route::post('forgot-password', [AuthController::class, 'sendResetCode']);

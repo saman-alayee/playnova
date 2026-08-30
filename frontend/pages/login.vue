@@ -3,12 +3,13 @@ useHead({ title: 'ورود | PlayNova' })
 
 const route = useRoute()
 const auth = useAuthStore()
-const api = useApi()
 const flash = useState('flash')
+const captchaRef = ref<{ key: string; refresh: () => Promise<void> } | null>(null)
 
 const mobile = ref('')
 const password = ref('')
 const remember = ref(false)
+const captchaAnswer = ref('')
 const loading = ref(false)
 const errors = ref<string[]>([])
 
@@ -20,7 +21,16 @@ async function submit() {
   loading.value = true
   errors.value = []
   try {
-    await auth.login(mobile.value, password.value, remember.value)
+    const captchaKey = captchaRef.value?.key
+    if (!captchaKey || captchaAnswer.value === '') {
+      errors.value = ['لطفاً پاسخ کد امنیتی را وارد کنید.']
+      return
+    }
+
+    await auth.login(mobile.value, password.value, remember.value, {
+      key: captchaKey,
+      answer: captchaAnswer.value,
+    })
     flash.value = { success: 'با موفقیت وارد شدید.' }
     const redirect = (route.query.redirect as string) || '/'
     await navigateTo(redirect)
@@ -31,6 +41,7 @@ async function submit() {
     } else {
       errors.value = [err.message || 'ورود ناموفق بود.']
     }
+    await captchaRef.value?.refresh()
   } finally {
     loading.value = false
   }
@@ -69,6 +80,7 @@ async function submit() {
           autocomplete="current-password"
         >
       </div>
+      <AuthCaptcha ref="captchaRef" v-model="captchaAnswer" />
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <label class="inline-flex items-center gap-2 text-sm text-gray-400 w-fit max-w-full">
           <input v-model="remember" type="checkbox" class="shrink-0">

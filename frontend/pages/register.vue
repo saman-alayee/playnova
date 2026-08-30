@@ -4,6 +4,7 @@ useHead({ title: 'ثبت‌نام | PlayNova' })
 const route = useRoute()
 const auth = useAuthStore()
 const api = useApi()
+const captchaRef = ref<{ key: string; refresh: () => Promise<void> } | null>(null)
 
 const form = reactive({
   username: '',
@@ -12,8 +13,10 @@ const form = reactive({
   password_confirmation: '',
   cod_id: '',
   referral_code: (route.query.ref as string) || '',
+  accept_rules: false,
 })
 
+const captchaAnswer = ref('')
 const loading = ref(false)
 const errors = ref<string[]>([])
 
@@ -25,7 +28,18 @@ async function submit() {
   loading.value = true
   errors.value = []
   try {
-    const result = await api.auth.register({ ...form })
+    const captchaKey = captchaRef.value?.key
+    if (!captchaKey || captchaAnswer.value === '') {
+      errors.value = ['لطفاً پاسخ کد امنیتی را وارد کنید.']
+      return
+    }
+
+    const result = await api.auth.register({
+      ...form,
+      accept_rules: form.accept_rules ? '1' : '0',
+      captcha_key: captchaKey,
+      captcha: captchaAnswer.value,
+    })
     if (result.verification_required && result.token) {
       await navigateTo(`/register/verify/${result.token}`)
       return
@@ -43,6 +57,7 @@ async function submit() {
     } else {
       errors.value = [err.message || 'ثبت‌نام ناموفق بود.']
     }
+    await captchaRef.value?.refresh()
   } finally {
     loading.value = false
   }
@@ -84,6 +99,14 @@ async function submit() {
         <label class="block text-sm mb-1 text-gray-400">کد معرف (اختیاری)</label>
         <input v-model="form.referral_code" type="text">
       </div>
+      <label class="flex items-start gap-2 text-sm text-gray-400">
+        <input v-model="form.accept_rules" type="checkbox" class="mt-1 shrink-0" required>
+        <span>
+          <NuxtLink to="/rules" class="text-secondary hover:underline">قوانین و مقررات</NuxtLink>
+          را مطالعه کرده و می‌پذیرم.
+        </span>
+      </label>
+      <AuthCaptcha ref="captchaRef" v-model="captchaAnswer" />
       <button type="submit" class="w-full btn-glow-primary rounded py-2" :disabled="loading">
         {{ loading ? '...' : 'ثبت‌نام' }}
       </button>
