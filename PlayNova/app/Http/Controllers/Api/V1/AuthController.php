@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Database\QueryException;
 
 class AuthController extends BaseApiController
 {
@@ -55,7 +56,7 @@ class AuthController extends BaseApiController
             return $this->error('کد امنیتی صحیح نیست.', 422, ['captcha' => ['کد امنیتی صحیح نیست.']]);
         }
 
-        $user = User::findByLogin($login);
+        $user = User::with('latestKycSubmission')->findByLogin($login);
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             return $this->error('اطلاعات ورود صحیح نیست.', 401);
@@ -149,16 +150,26 @@ class AuthController extends BaseApiController
         cache()->forget('register_pending_' . $token);
         cache()->forget('register_otp_' . $token);
 
-        $user = User::create([
-            'name' => $pending['username'],
-            'username' => $pending['username'],
-            'email' => null,
-            'mobile' => $pending['mobile'] ?? null,
-            'password' => $pending['password_hash'],
-            'cod_id' => $pending['cod_id'] ?? null,
-            'referral_code' => User::generateReferralCode(),
-            'referred_by' => $pending['referred_by'] ?? null,
-        ]);
+        try {
+            $user = User::create([
+                'name' => $pending['username'],
+                'username' => $pending['username'],
+                'email' => null,
+                'mobile' => $pending['mobile'] ?? null,
+                'password' => $pending['password_hash'],
+                'cod_id' => User::normalizeCodIdForStorage($pending['cod_id'] ?? null),
+                'referral_code' => User::generateReferralCode(),
+                'referred_by' => $pending['referred_by'] ?? null,
+            ]);
+        } catch (QueryException $e) {
+            if ($this->isDuplicateCodIdException($e)) {
+                return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, [
+                    'cod_id' => ['این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.'],
+                ]);
+            }
+
+            throw $e;
+        }
 
         $plainTextToken = $user->createToken('api')->plainTextToken;
 
@@ -207,6 +218,7 @@ class AuthController extends BaseApiController
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
+        $user->loadMissing('latestKycSubmission');
         $user->unread_notifications_count = Notification::query()
             ->where('user_id', $user->id)
             ->visibleInInbox()
@@ -395,12 +407,31 @@ class AuthController extends BaseApiController
 
     protected function createUserFromRequest(Request $request): JsonResponse
     {
-        $user = $this->registration->createUserFromRequest($request);
+        try {
+            $user = $this->registration->createUserFromRequest($request);
+        } catch (QueryException $e) {
+            if ($this->isDuplicateCodIdException($e)) {
+                return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, [
+                    'cod_id' => ['این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.'],
+                ]);
+            }
+
+            throw $e;
+        }
+
         $plainTextToken = $user->createToken('api')->plainTextToken;
 
         return $this->success([
             'user' => new UserResource($user),
             'token' => $plainTextToken,
         ], 'ثبت‌نام با موفقیت انجام شد. خوش آمدید!', 201);
+    }
+
+    protected function isDuplicateCodIdException(QueryException $e): bool
+    {
+        $message = strtolower($e->getMessage());
+
+        return str_contains($message, 'users_cod_id_unique')
+            || (str_contains($message, 'duplicate') && str_contains($message, 'cod_id'));
     }
 }

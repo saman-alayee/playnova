@@ -131,6 +131,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('users/{user}', [UserAdminController::class, 'destroy']);
 
         Route::get('withdrawals', [AdminResourceController::class, 'withdrawals']);
+        Route::get('transactions', [AdminResourceController::class, 'transactions']);
         Route::put('withdrawals/{transaction}', [WithdrawalAdminController::class, 'update']);
 
         Route::get('kyc', [AdminResourceController::class, 'kyc']);

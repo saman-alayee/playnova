@@ -155,6 +155,10 @@ class TournamentController extends BaseApiController
                 'insufficient_wallet' => $this->error('موجودی کیف پول کافی نیست.', 422),
                 default => $this->error('ثبت‌نام ناموفق بود.', 422),
             };
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->error('ثبت‌نام ناموفق بود. لطفاً دوباره تلاش کنید.', 500);
         }
 
         return $this->success([

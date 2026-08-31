@@ -92,6 +92,16 @@ class User extends Authenticatable
         return $this->hasMany(Registration::class);
     }
 
+    public function kycSubmissions()
+    {
+        return $this->hasMany(KycSubmission::class);
+    }
+
+    public function latestKycSubmission()
+    {
+        return $this->hasOne(KycSubmission::class)->latestOfMany();
+    }
+
     public function referrer()
     {
         return $this->belongsTo(self::class, 'referred_by');
@@ -125,6 +135,34 @@ class User extends Authenticatable
                     ->orWhere('username', $login);
             })
             ->first();
+    }
+
+    public static function normalizeCodIdForStorage(?string $value): ?string
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', (string) $value));
+
+        return $value === '' ? null : $value;
+    }
+
+    public static function normalizeCodIdKey(?string $value): ?string
+    {
+        $value = self::normalizeCodIdForStorage($value);
+
+        return $value === null ? null : mb_strtolower($value);
+    }
+
+    public static function codIdIsTaken(?string $codId, ?int $exceptUserId = null): bool
+    {
+        $normalized = self::normalizeCodIdKey($codId);
+        if ($normalized === null) {
+            return false;
+        }
+
+        return self::query()
+            ->whereNotNull('cod_id')
+            ->when($exceptUserId, fn ($query) => $query->where('id', '!=', $exceptUserId))
+            ->whereRaw('LOWER(TRIM(cod_id)) = ?', [$normalized])
+            ->exists();
     }
 
     public function refreshWalletLock(): void

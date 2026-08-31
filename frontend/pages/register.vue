@@ -47,7 +47,7 @@ async function submit() {
     if (result.token && result.user) {
       api.setToken(result.token)
       auth.setUser(result.user)
-      await navigateTo('/')
+      await navigateTo(auth.needsKycRedirect ? '/kyc' : '/')
       return
     }
   } catch (e: unknown) {
@@ -93,7 +93,8 @@ async function submit() {
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">آیدی کالاف <span class="text-gray-500">(نام شما در بازی کالاف دیوتی)</span></label>
-        <input v-model="form.cod_id" type="text" required>
+        <input v-model="form.cod_id" type="text" required dir="ltr" class="font-mono">
+        <p class="text-xs text-gray-500 mt-1">هر آیدی کالاف فقط یک‌بار قابل ثبت‌نام است و تکراری پذیرفته نمی‌شود.</p>
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">رمز عبور</label>

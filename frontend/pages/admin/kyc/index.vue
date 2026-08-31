@@ -17,23 +17,32 @@ const statusLabels: Record<string, string> = {
   rejected: 'رد شده',
 }
 
-async function openDocument(id: number, side: string) {
-  const token = localStorage.getItem('playnova_token')
-  const res = await fetch(`${config.public.apiBase}/admin/kyc/${id}/document/${side}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: 'include',
-  })
-  if (!res.ok) {
-    flash.value = { error: 'خطا در بارگذاری تصویر' }
-    return
+function documentSides(s: KycSubmission): string[] {
+  if (s.available_document_sides?.length) {
+    return s.available_document_sides
   }
-  const blob = await res.blob()
-  window.open(URL.createObjectURL(blob), '_blank')
+  return ['document', 'front', 'back']
+}
+
+async function openDocument(id: number, sides: string[]) {
+  const token = localStorage.getItem('playnova_token')
+  for (const side of sides) {
+    const res = await fetch(`${config.public.apiBase}/admin/kyc/${id}/document/${side}`, {
+      headers: token ? { Authorization: `Bearer ${token}`, Accept: 'image/*' } : { Accept: 'image/*' },
+      credentials: 'include',
+    })
+    if (res.ok) {
+      const blob = await res.blob()
+      window.open(URL.createObjectURL(blob), '_blank')
+      return
+    }
+  }
+  flash.value = { error: 'تصویر مدارک یافت نشد یا فایل روی سرور موجود نیست.' }
 }
 
 async function updateSubmission(s: KycSubmission, status: string, adminNote: string) {
   try {
-    await api.admin.updateKyc(s.id, { status, admin_note: adminNote })
+    await api.admin.updateKyc(s.id!, { status, admin_note: adminNote })
     flash.value = { success: 'وضعیت به‌روز شد.' }
     await refresh()
   } catch (e: unknown) {
@@ -61,13 +70,16 @@ async function updateSubmission(s: KycSubmission, status: string, adminNote: str
           <div>
             <h3 class="font-bold text-lg text-white">{{ (s.user as { username?: string })?.username || '—' }}</h3>
             <p class="text-xs text-gray-400" dir="ltr">{{ (s.user as { mobile?: string })?.mobile }}</p>
-            <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded border border-dark-600 text-gray-300">{{ statusLabels[s.status] || s.status }}</span>
+            <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded border border-dark-600 text-gray-300">{{ statusLabels[s.status || ''] || s.status }}</span>
           </div>
-          <div class="flex gap-2 flex-wrap">
-            <button type="button" class="text-xs bg-secondary/20 text-secondary px-3 py-1.5 rounded" @click="openDocument(s.id, 'document')">مدارک</button>
-            <button type="button" class="text-xs bg-secondary/20 text-secondary px-3 py-1.5 rounded" @click="openDocument(s.id, 'front')">روی کارت</button>
-            <button type="button" class="text-xs bg-secondary/20 text-secondary px-3 py-1.5 rounded" @click="openDocument(s.id, 'back')">پشت کارت</button>
-          </div>
+          <button
+            type="button"
+            class="text-xs bg-secondary/20 text-secondary px-3 py-1.5 rounded disabled:opacity-40"
+            :disabled="!documentSides(s).length"
+            @click="openDocument(s.id!, documentSides(s))"
+          >
+            مشاهده مدارک
+          </button>
         </div>
         <form class="flex flex-wrap gap-2 items-end border-t border-dark-600 pt-3" @submit.prevent="updateSubmission(s, ($event.target as HTMLFormElement).status.value, ($event.target as HTMLFormElement).admin_note.value)">
           <select name="status" class="bg-dark-700 border border-dark-600 rounded px-2 py-1.5 text-sm text-white">

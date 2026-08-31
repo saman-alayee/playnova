@@ -23,8 +23,8 @@ class AuthRegistrationService
         }
         $request->merge(['mobile' => $normalizedMobile]);
 
-        $codId = trim((string) $request->input('cod_id', ''));
-        $request->merge(['cod_id' => $codId !== '' ? $codId : null]);
+        $codId = User::normalizeCodIdForStorage($request->input('cod_id'));
+        $request->merge(['cod_id' => $codId]);
 
         return null;
     }
@@ -44,7 +44,16 @@ class AuthRegistrationService
             'username' => ['required', 'string', 'max:255', 'unique:users,username'],
             'mobile' => ['required', 'string', 'max:20', 'unique:users,mobile'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
-            'cod_id' => ['required', 'string', 'max:100', 'unique:users,cod_id'],
+            'cod_id' => [
+                'required',
+                'string',
+                'max:100',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (User::codIdIsTaken(is_string($value) ? $value : null)) {
+                        $fail('این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.');
+                    }
+                },
+            ],
             'referral_code' => ['nullable', 'string', 'exists:users,referral_code'],
             'accept_rules' => ['required', 'accepted'],
         ];
@@ -68,7 +77,7 @@ class AuthRegistrationService
     {
         $username = trim($username);
         $mobile = trim($mobile);
-        $codId = trim((string) $codId);
+        $codId = User::normalizeCodIdForStorage($codId);
 
         if ($username !== '' && User::where('username', $username)->exists()) {
             return ['username' => 'این نام کاربری قبلاً ثبت شده است.'];
@@ -78,7 +87,7 @@ class AuthRegistrationService
             return ['mobile' => 'این شماره موبایل قبلاً ثبت‌نام شده است.'];
         }
 
-        if ($codId !== '' && User::where('cod_id', $codId)->exists()) {
+        if ($codId !== null && User::codIdIsTaken($codId)) {
             return ['cod_id' => 'این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.'];
         }
 

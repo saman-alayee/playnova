@@ -38,6 +38,10 @@ watch(tournaments, (list) => {
 }, { immediate: true })
 
 async function createTournament() {
+  if (!createForm.start_date) {
+    flash.value = { error: 'تاریخ و ساعت شروع مسابقه را وارد کنید.' }
+    return
+  }
   creating.value = true
   try {
     await api.admin.createTournament({
@@ -162,7 +166,10 @@ function prizePaid(t: Tournament): boolean {
             <option value="2">چیدمان دو‌نفره</option>
             <option value="4">چیدمان چهارنفره</option>
           </select>
-          <input v-model="createForm.start_date" type="datetime-local" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <div class="sm:col-span-2">
+            <label class="block text-sm text-gray-400 mb-2">تاریخ و ساعت شروع (شمسی — وقت تهران)</label>
+            <PersianDateTimeInput v-model="createForm.start_date" required />
+          </div>
           <textarea v-model="createForm.description" placeholder="توضیحات" class="sm:col-span-2 bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" />
           <textarea v-model="createForm.game_login_info" rows="2" placeholder="اطلاعات ورود به مسابقه (اختیاری)" class="sm:col-span-2 bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" />
           <button type="submit" class="sm:col-span-2 bg-success hover:bg-green-700 text-white rounded py-2 font-bold" :disabled="creating">

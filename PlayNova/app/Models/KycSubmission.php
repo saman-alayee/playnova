@@ -30,4 +30,36 @@ class KycSubmission extends Model
     {
         return $this->hasMany(KycAccessLog::class);
     }
+
+    public function primaryDocumentSide(): ?string
+    {
+        if ($this->document_path) {
+            return 'document';
+        }
+        if ($this->card_front_path) {
+            return 'front';
+        }
+        if ($this->card_back_path) {
+            return 'back';
+        }
+
+        return null;
+    }
+
+    /** @return list<string> */
+    public function availableDocumentSides(): array
+    {
+        $sides = [];
+        if ($this->document_path) {
+            $sides[] = 'document';
+        }
+        if ($this->card_front_path) {
+            $sides[] = 'front';
+        }
+        if ($this->card_back_path) {
+            $sides[] = 'back';
+        }
+
+        return $sides;
+    }
 }

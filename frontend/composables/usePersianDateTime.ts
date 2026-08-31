@@ -1,10 +1,16 @@
 export function usePersianDateTime() {
   const timeZone = 'Asia/Tehran'
 
+  function isPersianDisplay(value: string): boolean {
+    return /[۰-۹]/.test(value) && value.includes('/')
+  }
+
   function formatDateTime(value?: string | null): string {
     if (!value) return '—'
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) return '—'
+    if (isPersianDisplay(value)) return value
+
+    const date = new Date(value.includes('T') ? value : value.replace(' ', 'T'))
+    if (Number.isNaN(date.getTime())) return value
 
     return new Intl.DateTimeFormat('fa-IR', {
       timeZone,
@@ -16,9 +22,15 @@ export function usePersianDateTime() {
     }).format(date)
   }
 
-  function formatDate(value?: string | null): string {
+  function formatDate(value?: string | null, display?: string | null): string {
+    if (display) {
+      const [datePart] = display.split(' ')
+      if (datePart) return datePart
+    }
     if (!value) return '—'
-    const date = new Date(value)
+    if (isPersianDisplay(value)) return value.split(' ')[0] || value
+
+    const date = new Date(value.includes('T') ? value : value.replace(' ', 'T'))
     if (Number.isNaN(date.getTime())) return '—'
 
     return new Intl.DateTimeFormat('fa-IR', {
@@ -29,9 +41,14 @@ export function usePersianDateTime() {
     }).format(date)
   }
 
-  function formatTime(value?: string | null): string {
+  function formatTime(value?: string | null, display?: string | null): string {
+    if (display) {
+      const parts = display.split(' ')
+      if (parts[1]) return parts[1]
+    }
     if (!value) return '—'
-    const date = new Date(value)
+
+    const date = new Date(value.includes('T') ? value : value.replace(' ', 'T'))
     if (Number.isNaN(date.getTime())) return '—'
 
     return new Intl.DateTimeFormat('fa-IR', {

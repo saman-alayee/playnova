@@ -9,7 +9,6 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule as ValidationRule;
 
 class UserAdminController extends BaseApiController
 {
@@ -20,13 +19,21 @@ class UserAdminController extends BaseApiController
         $this->authorizeAdmin();
 
         $request->validate([
-            'cod_id' => ['required', 'string', 'max:100', ValidationRule::unique('users', 'cod_id')->ignore($user->id)],
+            'cod_id' => [
+                'required',
+                'string',
+                'max:100',
+                function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
+                    if (User::codIdIsTaken(is_string($value) ? $value : null, $user->id)) {
+                        $fail('این آیدی کالاف قبلاً ثبت شده است.');
+                    }
+                },
+            ],
         ], [
             'cod_id.required' => 'آیدی کالاف الزامی است.',
-            'cod_id.unique' => 'این آیدی کالاف قبلاً ثبت شده است.',
         ]);
 
-        $user->cod_id = trim($request->cod_id);
+        $user->cod_id = User::normalizeCodIdForStorage($request->cod_id);
         $user->save();
 
         app(\App\Modules\Audit\Services\ActivityLogService::class)->logProfile(

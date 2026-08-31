@@ -3,23 +3,20 @@ defineEmits<{ 'open-sidebar': [] }>()
 
 const route = useRoute()
 const auth = useAuthStore()
-const { mediaUrl } = useMediaUrl()
+const { mediaUrl, publicAssetUrl } = useMediaUrl()
+const { formatToman } = useFormatToman()
 
 const logoFailed = ref(false)
 const logoIndex = ref(0)
 
 const logoCandidates = computed(() => {
   const candidates = [
-    auth.logoUrl,
-    '/playnova-logo.png',
-    '/logo.png',
-  ]
+    publicAssetUrl('/playnova-logo.png'),
+    publicAssetUrl('/logo.png'),
+    mediaUrl(auth.logoUrl),
+  ].filter((url): url is string => !!url)
 
-  const urls = candidates
-    .map((path) => mediaUrl(path))
-    .filter((url): url is string => !!url)
-
-  return [...new Set(urls)]
+  return [...new Set(candidates)]
 })
 
 const logoSrc = computed(() => logoCandidates.value[logoIndex.value] ?? null)
@@ -92,14 +89,14 @@ function isActive(path: string) {
           <NuxtLink to="/wallet" class="btn-header-wallet">💼 کیف پول</NuxtLink>
           <template v-if="auth.isAuthenticated">
             <span class="show-desktop-only text-xs text-success font-bold">
-              {{ auth.walletBalance.toLocaleString('fa-IR') }}
+              {{ formatToman(auth.walletBalance, false) }}
             </span>
             <span class="show-desktop-only text-sm text-gray-300 max-w-[120px] truncate">
               {{ auth.displayName }}
             </span>
             <button
               type="button"
-              class="show-desktop-only text-sm text-red-400 hover:text-red-300 transition font-bold"
+              class="btn-header-logout"
               @click="auth.logout()"
             >
               خروج

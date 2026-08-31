@@ -32,7 +32,9 @@ async function submit() {
       answer: captchaAnswer.value,
     })
     flash.value = { success: 'با موفقیت وارد شدید.' }
-    const redirect = (route.query.redirect as string) || '/'
+    const redirect = auth.needsKycRedirect
+      ? '/kyc'
+      : ((route.query.redirect as string) || '/')
     await navigateTo(redirect)
   } catch (e: unknown) {
     const err = e as { message?: string; data?: { errors?: Record<string, string[]> } }

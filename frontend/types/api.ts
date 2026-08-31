@@ -41,10 +41,14 @@ export interface User {
   losses?: number
   wallet: number | string
   referral_code?: string
+  active_seats?: Registration[]
   is_admin?: boolean
   is_seat_admin?: boolean
   first_deposit_done?: boolean
   kyc_verified_at?: string | null
+  kyc_verified?: boolean
+  kyc_submission_status?: string | null
+  kyc_wallet_cap?: number
   unread_notifications_count?: number
 }
 
@@ -119,13 +123,42 @@ export interface HistoryItem {
 
 export interface Transaction {
   id: number
+  user_id?: number
   type: string
   type_label?: string
   amount: number | string
+  balance_after?: number
   status: string
   status_label?: string
   description?: string | null
+  reference_id?: string | null
+  rejection_reason?: string | null
   created_at: string
+  created_at_display?: string
+  displayed_at?: string
+  displayed_at_display?: string
+  updated_at?: string
+  user?: {
+    id: number
+    username?: string
+    mobile?: string
+    cod_id?: string | null
+    wallet?: number
+    bank_card_number?: string | null
+    bank_account_name?: string | null
+  }
+}
+
+export interface AdminWithdrawalsData {
+  items: Transaction[]
+  meta: PaginationMeta | null
+  financialSummary?: {
+    pending_withdraws?: number
+    pending_withdrawals_count?: number
+    total_withdraws_completed?: number
+    total_wallets?: number
+  } | null
+  userTransactions?: Record<string, Transaction[]>
 }
 
 export interface WalletData {
@@ -238,6 +271,7 @@ export interface Registration {
   tournament_id: number
   user_id: number
   seat_number?: number | null
+  seat_label?: string | null
   status?: string
   tournament?: Tournament
 }
@@ -279,8 +313,18 @@ export interface GameLoginInfo {
 export interface KycSubmission {
   id?: number
   status?: 'pending' | 'approved' | 'rejected' | string
+  admin_note?: string | null
   national_id?: string
   rejection_reason?: string | null
+  available_document_sides?: string[]
+  user?: User
+  submission?: {
+    id?: number
+    status?: string
+    created_at?: string
+    reviewed_at?: string | null
+    admin_note?: string | null
+  } | null
 }
 
 export interface AdminDashboard {
@@ -291,6 +335,7 @@ export interface AdminDashboard {
   total_withdraws_completed?: number
   pending_withdraws?: number
   pending_withdrawals_count?: number
+  total_wallets?: number
   total_entry_fees?: number
   total_prizes_paid?: number
   net_revenue?: number

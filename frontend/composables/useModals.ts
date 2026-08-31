@@ -62,6 +62,11 @@ export function useModals() {
   }
 
   function openRegisterModal(tournament: Tournament) {
+    const auth = useAuthStore()
+    if (!auth.isAuthenticated) {
+      void navigateTo('/login')
+      return
+    }
     registerTournament.value = tournament
     registerOpen.value = true
   }

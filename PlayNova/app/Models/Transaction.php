@@ -8,6 +8,24 @@ use Illuminate\Support\Carbon;
 
 class Transaction extends Model
 {
+    public const TYPE_LABELS = [
+        'deposit' => 'شارژ',
+        'withdraw' => 'برداشت',
+        'fee' => 'ورودی مسابقه',
+        'entry_fee' => 'ورودی مسابقه',
+        'prize' => 'جایزه',
+        'referral_bonus' => 'پاداش معرفی',
+        'admin_credit' => 'واریز ادمین',
+        'admin_debit' => 'کسر ادمین',
+    ];
+
+    public const STATUS_LABELS = [
+        'pending' => 'در انتظار',
+        'completed' => 'تأیید شده',
+        'rejected' => 'رد شده',
+        'failed' => 'ناموفق',
+    ];
+
     protected $fillable = [
         'user_id',
         'type',
@@ -48,5 +66,15 @@ class Transaction extends Model
         }
 
         return null;
+    }
+
+    public function typeLabel(): string
+    {
+        return self::TYPE_LABELS[$this->type] ?? $this->type;
+    }
+
+    public function statusLabel(): string
+    {
+        return self::STATUS_LABELS[$this->status] ?? $this->status;
     }
 }

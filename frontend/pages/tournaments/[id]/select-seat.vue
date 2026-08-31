@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { OccupiedSeatInfo } from '~/types/api'
 
-definePageMeta({ middleware: 'auth', layout: false })
+definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const api = useApi()
@@ -20,7 +20,7 @@ const { data, pending, error, refresh } = await useAsyncData(
   () => api.tournaments.selectSeat(id.value),
 )
 
-useHead(() => ({ title: `انتخاب جایگاه | ${data.value?.tournament?.title || 'مسابقه'}` }))
+useHead(() => ({ title: `جایگاه‌ها | ${data.value?.tournament?.title || 'مسابقه'}` }))
 
 const alreadySelected = computed(() => !!data.value?.seat_label && !data.value?.teams_grid)
 const teamsGrid = computed(() => data.value?.teams_grid || [])
@@ -87,100 +87,79 @@ async function cancelRegistration() {
     cancelling.value = false
   }
 }
-
-function avatarLetter(username?: string | null) {
-  return (username?.charAt(0) || '?').toUpperCase()
-}
 </script>
 
 <template>
-  <div class="seat-page fixed inset-0 z-[9999] flex flex-col">
-    <div class="border-b border-amber-900/40 bg-black/70 px-4 py-4 shrink-0">
-      <h1 class="text-xl md:text-2xl font-bold text-[#d4af37] text-center">انتخاب جایگاه</h1>
-      <p v-if="data?.tournament" class="text-center text-sm text-gray-400 mt-1">
-        {{ data.tournament.title }} — {{ data.tournament.seat_mode_label || 'انفرادی' }}
-      </p>
-      <p class="text-center text-xs text-amber-400/90 mt-2">
-        روی جایگاه خالی (مثلاً 2.1 یا 20.2) کلیک کنید و تأیید نمایید.
-      </p>
-      <p class="text-center mt-2 flex flex-wrap items-center justify-center gap-3">
-        <NuxtLink to="/" class="text-xs text-gray-500 hover:text-gray-300 underline">بازگشت به صفحه اصلی</NuxtLink>
+  <div class="seat-page">
+    <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+
+    <div v-else-if="error || !data" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
+      امکان انتخاب جایگاه وجود ندارد.
+    </div>
+
+    <div v-else-if="alreadySelected" class="max-w-lg mx-auto bg-dark-800 border border-[#d4af37]/40 rounded-2xl p-8 text-center">
+      <p class="text-gray-300 mb-2">جایگاه شما قبلاً ثبت شده است:</p>
+      <p class="text-4xl font-black text-[#d4af37] font-mono" dir="ltr">{{ data.seat_label }}</p>
+      <NuxtLink :to="`/tournaments/${id}`" class="inline-block mt-6 text-secondary hover:underline">بازگشت به مسابقه</NuxtLink>
+    </div>
+
+    <template v-else>
+      <div class="seat-page__toolbar">
+        <p v-if="data.tournament" class="seat-page__subtitle">
+          {{ data.tournament.title }}
+          <span v-if="data.tournament.seat_mode_label"> — {{ data.tournament.seat_mode_label }}</span>
+        </p>
         <button
           type="button"
-          class="text-xs text-red-400 hover:text-red-300 underline disabled:opacity-50"
-          :disabled="cancelling || alreadySelected"
+          class="seat-page__cancel"
+          :disabled="cancelling"
           @click="cancelRegistration"
         >
           {{ cancelling ? '...' : 'انصراف از ثبت‌نام' }}
         </button>
-      </p>
-    </div>
-
-    <div class="flex-1 overflow-y-auto p-3 md:p-6">
-      <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
-
-      <div v-else-if="error || !data" class="max-w-6xl mx-auto bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
-        امکان انتخاب جایگاه وجود ندارد.
       </div>
 
-      <div v-else-if="alreadySelected" class="max-w-lg mx-auto bg-dark-800 border border-[#d4af37]/40 rounded-2xl p-8 text-center">
-        <p class="text-gray-300 mb-2">جایگاه شما قبلاً ثبت شده است:</p>
-        <p class="text-4xl font-black text-[#d4af37] font-mono" dir="ltr">{{ data.seat_label }}</p>
-        <NuxtLink :to="`/tournaments/${id}`" class="inline-block mt-6 text-secondary hover:underline">بازگشت به مسابقه</NuxtLink>
+      <div v-if="errors.length" class="mb-4 rounded-lg border border-red-700 bg-red-900/30 px-4 py-3 text-red-300 text-sm">
+        <ul class="list-disc list-inside space-y-1">
+          <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
+        </ul>
       </div>
 
-      <template v-else>
-        <div v-if="errors.length" class="max-w-6xl mx-auto mb-4 rounded-lg border border-red-700 bg-red-900/30 px-4 py-3 text-red-300 text-sm">
-          <ul class="list-disc list-inside space-y-1">
-            <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
-          </ul>
-        </div>
-
-        <div class="team-grid max-w-6xl mx-auto">
-          <div v-for="teamRow in teamsGrid" :key="teamRow.team" class="team-card">
-            <div class="team-card__title">تیم {{ teamRow.team }}</div>
-            <div
-              class="team-card__slots"
-              :style="{ gridTemplateColumns: `repeat(${seatMode}, minmax(0, 1fr))` }"
-            >
-              <template v-for="slot in teamRow.slots" :key="slot.seat_number">
-                <div
-                  v-if="getOccupied(slot.seat_number)"
-                  class="seat-slot seat-slot--taken"
-                >
-                  <div class="seat-slot__top">نفر {{ slot.slot }}</div>
-                  <div class="seat-slot__avatar">
-                    {{ avatarLetter(getOccupied(slot.seat_number)?.user?.username) }}
-                  </div>
-                  <span class="seat-slot__code">{{ slot.label }}</span>
-                  <div v-if="getOccupied(slot.seat_number)?.user?.cod_id" class="seat-slot__cod">
-                    {{ getOccupied(slot.seat_number)?.user?.cod_id }}
-                  </div>
-                  <div class="seat-slot__user">{{ getOccupied(slot.seat_number)?.user?.username || '—' }}</div>
-                  <div class="seat-slot__status">پر شده</div>
+      <div class="team-grid">
+        <div v-for="teamRow in teamsGrid" :key="teamRow.team" class="team-card">
+          <div class="team-card__title">تیم {{ teamRow.team }}</div>
+          <div
+            class="team-card__slots"
+            :style="{ gridTemplateColumns: `repeat(${seatMode}, minmax(0, 1fr))` }"
+          >
+            <template v-for="slot in teamRow.slots" :key="slot.seat_number">
+              <div
+                v-if="getOccupied(slot.seat_number)"
+                class="seat-slot seat-slot--taken"
+              >
+                <div class="seat-slot__label">{{ slot.label }}</div>
+                <div class="seat-slot__name">
+                  {{ getOccupied(slot.seat_number)?.user?.username || '—' }}
                 </div>
-                <button
-                  v-else
-                  type="button"
-                  class="seat-slot"
-                  :class="{ 'is-selected': pendingSeat === slot.seat_number && showModal }"
-                  @click="openConfirm(slot.seat_number, slot.label)"
-                >
-                  <div class="seat-slot__top">نفر {{ slot.slot }}</div>
-                  <svg class="seat-slot__icon" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-                    <ellipse cx="32" cy="54" rx="18" ry="4" fill="rgba(212,175,55,0.2)" />
-                    <circle cx="32" cy="22" r="11" fill="#64748b" />
-                    <path d="M14 52c2-12 10-18 18-18s16 6 18 18" fill="#475569" />
-                  </svg>
-                  <span class="seat-slot__code">{{ slot.label }}</span>
-                  <div class="seat-slot__status">خالی — کلیک</div>
-                </button>
-              </template>
-            </div>
+                <div v-if="getOccupied(slot.seat_number)?.user?.cod_id" class="seat-slot__cod">
+                  {{ getOccupied(slot.seat_number)?.user?.cod_id }}
+                </div>
+              </div>
+              <button
+                v-else
+                type="button"
+                class="seat-slot seat-slot--empty"
+                :class="{ 'is-selected': pendingSeat === slot.seat_number && showModal }"
+                @click="openConfirm(slot.seat_number, slot.label)"
+              >
+                <div class="seat-slot__label">{{ slot.label }}</div>
+                <div class="seat-slot__empty">خالی</div>
+              </button>
+            </template>
           </div>
         </div>
-      </template>
-    </div>
+      </div>
+    </template>
 
     <Teleport to="body">
       <div
@@ -220,137 +199,150 @@ function avatarLetter(username?: string | null) {
 
 <style scoped>
 .seat-page {
-  background: radial-gradient(ellipse at top, #1a1508 0%, #050508 45%, #050508 100%);
+  direction: rtl;
 }
+
+.seat-page__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.seat-page__subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.seat-page__cancel {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.seat-page__cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .team-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: 0.65rem;
   direction: ltr;
 }
-@media (min-width: 640px) {
-  .team-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+
+@media (min-width: 768px) {
+  .team-grid {
+    gap: 0.85rem;
+  }
 }
+
 @media (min-width: 1024px) {
-  .team-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .team-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
+
+@media (min-width: 1280px) {
+  .team-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .team-card {
-  position: relative;
-  background: linear-gradient(180deg, rgba(24, 20, 12, 0.95) 0%, rgba(10, 9, 8, 0.98) 100%);
-  border: 1px solid rgba(212, 175, 55, 0.55);
-  box-shadow: inset 0 0 0 1px rgba(212, 175, 55, 0.12), 0 8px 24px rgba(0, 0, 0, 0.45);
-  padding: 0.45rem 0.5rem 0.55rem;
+  border: 1px solid #d4af37;
+  background: #000;
+  padding: 0.5rem 0.55rem 0.6rem;
 }
-.team-card::before,
-.team-card::after {
-  content: '';
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-color: rgba(212, 175, 55, 0.85);
-  border-style: solid;
-  pointer-events: none;
-}
-.team-card::before {
-  top: -1px; left: -1px;
-  border-width: 2px 0 0 2px;
-}
-.team-card::after {
-  bottom: -1px; right: -1px;
-  border-width: 0 2px 2px 0;
-}
+
 .team-card__title {
   text-align: center;
   color: #d4af37;
   font-weight: 800;
   font-size: 0.95rem;
   margin-bottom: 0.45rem;
-  letter-spacing: 0.02em;
 }
+
 .team-card__slots {
   display: grid;
   gap: 0.35rem;
   direction: ltr;
 }
+
 .seat-slot {
-  position: relative;
-  min-height: 88px;
-  border: 1px solid rgba(212, 175, 55, 0.35);
-  background: rgba(0, 0, 0, 0.35);
-  padding: 0.35rem 0.25rem 0.5rem;
+  min-height: 92px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 15, 18, 0.95);
+  padding: 0.45rem 0.35rem 0.55rem;
   text-align: center;
-  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
+
 button.seat-slot {
   cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
 }
+
 button.seat-slot:hover {
-  border-color: rgba(212, 175, 55, 0.85);
-  background: rgba(212, 175, 55, 0.08);
-  transform: translateY(-1px);
+  border-color: rgba(212, 175, 55, 0.65);
+  background: rgba(212, 175, 55, 0.06);
 }
+
 button.seat-slot.is-selected {
   border-color: #d4af37;
-  background: rgba(212, 175, 55, 0.16);
-  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35);
+  background: rgba(212, 175, 55, 0.12);
 }
+
 .seat-slot--taken {
-  opacity: 0.72;
-  cursor: default;
+  opacity: 0.85;
 }
-.seat-slot__top {
+
+.seat-slot__label {
   color: #d4af37;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  margin-bottom: 0.15rem;
-}
-.seat-slot__avatar {
-  width: 36px;
-  height: 36px;
-  margin: 0 auto 0.2rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, #8B5CF6, #d4af37);
-  color: #fff;
-  font-weight: 800;
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-.seat-slot__icon {
-  width: 36px;
-  height: 36px;
-  margin: 0 auto 0.2rem;
-  display: block;
-}
-.seat-slot__code {
-  display: block;
-  color: #f5f5f5;
-  font-weight: 800;
-  font-size: 0.95rem;
-  letter-spacing: 0.04em;
+  margin-bottom: 0.35rem;
   direction: ltr;
   font-family: ui-monospace, monospace;
 }
+
+.seat-slot__name {
+  color: #f5f5f5;
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.35;
+  word-break: break-word;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
 .seat-slot__cod {
   font-size: 0.68rem;
   color: #d4af37;
-  font-weight: 700;
-  margin-top: 0.1rem;
+  font-weight: 600;
   line-height: 1.25;
   word-break: break-word;
+  margin-top: 0.15rem;
 }
-.seat-slot__user {
-  font-size: 0.58rem;
-  color: #9ca3af;
-  margin-top: 0.1rem;
-  line-height: 1.25;
-  word-break: break-word;
-}
-.seat-slot__status {
-  font-size: 0.58rem;
+
+.seat-slot__empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #6b7280;
-  margin-top: 0.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 </style>

@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Resources\V1\RegistrationResource;
 use App\Http\Resources\V1\UserResource;
+use App\Models\Setting;
+use App\Models\User;
 use App\Modules\Audit\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,7 +28,15 @@ class ProfileController extends BaseApiController
                 ->orderByDesc('updated_at');
         }]);
 
-        return $this->success(new UserResource($user));
+        return $this->success([
+            'user' => new UserResource($user),
+            'active_seats' => RegistrationResource::collection($user->registrations),
+            'referral_bonus_percent' => Setting::getReferralBonusPercent(),
+            'stats' => [
+                'wins' => (int) $user->wins,
+                'kills' => (int) $user->kills,
+            ],
+        ]);
     }
 
     public function update(Request $request): JsonResponse
@@ -36,14 +47,23 @@ class ProfileController extends BaseApiController
             'username' => ['required', 'string', 'max:255', Rule::unique('users')->ignore($user->id)],
             'email' => ['nullable', 'email', Rule::unique('users')->ignore($user->id)],
             'mobile' => ['nullable', 'string', 'max:20', Rule::unique('users')->ignore($user->id)],
-            'cod_id' => ['nullable', 'string', 'max:100', Rule::unique('users', 'cod_id')->ignore($user->id)],
+            'cod_id' => [
+                'nullable',
+                'string',
+                'max:100',
+                function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
+                    if (User::codIdIsTaken(is_string($value) ? $value : null, $user->id)) {
+                        $fail('این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.');
+                    }
+                },
+            ],
             'bank_card_number' => ['nullable', 'string', 'max:24', 'regex:/^[0-9\-]*$/'],
             'bank_account_name' => ['nullable', 'string', 'max:120'],
             'password' => ['nullable', 'string', 'min:6', 'confirmed'],
         ]);
 
-        $newCodId = trim((string) ($validated['cod_id'] ?? ''));
-        $currentCodId = trim((string) ($user->cod_id ?? ''));
+        $newCodId = User::normalizeCodIdForStorage($validated['cod_id'] ?? null);
+        $currentCodId = User::normalizeCodIdForStorage($user->cod_id);
         $codIdChanged = false;
         $profileFieldsChanged = [];
 
@@ -104,6 +124,8 @@ class ProfileController extends BaseApiController
             $this->activity->logProfile($user, 'profile_updated', 'به‌روزرسانی اطلاعات پروفایل', $profileFieldsChanged);
         }
 
-        return $this->success(new UserResource($user), 'اطلاعات پروفایل با موفقیت به‌روزرسانی شد.');
+        return $this->success([
+            'user' => new UserResource($user->fresh(['registrations.tournament'])),
+        ], 'اطلاعات پروفایل با موفقیت به‌روزرسانی شد.');
     }
 }

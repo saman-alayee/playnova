@@ -8,6 +8,7 @@ const {
 } = useModals()
 
 const api = useApi()
+const auth = useAuthStore()
 const flash = useState<{ success?: string; error?: string; info?: string } | null>('flash')
 
 const step = ref<'rules' | 'type' | 'team'>('rules')
@@ -100,17 +101,17 @@ async function submitTeamInvite() {
   <Teleport to="body">
     <div
       v-if="registerOpen && registerTournament"
-      class="register-tournament-modal"
+      class="modal-overlay"
       @click.self="close"
     >
-      <div class="register-tournament-modal__panel">
-        <h2 class="text-xl font-bold text-primary mb-2">{{ registerTournament.title }}</h2>
+      <div class="modal-panel register-tournament-modal__panel">
+        <h2 class="modal-panel__title">{{ registerTournament.title }}</h2>
 
         <p v-if="errorMessage" class="text-sm text-danger mb-3">{{ errorMessage }}</p>
 
         <div v-if="step === 'rules'">
           <h3 class="font-bold text-primary mb-3">📜 تأیید خواندن قوانین</h3>
-          <div class="register-tournament-modal__rules">
+          <div class="modal-panel__body register-tournament-modal__rules">
             <div v-for="(rule, index) in rules" :key="rule.id" class="mb-3">
               <strong class="text-secondary">بخش {{ index + 1 }}:</strong>
               <span class="text-gray-300">{{ rule.content }}</span>
@@ -126,7 +127,7 @@ async function submitTeamInvite() {
               type="button"
               class="btn-glow-success flex-1 rounded-lg py-2 text-sm font-bold disabled:opacity-50"
               :disabled="!acceptRules"
-              @click="step = supportsTeam ? 'type' : 'type'"
+              @click="step = 'type'"
             >
               ادامه
             </button>
@@ -139,6 +140,13 @@ async function submitTeamInvite() {
         <div v-else-if="step === 'type'">
           <h3 class="font-bold text-primary mb-3">نوع ثبت‌نام</h3>
           <p class="text-sm text-gray-400 mb-4">نحوه رزرو جایگاه خود را انتخاب کنید.</p>
+          <p class="text-xs text-gray-500 mb-4">
+            موجودی کیف پول:
+            <strong>{{ auth.walletBalance.toLocaleString('fa-IR') }} تومان</strong>
+            —
+            هزینه ورودی:
+            <strong>{{ Number(registerTournament.entry_fee).toLocaleString('fa-IR') }} تومان</strong>
+          </p>
           <div class="space-y-3">
             <button
               type="button"
@@ -201,3 +209,14 @@ async function submitTeamInvite() {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.register-tournament-modal__panel {
+  max-width: 560px;
+}
+
+.register-tournament-modal__rules {
+  max-height: 45vh;
+  overflow-y: auto;
+}
+</style>

@@ -44,7 +44,7 @@ class WalletController extends Controller
         if (! $kycVerified) {
             $remaining = max(0, $walletCap - (int) $user->wallet);
             if ($remaining <= 0) {
-                return back()->with('error', 'تا زمان تأیید احراز هویت، سقف موجودی کیف پول ۱,۰۰۰,۰۰۰ تومان است. لطفاً از بخش احراز هویت مدارک را ارسال کنید.');
+                return back()->with('error', 'تا زمان تأیید احراز هویت، سقف واریز ۱,۰۰۰,۰۰۰ تومان است. لطفاً از بخش احراز هویت مدارک را ارسال کنید.');
             }
             $rules['amount'] .= '|max:' . $remaining;
         } else {
@@ -54,7 +54,7 @@ class WalletController extends Controller
         $request->validate($rules, [
             'amount.max' => $kycVerified
                 ? 'حداکثر مبلغ هر واریز ۵۰,۰۰۰,۰۰۰ تومان است.'
-                : 'تا قبل از تأیید احراز هویت، حداکثر موجودی کیف پول ۱,۰۰۰,۰۰۰ تومان است. مبلغ واریز را کاهش دهید یا احراز هویت را تکمیل کنید.',
+                : 'تا قبل از تأیید احراز هویت، سقف واریز ۱,۰۰۰,۰۰۰ تومان است. مبلغ واریز را کاهش دهید یا احراز هویت را تکمیل کنید.',
         ]);
 
         $amount = (int) $request->amount;

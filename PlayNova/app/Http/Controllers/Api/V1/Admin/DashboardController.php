@@ -29,17 +29,22 @@ class DashboardController extends BaseApiController
                 ->sum('amount');
             $totalPrizesPaid = Transaction::where('type', 'prize')->where('status', 'completed')->sum('amount');
 
+            $totalDeposits = (float) Transaction::where('type', 'deposit')->where('status', 'completed')->sum('amount');
+            $totalWithdrawsCompleted = (float) Transaction::where('type', 'withdraw')->where('status', 'completed')->sum('amount');
+            $pendingWithdraws = (float) Transaction::where('type', 'withdraw')->where('status', 'pending')->sum('amount');
+
             return [
                 'total_users' => User::count(),
                 'total_tournaments' => Tournament::count(),
                 'active_tournaments' => Tournament::where('status', 'active')->count(),
-                'total_deposits' => Transaction::where('type', 'deposit')->where('status', 'completed')->sum('amount'),
-                'total_withdraws_completed' => Transaction::where('type', 'withdraw')->where('status', 'completed')->sum('amount'),
-                'pending_withdraws' => Transaction::where('type', 'withdraw')->where('status', 'pending')->sum('amount'),
+                'total_deposits' => $totalDeposits,
+                'total_withdraws_completed' => $totalWithdrawsCompleted,
+                'pending_withdraws' => $pendingWithdraws,
                 'pending_withdrawals_count' => Transaction::where('type', 'withdraw')->where('status', 'pending')->count(),
-                'total_entry_fees' => $totalEntryFees,
-                'total_prizes_paid' => $totalPrizesPaid,
-                'net_revenue' => $totalEntryFees - $totalPrizesPaid,
+                'total_wallets' => (float) User::sum('wallet'),
+                'total_entry_fees' => (float) $totalEntryFees,
+                'total_prizes_paid' => (float) $totalPrizesPaid,
+                'net_revenue' => (float) $totalEntryFees - (float) $totalPrizesPaid,
                 'open_tickets' => Ticket::where('status', 'open')->count(),
                 'pending_kyc' => KycSubmission::where('status', 'pending')->count(),
                 'unresolved_api_errors' => ApiErrorLog::whereNull('resolved_at')->count(),

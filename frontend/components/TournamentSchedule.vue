@@ -6,12 +6,13 @@ const props = defineProps<{
   class?: string
 }>()
 
+const { formatDate, formatTime } = usePersianDateTime()
+
 const formatted = computed(() => {
-  if (!props.tournament.start_date) return null
-  const date = new Date(props.tournament.start_date)
+  if (!props.tournament.start_date && !props.tournament.start_date_display) return null
   return {
-    date: date.toLocaleDateString('fa-IR'),
-    time: date.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
+    date: formatDate(props.tournament.start_date, props.tournament.start_date_display),
+    time: formatTime(props.tournament.start_date, props.tournament.start_date_display),
   }
 })
 </script>

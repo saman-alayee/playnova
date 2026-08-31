@@ -5,6 +5,7 @@ useHead({ title: 'کیف پول | PlayNova' })
 const api = useApi()
 const flash = useState('flash')
 const { formatDateTime } = usePersianDateTime()
+const { formatToman } = useFormatToman()
 
 const { data, pending, refresh } = await useAsyncData('wallet', () => api.wallet.show())
 
@@ -84,12 +85,12 @@ async function withdraw() {
       <div class="grid md:grid-cols-2 gap-6 mb-6">
         <div class="bg-dark-800 border border-success/40 rounded-xl p-6">
           <p class="text-sm text-gray-400 mb-1">موجودی فعلی</p>
-          <p class="text-3xl font-black text-secondary mb-4">{{ Number(data.balance).toLocaleString('fa-IR') }} تومان</p>
+          <p class="text-3xl font-black text-secondary mb-4">{{ formatToman(data.balance) }}</p>
 
           <h3 class="font-bold mb-2">شارژ کیف پول</h3>
           <p v-if="data.kyc_verified" class="text-xs text-green-400/90 mb-2">احراز هویت تأیید شده — سقف واریز برداشته شده است.</p>
           <p v-else class="text-xs text-amber-400/90 mb-2">
-            تا تأیید احراز هویت، سقف موجودی محدود است.
+            تا تأیید احراز هویت، سقف واریز محدود است.
             <NuxtLink to="/kyc" class="text-secondary hover:underline">ارسال مدارک</NuxtLink>
           </p>
           <form class="flex gap-2" @submit.prevent="deposit">

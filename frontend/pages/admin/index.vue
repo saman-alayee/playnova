@@ -5,15 +5,11 @@ definePageMeta({ middleware: 'admin', layout: 'admin' })
 useHead({ title: 'پنل مدیریت | PlayNova' })
 
 const api = useApi()
+const { formatToman } = useFormatToman()
 
 const { data, pending } = await useAsyncData('admin-dashboard', () => api.admin.dashboard(), {
   default: () => ({}) as AdminDashboard,
 })
-
-function formatMoney(value?: number) {
-  if (value === undefined || value === null) return '—'
-  return `${Number(value).toLocaleString('fa-IR')} تومان`
-}
 
 function formatCount(value?: number) {
   if (value === undefined || value === null) return '—'
@@ -50,30 +46,34 @@ function formatCount(value?: number) {
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div class="bg-dark-800 border border-green-500/40 rounded-xl p-5">
           <p class="text-xs text-gray-400">مجموع شارژها</p>
-          <p class="text-xl font-bold text-green-400">{{ formatMoney(data?.total_deposits) }}</p>
+          <p class="text-xl font-bold text-green-400">{{ formatToman(data?.total_deposits) }}</p>
         </div>
         <div class="bg-dark-800 border border-yellow-500/40 rounded-xl p-5">
           <p class="text-xs text-gray-400">برداشت‌های در انتظار</p>
-          <p class="text-xl font-bold text-yellow-400">{{ formatMoney(data?.pending_withdraws) }}</p>
+          <p class="text-xl font-bold text-yellow-400">{{ formatToman(data?.pending_withdraws) }}</p>
           <p v-if="data?.pending_withdrawals_count" class="text-xs text-gray-500 mt-1">
             {{ formatCount(data.pending_withdrawals_count) }} درخواست
           </p>
         </div>
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-5">
-          <p class="text-xs text-gray-400">برداشت‌های پرداخت شده</p>
-          <p class="text-xl font-bold text-white">{{ formatMoney(data?.total_withdraws_completed) }}</p>
+          <p class="text-xs text-gray-400">برداشت‌های تأیید شده</p>
+          <p class="text-xl font-bold text-white">{{ formatToman(data?.total_withdraws_completed) }}</p>
+        </div>
+        <div class="bg-dark-800 border border-secondary/40 rounded-xl p-5">
+          <p class="text-xs text-gray-400">جمع مبالغ در کیف پول کاربران</p>
+          <p class="text-xl font-bold text-secondary">{{ formatToman(data?.total_wallets) }}</p>
         </div>
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-5">
           <p class="text-xs text-gray-400">مجموع ورودی مسابقات</p>
-          <p class="text-xl font-bold text-white">{{ formatMoney(data?.total_entry_fees) }}</p>
+          <p class="text-xl font-bold text-white">{{ formatToman(data?.total_entry_fees) }}</p>
         </div>
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-5">
           <p class="text-xs text-gray-400">مجموع جوایز پرداخت شده</p>
-          <p class="text-xl font-bold text-white">{{ formatMoney(data?.total_prizes_paid) }}</p>
+          <p class="text-xl font-bold text-white">{{ formatToman(data?.total_prizes_paid) }}</p>
         </div>
-        <div class="bg-dark-800 border border-secondary/40 rounded-xl p-5">
+        <div class="bg-dark-800 border border-secondary/40 rounded-xl p-5 sm:col-span-2 lg:col-span-1">
           <p class="text-xs text-gray-400">درآمد خالص (ورودی − جایزه)</p>
-          <p class="text-xl font-bold text-secondary">{{ formatMoney(data?.net_revenue) }}</p>
+          <p class="text-xl font-bold text-secondary">{{ formatToman(data?.net_revenue) }}</p>
         </div>
       </div>
 

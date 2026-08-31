@@ -44,7 +44,7 @@ watch(tournament, (t) => {
     prize_pool: t.prize_pool,
     capacity: t.capacity,
     seat_mode: t.seat_mode || 2,
-    start_date: t.start_date ? t.start_date.slice(0, 16) : '',
+    start_date: t.start_date || '',
     end_date: t.end_date ? t.end_date.slice(0, 16) : '',
     status: t.status,
     winner_id: t.winner_id ?? null,
@@ -96,7 +96,10 @@ async function submit() {
           <option :value="4">۴ نفره</option>
         </select>
       </div>
-      <input v-model="form.start_date" type="datetime-local" required class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+      <div>
+        <label class="block text-sm text-gray-400 mb-2">تاریخ و ساعت شروع (شمسی — وقت تهران)</label>
+        <PersianDateTimeInput v-model="form.start_date" required />
+      </div>
       <select v-model="form.status" class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
         <option value="upcoming">آینده</option>
         <option value="active">فعال</option>

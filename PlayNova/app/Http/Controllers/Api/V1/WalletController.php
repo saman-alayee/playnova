@@ -26,6 +26,8 @@ class WalletController extends BaseApiController
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+        $kycVerified = $user->isKycVerified();
+        $walletCap = $user->kycWalletCap();
 
         $transactions = $user->transactions()
             ->where(function ($query) {
@@ -33,9 +35,19 @@ class WalletController extends BaseApiController
                     ->orWhere('status', 'completed');
             })
             ->orderByDesc('created_at')
-            ->paginate(20);
+            ->limit(20)
+            ->get();
 
-        return $this->paginated($transactions, TransactionResource::class);
+        $remaining = $kycVerified
+            ? 50_000_000
+            : max(0, $walletCap - (int) $user->wallet);
+
+        return $this->success([
+            'balance' => (float) $user->wallet,
+            'kyc_verified' => $kycVerified,
+            'max_deposit' => $remaining,
+            'transactions' => TransactionResource::collection($transactions),
+        ]);
     }
 
     public function deposit(Request $request): JsonResponse
@@ -51,7 +63,7 @@ class WalletController extends BaseApiController
         if (! $kycVerified) {
             $remaining = max(0, $walletCap - (int) $user->wallet);
             if ($remaining <= 0) {
-                return $this->error('تا زمان تأیید احراز هویت، سقف موجودی کیف پول ۱,۰۰۰,۰۰۰ تومان است. لطفاً از بخش احراز هویت مدارک را ارسال کنید.', 422);
+                return $this->error('تا زمان تأیید احراز هویت، سقف واریز ۱,۰۰۰,۰۰۰ تومان است. لطفاً از بخش احراز هویت مدارک را ارسال کنید.', 422);
             }
             $rules['amount'] .= '|max:' . $remaining;
         } else {
@@ -61,7 +73,7 @@ class WalletController extends BaseApiController
         $request->validate($rules, [
             'amount.max' => $kycVerified
                 ? 'حداکثر مبلغ هر واریز ۵۰,۰۰۰,۰۰۰ تومان است.'
-                : 'تا قبل از تأیید احراز هویت، حداکثر موجودی کیف پول ۱,۰۰۰,۰۰۰ تومان است. مبلغ واریز را کاهش دهید یا احراز هویت را تکمیل کنید.',
+                : 'تا قبل از تأیید احراز هویت، سقف واریز ۱,۰۰۰,۰۰۰ تومان است. مبلغ واریز را کاهش دهید یا احراز هویت را تکمیل کنید.',
         ]);
 
         $amount = (int) $request->amount;

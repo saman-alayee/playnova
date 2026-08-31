@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
 use App\Http\Controllers\Api\V1\BaseApiController;
+use App\Http\Resources\V1\KycSubmissionResource;
 use App\Http\Resources\V1\TournamentResource;
 use App\Http\Resources\V1\TransactionResource;
 use App\Http\Resources\V1\UserResource;
@@ -72,7 +73,67 @@ class ResourceController extends BaseApiController
 
         $withdrawals = $query->orderByDesc('created_at')->paginate(30);
 
-        return $this->paginated($withdrawals, TransactionResource::class);
+        $userIds = $withdrawals->getCollection()->pluck('user_id')->filter()->unique()->values();
+        $userTransactions = $userIds->isEmpty()
+            ? collect()
+            : Transaction::with('user')
+                ->whereIn('user_id', $userIds)
+                ->orderByDesc('created_at')
+                ->get()
+                ->groupBy('user_id')
+                ->map(fn ($items) => TransactionResource::collection($items)->resolve());
+
+        $pendingWithdraws = (float) Transaction::where('type', 'withdraw')->where('status', 'pending')->sum('amount');
+        $totalWithdrawsCompleted = (float) Transaction::where('type', 'withdraw')->where('status', 'completed')->sum('amount');
+        $totalWallets = (float) User::sum('wallet');
+
+        return response()->json([
+            'success' => true,
+            'data' => TransactionResource::collection($withdrawals->getCollection()),
+            'meta' => [
+                'current_page' => $withdrawals->currentPage(),
+                'last_page' => $withdrawals->lastPage(),
+                'per_page' => $withdrawals->perPage(),
+                'total' => $withdrawals->total(),
+            ],
+            'links' => [
+                'first' => $withdrawals->url(1),
+                'last' => $withdrawals->url($withdrawals->lastPage()),
+                'prev' => $withdrawals->previousPageUrl(),
+                'next' => $withdrawals->nextPageUrl(),
+            ],
+            'financial_summary' => [
+                'pending_withdraws' => $pendingWithdraws,
+                'pending_withdrawals_count' => Transaction::where('type', 'withdraw')->where('status', 'pending')->count(),
+                'total_withdraws_completed' => $totalWithdrawsCompleted,
+                'total_wallets' => $totalWallets,
+            ],
+            'user_transactions' => $userTransactions,
+        ]);
+    }
+
+    public function transactions(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $query = Transaction::with('user')->orderByDesc('created_at');
+
+        if ($request->filled('user_search')) {
+            $search = trim((string) $request->user_search);
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('username', 'like', "%{$search}%")
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('cod_id', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('tx_type') && $request->tx_type !== 'all') {
+            $query->where('type', $request->tx_type);
+        }
+
+        $transactions = $query->paginate(40);
+
+        return $this->paginated($transactions, TransactionResource::class);
     }
 
     public function kyc(): JsonResponse
@@ -81,7 +142,7 @@ class ResourceController extends BaseApiController
 
         $submissions = KycSubmission::with('user')->orderByDesc('created_at')->paginate(20);
 
-        return $this->paginated($submissions);
+        return $this->paginated($submissions, KycSubmissionResource::class);
     }
 
     public function siteSettings(): JsonResponse

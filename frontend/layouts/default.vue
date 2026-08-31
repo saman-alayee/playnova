@@ -59,7 +59,7 @@ watch(() => route.path, () => {
       <LazyHomeNotificationPopup v-if="auth.isAuthenticated" />
       <LazyTeamInviteBanner v-if="auth.isAuthenticated" />
       <LazyGameLoginModal />
-      <LazyRegisterTournamentModal />
+      <RegisterTournamentModal />
     </ClientOnly>
   </div>
 </template>

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { User, SiteSettings } from '~/types/api'
+import { parseAmount } from '~/utils/formatToman'
 
 const TOKEN_KEY = 'playnova_token'
 const USER_KEY = 'playnova_user'
@@ -19,8 +20,18 @@ export const useAuthStore = defineStore('auth', {
     isAdmin: (state) => !!state.user?.is_admin,
     isSeatAdmin: (state) => !!state.user?.is_seat_admin,
     displayName: (state) => state.user?.username || state.user?.name || '',
-    walletBalance: (state) => Number(state.user?.wallet ?? 0),
+    walletBalance: (state) => parseAmount(state.user?.wallet),
     logoUrl: (state) => state.settings?.logo_url || null,
+    needsKycRedirect: (state) => {
+      const user = state.user
+      if (!user || user.is_admin) return false
+      if (user.kyc_verified || user.kyc_verified_at) return false
+
+      const status = user.kyc_submission_status
+      if (status === 'pending' || status === 'approved') return false
+
+      return true
+    },
   },
 
   actions: {

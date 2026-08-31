@@ -23,6 +23,7 @@ class UserResource extends JsonResource
             'losses' => (int) $this->losses,
             'referral_code' => $this->referral_code,
             'kyc_verified' => $this->isKycVerified(),
+            'kyc_submission_status' => $this->latestKycSubmission?->status,
             'kyc_wallet_cap' => $this->kycWalletCap(),
             'bank_card_number' => $this->bank_card_number,
             'bank_account_name' => $this->bank_account_name,

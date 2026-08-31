@@ -20,6 +20,8 @@ class KycController extends BaseApiController
         $submission = KycSubmission::where('user_id', Auth::id())->latest()->first();
 
         return $this->success([
+            'status' => $submission?->status,
+            'rejection_reason' => $submission?->status === 'rejected' ? $submission->admin_note : null,
             'submission' => $submission ? [
                 'id' => $submission->id,
                 'status' => $submission->status,
@@ -75,11 +77,14 @@ class KycController extends BaseApiController
         $submission = KycSubmission::create([
             'user_id' => $userId,
             'national_id_encrypted' => null,
+            'card_front_path' => null,
+            'card_back_path' => null,
             'document_path' => $documentPath,
             'status' => 'pending',
         ]);
 
         return $this->success([
+            'status' => $submission->status,
             'submission' => [
                 'id' => $submission->id,
                 'status' => $submission->status,

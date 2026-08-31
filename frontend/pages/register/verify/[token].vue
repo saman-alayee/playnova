@@ -20,7 +20,7 @@ async function submit() {
     api.setToken(result.token)
     auth.setUser(result.user)
     flash.value = { success: 'ثبت‌نام با موفقیت تکمیل شد.' }
-    await navigateTo('/')
+    await navigateTo(auth.needsKycRedirect ? '/kyc' : '/')
   } catch (e: unknown) {
     const err = e as { message?: string; data?: { errors?: Record<string, string[]> } }
     errors.value = err.data?.errors

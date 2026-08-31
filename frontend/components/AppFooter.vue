@@ -1,9 +1,13 @@
 <script setup lang="ts">
 const auth = useAuthStore()
-const { mediaUrl } = useMediaUrl()
+const { mediaUrl, publicAssetUrl } = useMediaUrl()
 const year = new Date().getFullYear()
 
-const logoUrl = computed(() => mediaUrl(auth.logoUrl))
+const logoUrl = computed(() =>
+  publicAssetUrl('/playnova-logo.png')
+  || publicAssetUrl('/logo.png')
+  || mediaUrl(auth.logoUrl),
+)
 </script>
 
 <template>

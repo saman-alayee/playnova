@@ -37,13 +37,11 @@ function formatNumber(n: number) {
 }
 
 function formatDate(date?: string | null) {
-  if (!date) return '—'
-  return formatIranDate(date)
+  return formatIranDate(date, props.tournament.start_date_display)
 }
 
 function formatTime(date?: string | null) {
-  if (!date) return '—'
-  return formatIranTime(date)
+  return formatIranTime(date, props.tournament.start_date_display)
 }
 </script>
 

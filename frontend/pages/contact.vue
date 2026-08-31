@@ -6,7 +6,6 @@ const { data, pending, error } = await useAsyncData('contact', () => api.pages.c
 
 const email = computed(() => data.value?.email?.trim() || '')
 const phone = computed(() => data.value?.phone?.trim() || '')
-const address = computed(() => data.value?.address?.trim() || '')
 const phoneHref = computed(() => phone.value.replace(/\s+/g, ''))
 </script>
 
@@ -29,10 +28,6 @@ const phoneHref = computed(() => phone.value.replace(/\s+/g, ''))
         <p v-if="phone">
           <span class="text-gray-500">تلفن:</span>
           <a :href="`tel:${phoneHref}`" dir="ltr" class="text-secondary">{{ phone }}</a>
-        </p>
-        <p v-if="address">
-          <span class="text-gray-500">آدرس:</span>
-          <span class="text-gray-300">{{ address }}</span>
         </p>
       </div>
       <NuxtLink to="/tickets" class="inline-block mt-4 btn-glow-primary text-sm px-4 py-2 rounded-xl">

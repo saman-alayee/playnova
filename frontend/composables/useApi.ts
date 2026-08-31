@@ -389,8 +389,39 @@ export function useApi() {
 
       deleteUser: (userId: number) => api.delete<void>(`/admin/users/${userId}`),
 
-      withdrawals: (query?: Record<string, string | number | boolean | undefined>) =>
-        api.paginated<import('~/types/api').Transaction>('/admin/withdrawals', query),
+      withdrawals: async (query?: Record<string, string | number | boolean | undefined>) => {
+        const headers: Record<string, string> = { Accept: 'application/json' }
+        const token = getToken()
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const response = await $fetch<
+          import('~/types/api').ApiResponse<import('~/types/api').Transaction[]> & {
+            financial_summary?: import('~/types/api').AdminWithdrawalsData['financialSummary']
+            user_transactions?: Record<string, import('~/types/api').Transaction[]>
+          }
+        >('/admin/withdrawals', {
+          baseURL: config.public.apiBase as string,
+          query,
+          headers,
+          credentials: token ? 'include' : 'omit',
+        })
+
+        if (!response.success) {
+          const err = new Error(response.message || 'خطای سرور') as import('~/types/api').ApiError
+          err.data = response
+          throw err
+        }
+
+        return {
+          items: (response.data ?? []) as import('~/types/api').Transaction[],
+          meta: response.meta ?? null,
+          financialSummary: response.financial_summary ?? null,
+          userTransactions: response.user_transactions ?? {},
+        } satisfies import('~/types/api').AdminWithdrawalsData
+      },
+
+      transactions: (query?: Record<string, string | number | boolean | undefined>) =>
+        api.paginated<import('~/types/api').Transaction>('/admin/transactions', query),
 
       updateWithdrawal: (
         txId: number,
