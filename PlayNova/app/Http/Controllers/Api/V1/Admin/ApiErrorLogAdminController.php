@@ -88,6 +88,17 @@ class ApiErrorLogAdminController extends BaseApiController
         return $this->success(['count' => $count], "{$count} خطا علامت‌گذاری شد.");
     }
 
+    public function destroyAll(): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $count = ApiErrorLog::query()->count();
+        ApiErrorLog::query()->delete();
+        Cache::forget('admin:dashboard:stats');
+
+        return $this->success(['count' => $count], "{$count} خطا حذف شد.");
+    }
+
     protected function formatLog(ApiErrorLog $log, bool $detailed): array
     {
         $data = [

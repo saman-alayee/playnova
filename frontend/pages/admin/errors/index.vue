@@ -61,6 +61,21 @@ async function resolveAll() {
   }
 }
 
+async function deleteAll() {
+  if (!import.meta.client) return
+  const confirmed = window.confirm('همه خطاهای ثبت‌شده حذف شوند؟ این عمل قابل بازگشت نیست.')
+  if (!confirmed) return
+
+  try {
+    const result = await api.admin.deleteAllApiErrors()
+    flash.value = { success: `${result.count} خطا حذف شد.` }
+    selected.value = null
+    await Promise.all([refresh(), refreshStats()])
+  } catch (e: unknown) {
+    flash.value = { error: (e as Error).message }
+  }
+}
+
 function applySearch() {
   refresh()
 }
@@ -90,6 +105,14 @@ function statusLabel(code: number) {
           @click="resolveAll"
         >
           علامت‌گذاری همه
+        </button>
+        <button
+          v-if="errors.length || stats?.last_24h_count"
+          type="button"
+          class="text-xs bg-danger/90 hover:bg-danger text-white px-3 py-1.5 rounded"
+          @click="deleteAll"
+        >
+          حذف همه
         </button>
         <NuxtLink to="/admin" class="text-sm text-secondary">← داشبورد</NuxtLink>
       </div>

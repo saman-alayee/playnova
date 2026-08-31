@@ -103,6 +103,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('api-errors', [ApiErrorLogAdminController::class, 'index']);
         Route::get('api-errors/stats', [ApiErrorLogAdminController::class, 'stats']);
         Route::put('api-errors/resolve-all', [ApiErrorLogAdminController::class, 'resolveAll']);
+        Route::delete('api-errors/delete-all', [ApiErrorLogAdminController::class, 'destroyAll']);
         Route::get('api-errors/{apiErrorLog}', [ApiErrorLogAdminController::class, 'show']);
         Route::put('api-errors/{apiErrorLog}/resolve', [ApiErrorLogAdminController::class, 'resolve']);
         Route::get('tournaments', [AdminResourceController::class, 'tournaments']);

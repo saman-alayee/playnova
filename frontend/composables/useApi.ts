@@ -524,6 +524,8 @@ export function useApi() {
 
       resolveAllApiErrors: () => api.put<{ count: number }>('/admin/api-errors/resolve-all'),
 
+      deleteAllApiErrors: () => api.delete<{ count: number }>('/admin/api-errors/delete-all'),
+
       tournamentSeats: () => api.get<import('~/types/api').Tournament[]>('/admin/tournament-seats'),
 
       tournamentSeatMap: (id: number | string) =>
