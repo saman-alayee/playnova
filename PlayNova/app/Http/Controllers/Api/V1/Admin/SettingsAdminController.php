@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
 use App\Models\Setting;
 use App\Services\AvalAIService;
 use App\Services\FaviconService;
+use App\Services\ZibalGatewayService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,7 +23,8 @@ class SettingsAdminController extends BaseApiController
 
         return $this->success([
             'logo' => $logo,
-            'logo_url' => $logo ? asset('storage/' . $logo) : null,
+            'logo_url' => Setting::logoUrl(),
+            'has_custom' => filled($logo),
         ]);
     }
 
@@ -30,7 +32,9 @@ class SettingsAdminController extends BaseApiController
     {
         $this->authorizeAdmin();
 
-        $request->validate(['logo' => 'required|image|max:2048']);
+        $request->validate([
+            'logo' => 'required|file|mimes:jpeg,jpg,png,svg,webp|max:2048',
+        ]);
 
         $oldLogo = Setting::get('logo');
         if ($oldLogo && file_exists(storage_path('app/public/' . $oldLogo))) {
@@ -41,15 +45,16 @@ class SettingsAdminController extends BaseApiController
         Setting::set('logo', $path);
 
         $sourcePath = storage_path('app/public/' . $path);
-        foreach ([
-            dirname(base_path()) . '/playnova-logo.png',
-            public_path('logo.png'),
-        ] as $publicTarget) {
+        foreach (self::logoPublicTargets() as $publicTarget) {
             @copy($sourcePath, $publicTarget);
         }
         FaviconService::regenerateFromFile($sourcePath);
 
-        return $this->success(['logo' => $path, 'logo_url' => asset('storage/' . $path)], 'لوگو تغییر یافت.');
+        return $this->success([
+            'logo' => $path,
+            'logo_url' => Setting::logoUrl(),
+            'has_custom' => true,
+        ], 'لوگو تغییر یافت.');
     }
 
     public function deleteLogo(): JsonResponse
@@ -62,18 +67,51 @@ class SettingsAdminController extends BaseApiController
         }
         Setting::set('logo', null);
 
-        return $this->success(null, 'لوگو به حالت پیش‌فرض بازگشت.');
+        $defaultSource = dirname(base_path()) . '/frontend/public/playnova-logo.png';
+        if (file_exists($defaultSource)) {
+            foreach (self::logoPublicTargets() as $publicTarget) {
+                @copy($defaultSource, $publicTarget);
+            }
+            FaviconService::regenerateFromFile($defaultSource);
+        }
+
+        return $this->success([
+            'logo' => null,
+            'logo_url' => Setting::logoUrl(),
+            'has_custom' => false,
+        ], 'لوگو به حالت پیش‌فرض بازگشت.');
     }
 
-    public function paymentGateway(): JsonResponse
+    /** @return list<string> */
+    private static function logoPublicTargets(): array
+    {
+        $root = dirname(base_path());
+
+        return [
+            $root . '/playnova-logo.png',
+            $root . '/frontend/public/logo.png',
+            $root . '/frontend/public/playnova-logo.png',
+            public_path('logo.png'),
+            public_path('playnova-logo.png'),
+        ];
+    }
+
+    public function paymentGateway(ZibalGatewayService $zibal): JsonResponse
     {
         $this->authorizeAdmin();
 
+        $detectedIp = $zibal->detectServerIp();
+        $storedIp = Setting::getZibalServerIp();
+
         return $this->success([
-            'merchant_id' => Setting::getZibalMerchantId(),
+            'merchant_id' => Setting::getZibalMerchantCode() ?? '',
             'is_active' => Setting::isPaymentGatewayActive(),
             'sandbox' => Setting::isZibalSandbox(),
             'provider' => Setting::get('payment_gateway_provider', 'zibal'),
+            'callback_url' => $zibal->callbackUrl(),
+            'server_ip' => $storedIp ?: $detectedIp,
+            'detected_server_ip' => $detectedIp,
+            'has_api_key' => filled(Setting::getZibalApiKey()),
         ]);
     }
 
@@ -85,6 +123,8 @@ class SettingsAdminController extends BaseApiController
             'merchant_id' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
             'sandbox' => 'nullable|boolean',
+            'zibal_api_key' => 'nullable|string|max:255',
+            'zibal_server_ip' => 'nullable|string|max:45',
         ]);
 
         if ($request->filled('merchant_id')) {
@@ -99,7 +139,16 @@ class SettingsAdminController extends BaseApiController
         Setting::set('zibal_sandbox', $request->boolean('sandbox'));
         Setting::set('payment_gateway_provider', 'zibal');
 
-        return $this->success(null, 'تنظیمات درگاه پرداخت ذخیره شد.');
+        if ($request->filled('zibal_api_key')) {
+            Setting::set('zibal_api_key', trim((string) $request->zibal_api_key));
+        }
+
+        if ($request->has('zibal_server_ip')) {
+            $ip = trim((string) $request->zibal_server_ip);
+            Setting::set('zibal_server_ip', $ip !== '' ? $ip : null);
+        }
+
+        return $this->success(null, 'تنظیمات درگاه پرداخت زیبال با موفقیت ذخیره شد.');
     }
 
     public function testPaymentGateway(): JsonResponse

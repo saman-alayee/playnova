@@ -316,6 +316,16 @@ class Setting extends Model
         return (string) config('services.avalai.vision_model', 'gpt-4o');
     }
 
+    public static function getResultAiVisionModel(): string
+    {
+        $fromDb = trim((string) self::get('result_ai_vision_model', ''));
+        if ($fromDb !== '') {
+            return $fromDb;
+        }
+
+        return (string) config('services.avalai.result_vision_model', 'gpt-4.1');
+    }
+
     public static function getAvalAiTimeout(): int
     {
         $fromDb = self::get('avalai_timeout');
@@ -363,21 +373,27 @@ class Setting extends Model
         }
 
         return <<<'PROMPT'
-You extract structured data from Call of Duty Mobile match result screenshots (scoreboard / leaderboard / post-match screen).
+You are an expert at reading Call of Duty Mobile (CODM) post-match result screens (scoreboard, placement, leaderboard, BR standings).
 
-Return ONLY a JSON array. No markdown, no explanation.
+Return ONLY a valid JSON array. No markdown, no code fences, no explanation.
 
-Each item: {"rank":1,"player_name":"Name","uid":"123456789012345678","kills":12}
+Each item is one ranked placement. rank=1 is the winner / best placement.
 
-Rules:
-- rank: integer position (1 = winner / first place)
-- player_name: copy the in-game name EXACTLY as shown, including special symbols, fancy Unicode letters, emoji, and stylized fonts
-- uid: numeric Call of Duty player ID / UID if visible (digits only string), else null. Prefer UID over name when both are visible.
-- kills: kill count or score if visible, else null
-- If a row shows both clan tag and player name, include the full visible label in player_name
-- Do not "clean up" or latinize names; preserve what appears on screen
+SOLO (1-player teams):
+{"rank":1,"player_name":"ExactInGameName","uid":"123456789012345678","kills":12}
 
-Sort by rank ascending. Include every visible row on the scoreboard.
+DUO / SQUAD — return ONE item per TEAM (not one per squad member):
+{"rank":1,"team_label":"#5","player_names":["NameA","NameB"],"uids":["123456789012345678","987654321098765432"],"kills":24}
+
+Field rules:
+- rank: integer from the placement / # / رتبه column (1=first). Never guess rank from kills alone.
+- player_name OR player_names: copy EXACTLY as shown (Unicode, emoji, stylized fonts). Do not clean or latinize.
+- uid / uids: numeric CODM player ID when visible (digits only string). Prefer UID matching over names.
+- kills: kills/score when visible; null if not shown.
+- Include every ranked row visible on screen, in order.
+- Ignore lobby UI, spectators, ads, and buttons.
+
+Sort by rank ascending.
 PROMPT;
     }
 
@@ -392,12 +408,17 @@ PROMPT;
         return <<<'PROMPT'
 Tournament: {tournament_title}
 Mode: {seat_mode_label}
-Registered participants (match by UID first; names may contain special Unicode characters):
+
+Prize amounts (fixed Toman per rank — from tournament description):
+{prize_table}
+
+Registered participants (match by UID first; names may use special Unicode):
 {participants}
 
-Extract the scoreboard from this media.
-When UID is visible on screen, it is the most reliable identifier.
-Copy player_name exactly as displayed, even with fancy symbols or non-Latin characters.
+Extract the final standings from this media.
+- For duo/squad modes, rank TEAMS (one JSON row per team).
+- Use placement/# column for rank, not kill count.
+- Copy names and UIDs exactly as displayed.
 PROMPT;
     }
 

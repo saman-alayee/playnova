@@ -7,10 +7,54 @@ useHead({ title: 'مدیریت مسابقات | PlayNova' })
 const api = useApi()
 const flash = useState<{ success?: string; error?: string } | null>('flash')
 const page = ref(1)
+const search = ref('')
+const status = ref('all')
+const sort = ref('newest')
+
+const statusOptions = [
+  { value: 'all', label: 'همه وضعیت‌ها' },
+  { value: 'upcoming', label: 'آینده' },
+  { value: 'active', label: 'فعال' },
+  { value: 'ongoing', label: 'در حال برگزاری' },
+  { value: 'ended', label: 'پایان یافته' },
+  { value: 'cancelled', label: 'لغو شده' },
+]
+
+const sortOptions = [
+  { value: 'newest', label: 'جدیدترین' },
+  { value: 'start_date', label: 'تاریخ شروع' },
+  { value: 'entry_fee', label: 'بیشترین ورودی' },
+  { value: 'capacity', label: 'بیشترین ظرفیت' },
+]
+
+function queryParams() {
+  const params: Record<string, string | number> = { page: page.value }
+  if (search.value.trim()) params.search = search.value.trim()
+  if (status.value !== 'all') params.status = status.value
+  if (sort.value !== 'newest') params.sort = sort.value
+  return params
+}
+
+const hasActiveFilters = computed(
+  () => !!search.value.trim() || status.value !== 'all' || sort.value !== 'newest',
+)
+
+function applyFilters() {
+  page.value = 1
+  refresh()
+}
+
+function resetFilters() {
+  search.value = ''
+  status.value = 'all'
+  sort.value = 'newest'
+  page.value = 1
+  refresh()
+}
 
 const { data, pending, error, refresh } = await useAsyncData(
   'admin-tournaments',
-  () => api.admin.tournaments({ page: page.value }),
+  () => api.admin.tournaments(queryParams()),
   { watch: [page] },
 )
 
@@ -151,6 +195,31 @@ function prizePaid(t: Tournament): boolean {
     </div>
 
     <template v-else>
+      <AdminFilterBar
+        v-model:search="search"
+        search-placeholder="جستجو در عنوان، بازی یا توضیحات..."
+        :show-reset="hasActiveFilters"
+        @apply="applyFilters"
+        @reset="resetFilters"
+      >
+        <template #filters>
+          <AdminFilterField label="وضعیت">
+            <template #control>
+              <select v-model="status" @change="applyFilters">
+                <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </select>
+            </template>
+          </AdminFilterField>
+          <AdminFilterField label="مرتب‌سازی">
+            <template #control>
+              <select v-model="sort" @change="applyFilters">
+                <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </select>
+            </template>
+          </AdminFilterField>
+        </template>
+      </AdminFilterBar>
+
       <div class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6">
         <h2 class="font-bold text-white mb-4">ایجاد مسابقه جدید</h2>
         <form class="grid sm:grid-cols-2 gap-3" @submit.prevent="createTournament">
@@ -182,6 +251,9 @@ function prizePaid(t: Tournament): boolean {
       </div>
 
       <div class="space-y-4">
+        <div v-if="!tournaments.length" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
+          مسابقه‌ای با این فیلترها یافت نشد.
+        </div>
         <div v-for="t in tournaments" :key="t.id" class="bg-dark-800 border border-dark-600 rounded-xl p-4">
           <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
             <h3 class="font-bold text-white">{{ t.title }}</h3>

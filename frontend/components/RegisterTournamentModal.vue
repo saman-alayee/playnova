@@ -55,14 +55,11 @@ async function registerSolo() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const result = await api.tournaments.register(t.id, { accept_rules: '1' })
-    close()
+    await api.tournaments.register(t.id, { accept_rules: '1' })
     flash.value = { info: 'برای تکمیل ثبت‌نام، جایگاه خود را انتخاب کنید.' }
-    if (result?.next_step === 'select_seat') {
-      await navigateTo(`/tournaments/${t.id}/select-seat`)
-    } else {
-      await navigateTo(`/tournaments/${t.id}`)
-    }
+    await auth.fetchUser()
+    await navigateTo(`/tournaments/${t.id}/select-seat`)
+    close()
   } catch (e: unknown) {
     const err = e as { message?: string }
     errorMessage.value = err.message || 'ثبت‌نام ناموفق بود.'
@@ -152,7 +149,7 @@ async function submitTeamInvite() {
               type="button"
               class="btn-glow-success w-full rounded-lg py-3 text-sm font-bold"
               :disabled="loading"
-              @click="registerSolo"
+              @click.stop.prevent="registerSolo"
             >
               🎯 رزرو تکی — انتخاب جایگاه
             </button>

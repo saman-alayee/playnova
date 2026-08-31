@@ -248,6 +248,49 @@ function removeRow(index: number) {
 
 const winnerPreview = computed(() => rankedRows.value[0] ?? null)
 
+const prizeTable = computed<Record<number, number>>(() => {
+  const raw = analysis.value?.prize_table ?? promptConfig.value?.prize_table ?? {}
+  const normalized: Record<number, number> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    normalized[Number(key)] = Number(value)
+  }
+  return normalized
+})
+
+const hasPrizeTable = computed(() => Object.keys(prizeTable.value).length > 0)
+
+const totalPrizePreview = computed(() =>
+  rankedRows.value.reduce((sum, row, index) => sum + prizeAmountForRow(index, row), 0),
+)
+
+function prizeRankForRow(index: number, row: RankRow): number {
+  const seatMode = tournament.value?.seat_mode ?? 1
+  const participant = availableParticipants.value.find((p) => p.user_id === row.user_id)
+  const seatNumber = participant?.seat_number
+
+  if (seatMode > 1 && seatNumber) {
+    return Math.ceil(seatNumber / seatMode)
+  }
+
+  return index + 1
+}
+
+function prizeAmountForRow(index: number, row: RankRow): number {
+  const rank = prizeRankForRow(index, row)
+  const amount = prizeTable.value[rank]
+  if (amount !== undefined && amount > 0) {
+    return amount
+  }
+  if (!hasPrizeTable.value && rank === 1) {
+    return Number(tournament.value?.prize_pool ?? 0)
+  }
+  return 0
+}
+
+function formatToman(amount: number): string {
+  return Number(amount || 0).toLocaleString('fa-IR')
+}
+
 function matchMethodLabel(method?: string | null) {
   switch (method) {
     case 'uid':
@@ -362,7 +405,11 @@ onBeforeUnmount(() => {
             rows="5"
             class="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
           />
-          <p class="text-xs text-gray-500 mt-1">متغیرها: {tournament_title}، {seat_mode_label}، {participants}</p>
+          <p class="text-xs text-gray-500 mt-1">متغیرها: {tournament_title}، {seat_mode_label}، {participants}، {prize_table}</p>
+        </div>
+        <div v-if="promptConfig?.prize_table_text" class="rounded-lg border border-secondary/30 bg-secondary/5 p-3">
+          <p class="text-xs text-secondary font-bold mb-1">جدول جایزه (از توضیحات مسابقه)</p>
+          <pre class="text-xs text-gray-300 whitespace-pre-wrap font-sans">{{ promptConfig.prize_table_text }}</pre>
         </div>
         <label class="flex items-center gap-2 text-sm text-gray-300">
           <input v-model="savePrompt" type="checkbox">
@@ -433,9 +480,19 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="analysis" class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6">
-      <h2 class="font-bold text-white mb-2">۳. مرتب‌سازی رتبه‌ها</h2>
-      <p class="text-sm text-gray-400 mb-4">
+      <h2 class="font-bold text-white mb-2">۳. مرتب‌سازی رتبه‌ها و پیش‌نمایش جوایز</h2>
+      <p class="text-sm text-gray-400 mb-2">
         ردیف‌ها را بکشید یا با دکمه‌ها جابه‌جا کنید. رتبه ۱ = برنده.
+      </p>
+      <p v-if="analysis.vision_model" class="text-xs text-gray-500 mb-2">
+        مدل تحلیل: <span dir="ltr">{{ analysis.vision_model }}</span>
+      </p>
+      <p v-if="hasPrizeTable" class="text-sm text-secondary mb-4">
+        جوایز بر اساس جدول ثابت توضیحات مسابقه محاسبه می‌شود (نه درصدی).
+        مجموع پیش‌نمایش: <span class="font-bold">{{ formatToman(totalPrizePreview) }} تومان</span>
+      </p>
+      <p v-else class="text-sm text-amber-300/90 mb-4">
+        جدول جایزه در توضیحات مسابقه پیدا نشد؛ فقط جایزه نفر اول (prize pool) پیش‌نمایش می‌شود.
       </p>
 
       <div v-if="analysis.unmatched.length" class="mb-4 rounded-lg border border-amber-700/40 bg-amber-900/10 p-3">
@@ -472,6 +529,12 @@ onBeforeUnmount(() => {
             </p>
           </div>
           <span class="text-xs text-gray-500" dir="ltr">{{ row.cod_id || '—' }}</span>
+          <span
+            v-if="prizeAmountForRow(index, row) > 0"
+            class="text-xs font-bold text-green-300 shrink-0"
+          >
+            {{ formatToman(prizeAmountForRow(index, row)) }} ت
+          </span>
           <input
             v-model.number="row.kills"
             type="number"

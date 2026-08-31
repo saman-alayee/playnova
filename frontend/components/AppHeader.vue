@@ -5,7 +5,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const { formatToman } = useFormatToman()
 
-const menuReady = computed(() => auth.initialized)
+const menuReady = useAuthMenuReady()
 
 function isActive(path: string) {
   if (path === '/') return route.path === '/'

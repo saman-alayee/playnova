@@ -50,9 +50,11 @@ function isActive(path: string) {
     <NuxtLink to="/admin/broadcast-manage" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/broadcast-manage') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       📋 مدیریت اعلان‌ها
     </NuxtLink>
+    <!-- بخش تیکت‌ها بسته شد؛ سوالات متداول جایگزین شده است.
     <NuxtLink to="/admin/tickets" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/tickets') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       تیکت‌ها
     </NuxtLink>
+    -->
     <NuxtLink to="/admin/rules/manage" class="px-3 py-1.5 rounded transition" :class="isActive('/admin/rules') ? 'bg-secondary text-white' : 'bg-gray-700 hover:bg-gray-600 text-white'">
       📋 مدیریت قوانین
     </NuxtLink>

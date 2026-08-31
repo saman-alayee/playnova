@@ -11,6 +11,8 @@ const { formatDateTime } = usePersianDateTime()
 const tab = ref<'broadcast' | 'personal'>('broadcast')
 const broadcastPage = ref(1)
 const personalPage = ref(1)
+const broadcastSearch = ref('')
+const personalSearch = ref('')
 const editing = ref<AdminBroadcastCampaign | Notification | null>(null)
 const editForm = reactive({ title: '', message: '' })
 const saving = ref(false)
@@ -20,15 +22,46 @@ const selectedPersonal = ref<number[]>([])
 
 const { data: broadcastData, pending: broadcastPending, refresh: refreshBroadcasts } = await useAsyncData(
   'admin-broadcast-campaigns',
-  () => api.admin.broadcasts({ page: broadcastPage.value }),
+  () => api.admin.broadcasts({
+    page: broadcastPage.value,
+    search: broadcastSearch.value.trim() || undefined,
+  }),
   { watch: [broadcastPage] },
 )
 
 const { data: personalData, pending: personalPending, refresh: refreshPersonal } = await useAsyncData(
   'admin-personal-notifications',
-  () => api.admin.personalNotifications({ page: personalPage.value }),
+  () => api.admin.personalNotifications({
+    page: personalPage.value,
+    search: personalSearch.value.trim() || undefined,
+  }),
   { watch: [personalPage] },
 )
+
+const hasBroadcastFilters = computed(() => !!broadcastSearch.value.trim())
+const hasPersonalFilters = computed(() => !!personalSearch.value.trim())
+
+function applyBroadcastFilters() {
+  broadcastPage.value = 1
+  refreshBroadcasts()
+}
+
+function resetBroadcastFilters() {
+  broadcastSearch.value = ''
+  broadcastPage.value = 1
+  refreshBroadcasts()
+}
+
+function applyPersonalFilters() {
+  personalPage.value = 1
+  refreshPersonal()
+}
+
+function resetPersonalFilters() {
+  personalSearch.value = ''
+  personalPage.value = 1
+  refreshPersonal()
+}
 
 const broadcasts = computed(() => broadcastData.value?.items ?? [])
 const personalItems = computed(() => personalData.value?.items ?? [])
@@ -185,40 +218,33 @@ function togglePersonal(id: number, checked: boolean) {
       </button>
     </div>
 
-    <div v-if="tab === 'broadcast'" class="mb-4 flex flex-wrap items-center gap-3">
-      <label class="flex items-center gap-2 text-sm text-gray-300">
-        <input v-model="allBroadcastsSelected" type="checkbox" class="rounded">
-        انتخاب همه
-      </label>
-      <button
-        v-if="selectedBroadcasts.length"
-        type="button"
-        class="text-xs bg-danger text-white px-3 py-1.5 rounded"
-        @click="bulkDeleteBroadcasts"
-      >
-        حذف انتخاب‌شده‌ها ({{ selectedBroadcasts.length }})
-      </button>
-    </div>
-
-    <div v-else class="mb-4 flex flex-wrap items-center gap-3">
-      <label class="flex items-center gap-2 text-sm text-gray-300">
-        <input v-model="allPersonalSelected" type="checkbox" class="rounded">
-        انتخاب همه
-      </label>
-      <button
-        v-if="selectedPersonal.length"
-        type="button"
-        class="text-xs bg-danger text-white px-3 py-1.5 rounded"
-        @click="bulkDeletePersonal"
-      >
-        حذف انتخاب‌شده‌ها ({{ selectedPersonal.length }})
-      </button>
-    </div>
-
     <div v-if="tab === 'broadcast'">
+      <AdminFilterBar
+        v-model:search="broadcastSearch"
+        search-placeholder="جستجو در عنوان یا متن اعلان..."
+        :show-reset="hasBroadcastFilters"
+        @apply="applyBroadcastFilters"
+        @reset="resetBroadcastFilters"
+      />
+
+      <div class="mb-4 flex flex-wrap items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-gray-300">
+          <input v-model="allBroadcastsSelected" type="checkbox" class="rounded">
+          انتخاب همه
+        </label>
+        <button
+          v-if="selectedBroadcasts.length"
+          type="button"
+          class="text-xs bg-danger text-white px-3 py-1.5 rounded"
+          @click="bulkDeleteBroadcasts"
+        >
+          حذف انتخاب‌شده‌ها ({{ selectedBroadcasts.length }})
+        </button>
+      </div>
+
       <div v-if="broadcastPending" class="text-gray-500">در حال بارگذاری...</div>
       <div v-else-if="!broadcasts.length" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
-        اعلان کلی ثبت نشده است.
+        اعلان کلی با این فیلترها یافت نشد.
       </div>
       <div v-else class="space-y-3">
         <div
@@ -254,9 +280,32 @@ function togglePersonal(id: number, checked: boolean) {
     </div>
 
     <div v-else>
+      <AdminFilterBar
+        v-model:search="personalSearch"
+        search-placeholder="جستجو در عنوان، متن یا گیرنده..."
+        :show-reset="hasPersonalFilters"
+        @apply="applyPersonalFilters"
+        @reset="resetPersonalFilters"
+      />
+
+      <div class="mb-4 flex flex-wrap items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-gray-300">
+          <input v-model="allPersonalSelected" type="checkbox" class="rounded">
+          انتخاب همه
+        </label>
+        <button
+          v-if="selectedPersonal.length"
+          type="button"
+          class="text-xs bg-danger text-white px-3 py-1.5 rounded"
+          @click="bulkDeletePersonal"
+        >
+          حذف انتخاب‌شده‌ها ({{ selectedPersonal.length }})
+        </button>
+      </div>
+
       <div v-if="personalPending" class="text-gray-500">در حال بارگذاری...</div>
       <div v-else-if="!personalItems.length" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
-        اعلان شخصی ثبت نشده است.
+        اعلان شخصی با این فیلترها یافت نشد.
       </div>
       <div v-else class="space-y-3">
         <div

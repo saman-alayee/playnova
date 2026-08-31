@@ -14,6 +14,7 @@ const status = ref('pending')
 const page = ref(1)
 const txPage = ref(1)
 const userSearch = ref('')
+const withdrawalUserSearch = ref('')
 const txType = ref('all')
 const rejectionReasons = reactive<Record<number, string>>({})
 const approveChecks = reactive<Record<number, boolean>>({})
@@ -32,7 +33,11 @@ const txTypeOptions = [
 
 const { data, pending, error, refresh } = await useAsyncData(
   'admin-withdrawals',
-  () => api.admin.withdrawals({ status: status.value, page: page.value }),
+  () => api.admin.withdrawals({
+    status: status.value,
+    page: page.value,
+    user_search: withdrawalUserSearch.value.trim() || undefined,
+  }),
   { watch: [status, page] },
 )
 
@@ -87,21 +92,33 @@ function userTxList(tx: Transaction): Transaction[] {
   return userTransactions.value[key] ?? []
 }
 
+const hasWithdrawalFilters = computed(
+  () => status.value !== 'pending' || !!withdrawalUserSearch.value.trim(),
+)
+const hasTransactionFilters = computed(() => !!userSearch.value.trim() || txType.value !== 'all')
+
+function applyWithdrawalFilters() {
+  page.value = 1
+  refresh()
+}
+
+function resetWithdrawalFilters() {
+  status.value = 'pending'
+  withdrawalUserSearch.value = ''
+  page.value = 1
+  refresh()
+}
+
 function applyTransactionSearch() {
   txPage.value = 1
   refreshTransactions()
 }
 
-function goToPage(next: number, meta?: { last_page?: number } | null) {
-  const last = meta?.last_page ?? 1
-  if (next < 1 || next > last) return
-  page.value = next
-}
-
-function goToTxPage(next: number, meta?: { last_page?: number } | null) {
-  const last = meta?.last_page ?? 1
-  if (next < 1 || next > last) return
-  txPage.value = next
+function resetTransactionFilters() {
+  userSearch.value = ''
+  txType.value = 'all'
+  txPage.value = 1
+  refreshTransactions()
 }
 
 async function updateStatus(tx: Transaction, newStatus: string) {
@@ -189,23 +206,26 @@ async function updateStatus(tx: Transaction, newStatus: string) {
     </div>
 
     <template v-if="view === 'withdrawals'">
-      <div class="flex flex-wrap gap-2 mb-4">
-        <button
-          v-for="item in [
-            { key: 'pending', label: 'در انتظار' },
-            { key: 'all', label: 'همه' },
-            { key: 'completed', label: 'تأیید شده' },
-            { key: 'rejected', label: 'رد شده' },
-          ]"
-          :key="item.key"
-          type="button"
-          class="px-3 py-1 rounded text-xs"
-          :class="status === item.key ? 'bg-primary text-white' : 'bg-dark-700 text-gray-300'"
-          @click="status = item.key; page = 1"
-        >
-          {{ item.label }}
-        </button>
-      </div>
+      <AdminFilterBar
+        v-model:search="withdrawalUserSearch"
+        search-placeholder="جستجوی کاربر: نام کاربری، موبایل یا آیدی کالاف..."
+        :show-reset="hasWithdrawalFilters"
+        @apply="applyWithdrawalFilters"
+        @reset="resetWithdrawalFilters"
+      >
+        <template #filters>
+          <AdminFilterField label="وضعیت">
+            <template #control>
+              <select v-model="status" @change="applyWithdrawalFilters">
+                <option value="pending">در انتظار</option>
+                <option value="all">همه</option>
+                <option value="completed">تأیید شده</option>
+                <option value="rejected">رد شده</option>
+              </select>
+            </template>
+          </AdminFilterField>
+        </template>
+      </AdminFilterBar>
 
       <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
       <div v-else-if="error" class="text-red-400">{{ (error as Error).message }}</div>
@@ -317,32 +337,27 @@ async function updateStatus(tx: Transaction, newStatus: string) {
         </div>
       </div>
 
-      <div v-if="data?.meta && data.meta.last_page > 1" class="flex items-center justify-center gap-3 mt-4">
-        <button type="button" class="text-xs px-3 py-1 rounded bg-dark-700 text-gray-300 disabled:opacity-40" :disabled="page <= 1" @click="goToPage(page - 1, data.meta)">قبلی</button>
-        <span class="text-xs text-gray-400">{{ page.toLocaleString('fa-IR') }} / {{ data.meta.last_page.toLocaleString('fa-IR') }}</span>
-        <button type="button" class="text-xs px-3 py-1 rounded bg-dark-700 text-gray-300 disabled:opacity-40" :disabled="page >= data.meta.last_page" @click="goToPage(page + 1, data.meta)">بعدی</button>
-      </div>
+      <AdminPagination v-model:page="page" :meta="data?.meta" />
     </template>
 
     <template v-else>
-      <form class="flex flex-wrap gap-2 mb-4 items-end" @submit.prevent="applyTransactionSearch">
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">جستجوی کاربر</label>
-          <input
-            v-model="userSearch"
-            type="text"
-            placeholder="نام کاربری، موبایل، آیدی کالاف"
-            class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm outline-none focus:border-secondary min-w-[220px] text-white"
-          >
-        </div>
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">نوع تراکنش</label>
-          <select v-model="txType" class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-sm outline-none focus:border-secondary text-white">
-            <option v-for="option in txTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-          </select>
-        </div>
-        <button type="submit" class="bg-dark-600 hover:bg-dark-500 text-white px-4 py-2 rounded text-sm">جستجو</button>
-      </form>
+      <AdminFilterBar
+        v-model:search="userSearch"
+        search-placeholder="جستجوی کاربر: نام کاربری، موبایل یا آیدی کالاف..."
+        :show-reset="hasTransactionFilters"
+        @apply="applyTransactionSearch"
+        @reset="resetTransactionFilters"
+      >
+        <template #filters>
+          <AdminFilterField label="نوع تراکنش">
+            <template #control>
+              <select v-model="txType" @change="applyTransactionSearch">
+                <option v-for="option in txTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </template>
+          </AdminFilterField>
+        </template>
+      </AdminFilterBar>
 
       <div v-if="txPending" class="text-gray-500">در حال بارگذاری...</div>
       <div v-else-if="txError" class="text-red-400">{{ (txError as Error).message }}</div>
@@ -374,11 +389,7 @@ async function updateStatus(tx: Transaction, newStatus: string) {
         </table>
       </div>
 
-      <div v-if="txData?.meta && txData.meta.last_page > 1" class="flex items-center justify-center gap-3 mt-4">
-        <button type="button" class="text-xs px-3 py-1 rounded bg-dark-700 text-gray-300 disabled:opacity-40" :disabled="txPage <= 1" @click="goToTxPage(txPage - 1, txData.meta)">قبلی</button>
-        <span class="text-xs text-gray-400">{{ txPage.toLocaleString('fa-IR') }} / {{ txData.meta.last_page.toLocaleString('fa-IR') }}</span>
-        <button type="button" class="text-xs px-3 py-1 rounded bg-dark-700 text-gray-300 disabled:opacity-40" :disabled="txPage >= txData.meta.last_page" @click="goToTxPage(txPage + 1, txData.meta)">بعدی</button>
-      </div>
+      <AdminPagination v-model:page="txPage" :meta="txData?.meta" />
     </template>
   </div>
 </template>

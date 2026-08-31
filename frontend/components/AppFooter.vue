@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const auth = useAuthStore()
 const year = new Date().getFullYear()
-const menuReady = computed(() => auth.initialized)
+const menuReady = useAuthMenuReady()
 </script>
 
 <template>

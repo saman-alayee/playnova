@@ -17,13 +17,41 @@ class ZibalGatewayService
 
     public function callbackUrl(): string
     {
-        $frontend = trim((string) config('app.frontend_url', ''));
-        if ($frontend !== '') {
-            return rtrim($frontend, '/') . '/wallet/callback';
+        return $this->siteOrigin() . '/wallet/callback';
+    }
+
+    public function siteOrigin(): string
+    {
+        $candidates = array_values(array_filter([
+            trim((string) config('app.frontend_url', '')),
+            trim((string) config('app.url', '')),
+            trim((string) Setting::get('app_url', '')),
+            'https://playnova.ir',
+        ]));
+
+        foreach ($candidates as $candidate) {
+            $origin = $this->normalizeOrigin($candidate);
+            if ($origin && ! $this->isMachineOrigin($origin)) {
+                return $origin;
+            }
         }
 
-        $configured = trim((string) (config('app.url') ?: Setting::get('app_url', '')));
-        $base = $configured !== '' ? rtrim($configured, '/') : 'https://playnova.ir';
+        foreach ($candidates as $candidate) {
+            $origin = $this->normalizeOrigin($candidate);
+            if ($origin) {
+                return $origin;
+            }
+        }
+
+        return 'https://playnova.ir';
+    }
+
+    protected function normalizeOrigin(string $value): ?string
+    {
+        $base = trim($value);
+        if ($base === '') {
+            return null;
+        }
 
         if (! str_starts_with($base, 'http://') && ! str_starts_with($base, 'https://')) {
             $base = 'https://' . ltrim($base, '/');
@@ -33,7 +61,38 @@ class ZibalGatewayService
             $base = 'https://' . substr($base, 7);
         }
 
-        return $base . '/wallet/callback';
+        return rtrim($base, '/');
+    }
+
+    protected function isMachineOrigin(string $origin): bool
+    {
+        $host = parse_url($origin, PHP_URL_HOST);
+        if (! is_string($host) || $host === '') {
+            return true;
+        }
+
+        if (in_array(strtolower($host), ['localhost', '127.0.0.1'], true)) {
+            return true;
+        }
+
+        return filter_var($host, FILTER_VALIDATE_IP) !== false;
+    }
+
+    public function startPaymentUrl(string $trackId): string
+    {
+        $trackId = preg_replace('/\D+/', '', $trackId);
+
+        return self::BASE_URL . '/start/' . $trackId;
+    }
+
+    /**
+     * Bridge URL on the registered site domain so the browser sends Referer to Zibal /start.
+     */
+    public function paymentBridgeUrl(string $trackId): string
+    {
+        $trackId = preg_replace('/\D+/', '', $trackId);
+
+        return $this->siteOrigin() . '/wallet/pay/' . $trackId;
     }
 
     public function detectServerIp(): ?string
@@ -157,7 +216,8 @@ class ZibalGatewayService
         return [
             'ok' => true,
             'track_id' => (string) $trackId,
-            'redirect_url' => self::BASE_URL . '/start/' . $trackId,
+            'redirect_url' => $this->paymentBridgeUrl((string) $trackId),
+            'gateway_url' => $this->startPaymentUrl((string) $trackId),
         ];
     }
 

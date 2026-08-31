@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Support\IranDate;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,8 +32,11 @@ class UserResource extends JsonResource
             'is_admin' => (bool) $this->is_admin,
             'is_seat_admin' => (bool) $this->is_seat_admin,
             'unread_notifications_count' => (int) ($this->unread_notifications_count ?? 0),
+            'registrations_count' => $this->whenCounted('registrations'),
+            'referrer_username' => $this->whenLoaded('referrer', fn () => $this->referrer?->username),
             'active_seats' => RegistrationResource::collection($this->whenLoaded('registrations')),
             'created_at' => $this->created_at?->toIso8601String(),
+            'created_at_display' => IranDate::formatString($this->created_at),
         ];
     }
 }

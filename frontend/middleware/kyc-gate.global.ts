@@ -24,6 +24,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     '/privacy',
     '/contact',
     '/tickets',
+    '/support',
     '/notifications',
   ]
 

@@ -23,7 +23,7 @@ function formatCount(value?: number) {
 
     <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
     <template v-else>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-5">
           <p class="text-xs text-gray-400">تعداد کاربران</p>
           <p class="text-2xl font-black text-primary">{{ formatCount(data?.total_users) }}</p>
@@ -36,10 +36,12 @@ function formatCount(value?: number) {
           <p class="text-xs text-gray-400">مسابقات فعال</p>
           <p class="text-2xl font-black text-primary">{{ formatCount(data?.active_tournaments) }}</p>
         </div>
+        <!-- بخش تیکت‌ها بسته شد.
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-5">
           <p class="text-xs text-gray-400">تیکت‌های باز</p>
           <p class="text-2xl font-black text-white">{{ formatCount(data?.open_tickets) }}</p>
         </div>
+        -->
       </div>
 
       <h2 class="font-bold mb-4 text-white">گزارش مالی</h2>

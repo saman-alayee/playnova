@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\Admin\KycAdminController;
 use App\Http\Controllers\Api\V1\Admin\ResourceController as AdminResourceController;
 use App\Http\Controllers\Api\V1\Admin\RoleAdminController;
 use App\Http\Controllers\Api\V1\Admin\SettingsAdminController;
+use App\Http\Controllers\Api\V1\Admin\TicketAdminController;
 use App\Http\Controllers\Api\V1\Admin\TournamentAdminController;
 use App\Http\Controllers\Api\V1\Admin\TournamentResultController as AdminTournamentResultController;
 use App\Http\Controllers\Api\V1\Admin\TournamentPrizeAdminController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\Api\V1\PageController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\TeamInviteController;
+use App\Http\Controllers\Api\V1\TicketController;
 use App\Http\Controllers\Api\V1\TournamentController;
 use App\Http\Controllers\Api\V1\WalletController;
 use Illuminate\Support\Facades\Route;
@@ -83,6 +85,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('kyc', [KycController::class, 'index']);
     Route::post('kyc', [KycController::class, 'store']);
 
+    // بخش تیکت پشتیبانی بسته شد؛ سوالات متداول جایگزین شده است.
+    // Route::get('tickets', [TicketController::class, 'index']);
+    // Route::post('tickets', [TicketController::class, 'store']);
+    // Route::get('tickets/messages/{message}/attachment', [TicketController::class, 'attachment']);
+    // Route::get('tickets/{ticket}', [TicketController::class, 'show']);
+    // Route::post('tickets/{ticket}/reply', [TicketController::class, 'reply']);
+
     Route::get('team-invites', [TeamInviteController::class, 'index']);
     Route::post('tournaments/{tournament}/team-invite', [TeamInviteController::class, 'store']);
     Route::post('team-invites/{invite}/accept', [TeamInviteController::class, 'accept']);
@@ -137,6 +146,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('kyc', [AdminResourceController::class, 'kyc']);
         Route::put('kyc/{submission}', [KycAdminController::class, 'updateStatus']);
         Route::get('kyc/{submission}/document/{side}', [KycAdminController::class, 'document']);
+
+        // بخش تیکت‌ها بسته شد.
+        // Route::get('tickets', [TicketAdminController::class, 'index']);
+        // Route::get('tickets/messages/{message}/attachment', [TicketAdminController::class, 'attachment']);
+        // Route::get('tickets/{ticket}', [TicketAdminController::class, 'show']);
+        // Route::put('tickets/{ticket}/status', [TicketAdminController::class, 'updateStatus']);
+        // Route::post('tickets/{ticket}/reply', [TicketAdminController::class, 'reply']);
 
         Route::get('settings/site', [AdminResourceController::class, 'siteSettings']);
         Route::put('settings/site', [AdminResourceController::class, 'updateSiteSettings']);

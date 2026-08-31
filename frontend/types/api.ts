@@ -50,6 +50,10 @@ export interface User {
   kyc_submission_status?: string | null
   kyc_wallet_cap?: number
   unread_notifications_count?: number
+  registrations_count?: number
+  referrer_username?: string | null
+  created_at?: string | null
+  created_at_display?: string | null
 }
 
 export interface AuthResponse {
@@ -337,6 +341,34 @@ export interface KycSubmission {
   } | null
 }
 
+export interface TicketMessage {
+  id: number
+  ticket_id: number
+  body: string
+  is_admin: boolean
+  has_attachment?: boolean
+  created_at?: string
+  created_at_display?: string
+  user?: Pick<User, 'id' | 'username' | 'mobile' | 'email'>
+}
+
+export interface Ticket {
+  id: number
+  subject: string
+  message: string
+  status: 'open' | 'in_progress' | 'resolved' | 'closed' | string
+  status_label?: string
+  priority: 'low' | 'medium' | 'high' | string
+  priority_label?: string
+  messages_count?: number
+  created_at?: string
+  created_at_display?: string
+  updated_at?: string
+  updated_at_display?: string
+  user?: Pick<User, 'id' | 'username' | 'mobile' | 'email'>
+  messages?: TicketMessage[]
+}
+
 export interface AdminDashboard {
   total_users?: number
   total_tournaments?: number
@@ -468,6 +500,9 @@ export interface TournamentResultAiConfig {
   user_prompt: string
   seat_mode_label: string
   has_saved_prompt: boolean
+  prize_table?: Record<number, number>
+  prize_table_text?: string
+  vision_model?: string
 }
 
 export interface TournamentResultAnalysis {
@@ -478,6 +513,9 @@ export interface TournamentResultAnalysis {
   unmatched: TournamentResultUnmatched[]
   suggested_winner_user_id?: number | null
   participants: TournamentResultParticipant[]
+  prize_table?: Record<number, number>
+  prize_table_text?: string
+  vision_model?: string
   raw_excerpt?: string
 }
 

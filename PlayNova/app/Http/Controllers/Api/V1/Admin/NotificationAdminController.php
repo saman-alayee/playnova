@@ -61,12 +61,21 @@ class NotificationAdminController extends BaseApiController
         ], 'اعلان شخصی در صف ارسال قرار گرفت.');
     }
 
-    public function broadcasts(): JsonResponse
+    public function broadcasts(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
 
-        $rows = Notification::query()
-            ->where('type', 'broadcast')
+        $baseQuery = Notification::query()->where('type', 'broadcast');
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $baseQuery->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%");
+            });
+        }
+
+        $rows = $baseQuery
             ->select([
                 DB::raw('MIN(id) as id'),
                 DB::raw('COALESCE(broadcast_group_id, CAST(MIN(id) AS CHAR)) as group_id'),
@@ -108,15 +117,28 @@ class NotificationAdminController extends BaseApiController
         ]);
     }
 
-    public function personalNotifications(): JsonResponse
+    public function personalNotifications(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
 
-        $notifications = Notification::query()
+        $query = Notification::query()
             ->with('user:id,username,mobile,email')
-            ->where('type', 'admin')
-            ->orderByDesc('created_at')
-            ->paginate(25);
+            ->where('type', 'admin');
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($userQuery) use ($search) {
+                        $userQuery->where('username', 'like', "%{$search}%")
+                            ->orWhere('mobile', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $notifications = $query->orderByDesc('created_at')->paginate(25);
 
         return $this->paginated($notifications->through(fn (Notification $notification) => $this->formatPersonal($notification)));
     }

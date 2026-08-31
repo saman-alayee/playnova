@@ -90,9 +90,10 @@ onMounted(() => {
         برای مشاهده پاسخ‌ها، یکی از دسته‌های بالا را انتخاب کنید.
       </div>
 
-      <div class="bg-gradient-to-l from-amber-900/20 to-dark-800 border border-amber-700/40 rounded-xl p-5 md:p-6 text-center">
+      <div class="bg-gradient-to-l from-amber-900/20 to-dark-800 border border-amber-700/40 rounded-xl p-5 md:p-6 text-center space-y-3">
         <h3 class="font-bold text-amber-200 mb-2">پاسخ سوال خود را پیدا نکردید؟</h3>
-        <p class="text-sm text-gray-300 mb-3">با شماره ثابت پشتیبانی تماس بگیرید تا راهنمایی‌تان کنیم.</p>
+        <p class="text-sm text-gray-300">با شماره ثابت تماس بگیرید یا از بخش ارتباط با ما استفاده کنید.</p>
+        <div class="flex flex-wrap items-center justify-center gap-3">
         <a
           v-if="supportPhone"
           :href="`tel:${String(supportPhone).replace(/\s+/g, '')}`"
@@ -101,7 +102,14 @@ onMounted(() => {
         >
           📞 {{ supportPhone }}
         </a>
-        <p v-else class="text-sm text-gray-400">
+        <NuxtLink
+          to="/contact"
+          class="inline-flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/90 text-white font-bold px-6 py-3 rounded-xl text-sm"
+        >
+          ارتباط با ما
+        </NuxtLink>
+        </div>
+        <p v-if="!supportPhone" class="text-sm text-gray-400">
           شماره تماس به‌زودی در این بخش قرار می‌گیرد. فعلاً از
           <NuxtLink to="/contact" class="text-secondary underline">ارتباط با ما</NuxtLink>
           استفاده کنید.

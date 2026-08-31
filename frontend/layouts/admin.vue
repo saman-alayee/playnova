@@ -19,8 +19,19 @@ provide('sidebar', { open: sidebarOpen, close: closeSidebar, openSidebar })
     <FlashMessages />
     <main class="page-main container mx-auto px-4 py-6 max-w-7xl">
       <AdminNav />
-      <slot />
+      <AdminHelpBanner />
+      <div class="admin-page-content">
+        <slot />
+      </div>
     </main>
     <AppFooter />
   </div>
 </template>
+
+<style scoped>
+/* در RTL، بلوک‌های با max-width بدون margin به راست می‌چسبند؛ وسط‌چین می‌کنیم */
+.admin-page-content :deep(> *) {
+  width: 100%;
+  margin-inline: auto;
+}
+</style>

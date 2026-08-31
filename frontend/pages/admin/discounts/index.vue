@@ -15,10 +15,50 @@ interface Discount {
 }
 
 const page = ref(1)
+const search = ref('')
+const type = ref('all')
+const state = ref('all')
+
+const typeOptions = [
+  { value: 'all', label: 'همه انواع' },
+  { value: 'percentage', label: 'درصدی' },
+  { value: 'fixed', label: 'مبلغ ثابت' },
+]
+
+const stateOptions = [
+  { value: 'all', label: 'همه وضعیت‌ها' },
+  { value: 'active', label: 'فعال' },
+  { value: 'expired', label: 'منقضی / غیرفعال' },
+]
+
+function queryParams() {
+  const params: Record<string, string | number> = { page: page.value }
+  if (search.value.trim()) params.search = search.value.trim()
+  if (type.value !== 'all') params.type = type.value
+  if (state.value !== 'all') params.state = state.value
+  return params
+}
+
+const hasActiveFilters = computed(
+  () => !!search.value.trim() || type.value !== 'all' || state.value !== 'all',
+)
+
+function applyFilters() {
+  page.value = 1
+  refresh()
+}
+
+function resetFilters() {
+  search.value = ''
+  type.value = 'all'
+  state.value = 'all'
+  page.value = 1
+  refresh()
+}
 
 const { data, refresh } = await useAsyncData(
   'admin-discounts',
-  () => api.admin.discounts({ page: page.value }),
+  () => api.admin.discounts(queryParams()),
   { watch: [page] },
 )
 const discounts = computed(() => (data.value?.items ?? []) as Discount[])
@@ -52,6 +92,30 @@ async function remove(id: number) {
 <template>
   <div>
     <h1 class="text-2xl font-bold mb-6 text-white">مدیریت کدهای تخفیف</h1>
+    <AdminFilterBar
+      v-model:search="search"
+      search-placeholder="جستجو بر اساس کد تخفیف..."
+      :show-reset="hasActiveFilters"
+      @apply="applyFilters"
+      @reset="resetFilters"
+    >
+      <template #filters>
+        <AdminFilterField label="نوع">
+          <template #control>
+            <select v-model="type" @change="applyFilters">
+              <option v-for="opt in typeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </template>
+        </AdminFilterField>
+        <AdminFilterField label="وضعیت">
+          <template #control>
+            <select v-model="state" @change="applyFilters">
+              <option v-for="opt in stateOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </template>
+        </AdminFilterField>
+      </template>
+    </AdminFilterBar>
     <form class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6 grid sm:grid-cols-2 gap-3" @submit.prevent="onSubmit">
       <input v-model="form.code" required placeholder="کد تخفیف" class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
       <select v-model="form.type" class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
@@ -63,6 +127,9 @@ async function remove(id: number) {
       <input v-model="form.expires_at" type="date" class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
       <button type="submit" class="bg-success text-white rounded py-2 font-bold">ایجاد کد</button>
     </form>
+    <div v-if="!discounts.length" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500 mb-2">
+      کد تخفیفی با این فیلترها یافت نشد.
+    </div>
     <div v-for="d in discounts" :key="d.id" class="bg-dark-800 border border-dark-600 rounded-xl p-4 mb-2 flex justify-between">
       <span class="font-mono text-primary">{{ d.code }}</span>
       <button type="button" class="text-xs text-red-400" @click="remove(d.id)">حذف</button>

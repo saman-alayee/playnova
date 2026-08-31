@@ -9,13 +9,16 @@ use App\Models\TournamentPrizeBatch;
 use App\Models\TournamentPrizeEntry;
 use App\Models\User;
 use App\Modules\Audit\Services\ActivityLogService;
+use App\Services\TournamentPrizeTableParser;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class TournamentPrizeService
 {
-    public function __construct(protected ActivityLogService $activity)
-    {
+    public function __construct(
+        protected ActivityLogService $activity,
+        protected TournamentPrizeTableParser $prizeTableParser,
+    ) {
     }
 
     /**
@@ -79,6 +82,8 @@ class TournamentPrizeService
      */
     protected function buildSuggestedEntries(Tournament $tournament, array $rankedEntries, int $winnerUserId): array
     {
+        $prizeTable = $this->prizeTableParser->parse((string) $tournament->description);
+
         if ($rankedEntries === []) {
             $winnerReg = Registration::query()
                 ->where('tournament_id', $tournament->id)
@@ -86,24 +91,37 @@ class TournamentPrizeService
                 ->whereNotNull('seat_number')
                 ->first();
 
+            $prizeRank = $this->resolvePrizeRank($tournament, 1, $winnerReg?->seat_number);
+            $amount = $this->prizeTableParser->amountForRank(
+                $prizeTable,
+                $prizeRank,
+                (float) $tournament->prize_pool,
+            );
+
             return [[
                 'user_id' => $winnerUserId,
                 'rank' => 1,
                 'kills' => null,
                 'team_label' => $winnerReg ? $tournament->seatDisplayLabel((int) $winnerReg->seat_number) : null,
                 'seat_number' => $winnerReg?->seat_number,
-                'prize_amount' => (float) $tournament->prize_pool,
-                'metadata' => null,
+                'prize_amount' => $amount,
+                'metadata' => $prizeTable !== [] ? ['prize_rank' => $prizeRank] : null,
             ]];
         }
 
         return collect($rankedEntries)
-            ->map(function (array $row) use ($tournament) {
+            ->map(function (array $row) use ($tournament, $prizeTable) {
                 $rank = isset($row['rank']) ? (int) $row['rank'] : null;
                 $seatNumber = isset($row['seat_number']) ? (int) $row['seat_number'] : null;
                 $teamLabel = $row['team_label'] ?? ($seatNumber ? $tournament->seatDisplayLabel($seatNumber) : null);
+                $prizeRank = $this->resolvePrizeRank($tournament, $rank, $seatNumber);
+                $amount = $prizeRank
+                    ? $this->prizeTableParser->amountForRank($prizeTable, $prizeRank, (float) $tournament->prize_pool)
+                    : 0.0;
 
-                $amount = ($rank === 1) ? (float) $tournament->prize_pool : 0.0;
+                if ($amount <= 0 && $prizeTable === [] && $rank === 1) {
+                    $amount = (float) $tournament->prize_pool;
+                }
 
                 return [
                     'user_id' => (int) $row['user_id'],
@@ -112,12 +130,27 @@ class TournamentPrizeService
                     'team_label' => $teamLabel,
                     'seat_number' => $seatNumber,
                     'prize_amount' => $amount,
-                    'metadata' => $row['metadata'] ?? null,
+                    'metadata' => $prizeRank ? ['prize_rank' => $prizeRank] : ($row['metadata'] ?? null),
                 ];
             })
             ->unique('user_id')
             ->values()
             ->all();
+    }
+
+    /** @return array<int, float> */
+    public function prizeTableFor(Tournament $tournament): array
+    {
+        return $this->prizeTableParser->parse((string) $tournament->description);
+    }
+
+    protected function resolvePrizeRank(Tournament $tournament, ?int $placementRank, ?int $seatNumber): ?int
+    {
+        if ($tournament->seatMode() > 1 && $seatNumber) {
+            return (int) ceil($seatNumber / $tournament->seatMode());
+        }
+
+        return $placementRank;
     }
 
     /** @param  list<array{id:int,prize_amount:float}>  $updates */

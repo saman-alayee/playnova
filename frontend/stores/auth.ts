@@ -133,6 +133,7 @@ export const useAuthStore = defineStore('auth', {
 
     async init() {
       if (this.initialized) return
+      if (import.meta.server) return
       if (initPromise) return initPromise
 
       this.hydrateFromStorage()

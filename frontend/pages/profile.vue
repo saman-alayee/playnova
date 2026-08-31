@@ -168,7 +168,7 @@ function copyReferralLink() {
             class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 outline-none focus:border-secondary text-white"
             :readonly="user.cod_id_changed && !!user.cod_id"
           >
-          <p class="text-xs text-yellow-500/90">فقط یک‌بار امکان تغییر آیدی کالاف وجود دارد. در صورت نیاز به تغییرات بیشتر تیکت ثبت کنید.</p>
+          <p class="text-xs text-yellow-500/90">فقط یک‌بار امکان تغییر آیدی کالاف وجود دارد. در صورت نیاز به تغییرات بیشتر از بخش ارتباط با ما استفاده کنید.</p>
           <input v-model="form.password" type="password" placeholder="رمز عبور جدید (اختیاری)" class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 outline-none focus:border-secondary text-white">
           <input v-model="form.password_confirmation" type="password" placeholder="تکرار رمز عبور جدید" class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 outline-none focus:border-secondary text-white">
           <button type="submit" class="bg-secondary hover:opacity-90 text-white rounded px-4 py-2 font-bold" :disabled="loading">

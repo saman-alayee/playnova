@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { OccupiedSeatInfo } from '~/types/api'
 
-definePageMeta({ middleware: 'auth' })
+definePageMeta({ middleware: 'auth', layout: 'blank' })
 
 const route = useRoute()
 const api = useApi()
@@ -26,22 +26,7 @@ useHead(() => ({ title: `جایگاه‌ها | ${data.value?.tournament?.title |
 const alreadySelected = computed(() => !!data.value?.seat_label && !data.value?.teams_grid)
 const teamsGrid = computed(() => data.value?.teams_grid || [])
 const seatMode = computed(() => data.value?.tournament?.seat_mode || 1)
-
-const occupiedMap = computed(() => {
-  const map = new Map<number, OccupiedSeatInfo>()
-  const raw = data.value?.occupied_seats || {}
-  for (const [key, value] of Object.entries(raw)) {
-    const seatNumber = Number((value as OccupiedSeatInfo)?.seat_number ?? key)
-    if (Number.isFinite(seatNumber)) {
-      map.set(seatNumber, value as OccupiedSeatInfo)
-    }
-  }
-  return map
-})
-
-function getOccupied(seatNumber: number) {
-  return occupiedMap.value.get(seatNumber)
-}
+const occupiedSeats = computed(() => data.value?.occupied_seats || {})
 
 function openConfirm(seatNumber: number, label: string) {
   pendingSeat.value = seatNumber
@@ -93,104 +78,60 @@ async function cancelRegistration() {
 
 <template>
   <div class="seat-page">
-    <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+    <div v-if="pending" class="seat-page__state">در حال بارگذاری...</div>
 
-    <div v-else-if="error || !data" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
+    <div v-else-if="error || !data" class="seat-page__state">
       امکان انتخاب جایگاه وجود ندارد.
     </div>
 
-    <div v-else-if="alreadySelected" class="max-w-lg mx-auto bg-dark-800 border border-[#d4af37]/40 rounded-2xl p-8 text-center">
-      <p class="text-gray-300 mb-2">جایگاه شما قبلاً ثبت شده است:</p>
-      <p class="text-4xl font-black text-[#d4af37] font-mono" dir="ltr">{{ data.seat_label }}</p>
-      <NuxtLink :to="`/tournaments/${id}`" class="inline-block mt-6 text-secondary hover:underline">بازگشت به مسابقه</NuxtLink>
+    <div v-else-if="alreadySelected" class="seat-page__selected">
+      <p>جایگاه شما قبلاً ثبت شده است:</p>
+      <p class="seat-page__selected-value" dir="ltr">{{ data.seat_label }}</p>
+      <NuxtLink :to="`/tournaments/${id}`" class="seat-page__link">بازگشت به مسابقه</NuxtLink>
     </div>
 
     <template v-else>
       <div class="seat-page__toolbar">
-        <p v-if="data.tournament" class="seat-page__subtitle">
-          {{ data.tournament.title }}
-          <span v-if="data.tournament.seat_mode_label"> — {{ data.tournament.seat_mode_label }}</span>
-        </p>
+        <NuxtLink to="/" class="seat-page__back">بازگشت</NuxtLink>
+        <h1 class="seat-page__title">جایگاه‌ها</h1>
         <button
           type="button"
           class="seat-page__cancel"
           :disabled="cancelling"
           @click="cancelRegistration"
         >
-          {{ cancelling ? '...' : 'انصراف از ثبت‌نام' }}
+          {{ cancelling ? '...' : 'انصراف' }}
         </button>
       </div>
 
-      <div v-if="errors.length" class="mb-4 rounded-lg border border-red-700 bg-red-900/30 px-4 py-3 text-red-300 text-sm">
-        <ul class="list-disc list-inside space-y-1">
-          <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
-        </ul>
+      <div v-if="errors.length" class="seat-page__errors">
+        <p v-for="(err, i) in errors" :key="i">{{ err }}</p>
       </div>
 
-      <div class="team-grid">
-        <div v-for="teamRow in teamsGrid" :key="teamRow.team" class="team-card">
-          <div class="team-card__title">تیم {{ teamRow.team }}</div>
-          <div
-            class="team-card__slots"
-            :style="{ gridTemplateColumns: `repeat(${seatMode}, minmax(0, 1fr))` }"
-          >
-            <template v-for="slot in teamRow.slots" :key="slot.seat_number">
-              <div
-                v-if="getOccupied(slot.seat_number)"
-                class="seat-slot seat-slot--taken"
-              >
-                <div class="seat-slot__label">{{ slot.label }}</div>
-                <div class="seat-slot__name">
-                  {{ getOccupied(slot.seat_number)?.user?.username || '—' }}
-                </div>
-                <div v-if="getOccupied(slot.seat_number)?.user?.cod_id" class="seat-slot__cod">
-                  {{ getOccupied(slot.seat_number)?.user?.cod_id }}
-                </div>
-              </div>
-              <button
-                v-else
-                type="button"
-                class="seat-slot seat-slot--empty"
-                :class="{ 'is-selected': pendingSeat === slot.seat_number && showModal }"
-                @click="openConfirm(slot.seat_number, slot.label)"
-              >
-                <div class="seat-slot__label">{{ slot.label }}</div>
-                <div class="seat-slot__empty">خالی</div>
-              </button>
-            </template>
-          </div>
-        </div>
+      <div class="seat-page__body">
+        <TournamentSeatGrid
+          :teams="teamsGrid"
+          :occupied-seats="occupiedSeats as Record<number, OccupiedSeatInfo>"
+          :seat-mode="seatMode"
+          :selected-seat="pendingSeat"
+          interactive
+          @select="openConfirm"
+        />
       </div>
     </template>
 
     <Teleport to="body">
-      <div
-        v-if="showModal"
-        class="fixed inset-0 z-[10000] flex items-center justify-center p-4"
-        style="background: rgba(0,0,0,0.88);"
-        @click.self="closeConfirm"
-      >
-        <div class="bg-dark-800 border border-[#d4af37]/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center">
-          <h2 class="text-xl font-bold text-white mb-2">تأیید جایگاه</h2>
-          <p class="text-gray-300 mb-1">آیا این جایگاه را انتخاب می‌کنید؟</p>
-          <p class="text-4xl font-black text-[#d4af37] my-4 font-mono" dir="ltr">{{ pendingLabel || '—' }}</p>
-          <p class="text-xs text-amber-400/90 mb-5">پس از تأیید، هزینه ثبت‌نام از کیف پول کسر و ثبت‌نام نهایی می‌شود.</p>
-          <div class="flex gap-3">
-            <button
-              type="button"
-              class="flex-1 bg-gray-600 hover:bg-gray-500 text-white rounded-lg py-3 font-bold"
-              :disabled="loading"
-              @click="closeConfirm"
-            >
+      <div v-if="showModal" class="seat-modal" @click.self="closeConfirm">
+        <div class="seat-modal__panel">
+          <h2 class="seat-modal__title">تأیید جایگاه</h2>
+          <p class="seat-modal__text">آیا این جایگاه را انتخاب می‌کنید؟</p>
+          <p class="seat-modal__value" dir="ltr">{{ pendingLabel || '—' }}</p>
+          <div class="seat-modal__buttons">
+            <button type="button" class="seat-modal__btn seat-modal__btn--ghost" :disabled="loading" @click="closeConfirm">
               انصراف
             </button>
-            <button
-              type="button"
-              class="flex-1 bg-success hover:opacity-90 text-white rounded-lg py-3 font-bold"
-              :disabled="loading"
-              @click="confirmSeat"
-            >
-              {{ loading ? 'در حال ثبت...' : 'تأیید جایگاه' }}
+            <button type="button" class="seat-modal__btn seat-modal__btn--confirm" :disabled="loading" @click="confirmSeat">
+              {{ loading ? 'در حال ثبت...' : 'تأیید' }}
             </button>
           </div>
         </div>
@@ -202,149 +143,153 @@ async function cancelRegistration() {
 <style scoped>
 .seat-page {
   direction: rtl;
+  min-height: 100dvh;
+  background: #000;
+  color: #f5f5f5;
 }
 
-.seat-page__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.seat-page__subtitle {
-  margin: 0;
-  font-size: 0.85rem;
+.seat-page__state,
+.seat-page__selected {
+  padding: 2rem 1rem;
+  text-align: center;
   color: #9ca3af;
 }
 
+.seat-page__selected-value {
+  margin: 0.75rem 0;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #d4af37;
+  font-family: ui-monospace, monospace;
+}
+
+.seat-page__link {
+  color: #a78bfa;
+}
+
+.seat-page__toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid rgba(197, 160, 89, 0.35);
+}
+
+.seat-page__title {
+  margin: 0;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #d4af37;
+}
+
+.seat-page__back,
 .seat-page__cancel {
+  font-size: 0.72rem;
+  font-weight: 700;
   background: transparent;
   border: none;
-  color: #ef4444;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
   padding: 0;
+  cursor: pointer;
+}
+
+.seat-page__back {
+  color: #9ca3af;
+  text-decoration: none;
+  justify-self: start;
+}
+
+.seat-page__cancel {
+  color: #f87171;
+  justify-self: end;
 }
 
 .seat-page__cancel:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
 }
 
-.team-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-  direction: ltr;
+.seat-page__errors {
+  margin: 0.5rem 0.65rem 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #b91c1c;
+  background: rgba(127, 29, 29, 0.35);
+  color: #fca5a5;
+  font-size: 0.8rem;
 }
 
-@media (min-width: 768px) {
-  .team-grid {
-    gap: 0.85rem;
-  }
+.seat-page__body {
+  padding: 0.55rem;
+  overflow-x: auto;
 }
 
-@media (min-width: 1024px) {
-  .team-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1280px) {
-  .team-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.team-card {
-  border: 1px solid #d4af37;
-  background: #000;
-  padding: 0.5rem 0.55rem 0.6rem;
-}
-
-.team-card__title {
-  text-align: center;
-  color: #d4af37;
-  font-weight: 800;
-  font-size: 0.95rem;
-  margin-bottom: 0.45rem;
-}
-
-.team-card__slots {
-  display: grid;
-  gap: 0.35rem;
-  direction: ltr;
-}
-
-.seat-slot {
-  min-height: 92px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(15, 15, 18, 0.95);
-  padding: 0.45rem 0.35rem 0.55rem;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-button.seat-slot {
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-}
-
-button.seat-slot:hover {
-  border-color: rgba(212, 175, 55, 0.65);
-  background: rgba(212, 175, 55, 0.06);
-}
-
-button.seat-slot.is-selected {
-  border-color: #d4af37;
-  background: rgba(212, 175, 55, 0.12);
-}
-
-.seat-slot--taken {
-  opacity: 0.85;
-}
-
-.seat-slot__label {
-  color: #d4af37;
-  font-size: 0.72rem;
-  font-weight: 700;
-  margin-bottom: 0.35rem;
-  direction: ltr;
-  font-family: ui-monospace, monospace;
-}
-
-.seat-slot__name {
-  color: #f5f5f5;
-  font-size: 0.95rem;
-  font-weight: 800;
-  line-height: 1.35;
-  word-break: break-word;
-  margin-top: auto;
-  margin-bottom: auto;
-}
-
-.seat-slot__cod {
-  font-size: 0.68rem;
-  color: #d4af37;
-  font-weight: 600;
-  line-height: 1.25;
-  word-break: break-word;
-  margin-top: 0.15rem;
-}
-
-.seat-slot__empty {
-  flex: 1;
+.seat-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
-  font-size: 0.9rem;
-  font-weight: 600;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.9);
+}
+
+.seat-modal__panel {
+  width: 100%;
+  max-width: 22rem;
+  padding: 1.25rem;
+  text-align: center;
+  border: 1px solid #c5a059;
+  background: #000;
+}
+
+.seat-modal__title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #d4af37;
+}
+
+.seat-modal__text {
+  margin: 0;
+  color: #d1d5db;
+  font-size: 0.85rem;
+}
+
+.seat-modal__value {
+  margin: 0.85rem 0 1rem;
+  font-size: 2rem;
+  font-weight: 900;
+  color: #d4af37;
+  font-family: ui-monospace, monospace;
+}
+
+.seat-modal__buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.seat-modal__btn {
+  flex: 1;
+  border: none;
+  border-radius: 0.35rem;
+  padding: 0.65rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.seat-modal__btn--ghost {
+  background: #4b5563;
+  color: #fff;
+}
+
+.seat-modal__btn--confirm {
+  background: #16a34a;
+  color: #fff;
+}
+
+.seat-modal__btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

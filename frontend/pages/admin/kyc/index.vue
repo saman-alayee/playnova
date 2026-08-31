@@ -8,10 +8,40 @@ const api = useApi()
 const config = useRuntimeConfig()
 const flash = useState<{ success?: string; error?: string } | null>('flash')
 const page = ref(1)
+const search = ref('')
+const status = ref('all')
+
+const statusOptions = [
+  { value: 'all', label: 'همه وضعیت‌ها' },
+  { value: 'pending', label: 'در انتظار بررسی' },
+  { value: 'approved', label: 'تأیید شده' },
+  { value: 'rejected', label: 'رد شده' },
+]
+
+function queryParams() {
+  const params: Record<string, string | number> = { page: page.value }
+  if (search.value.trim()) params.search = search.value.trim()
+  if (status.value !== 'all') params.status = status.value
+  return params
+}
+
+const hasActiveFilters = computed(() => !!search.value.trim() || status.value !== 'all')
+
+function applyFilters() {
+  page.value = 1
+  refresh()
+}
+
+function resetFilters() {
+  search.value = ''
+  status.value = 'all'
+  page.value = 1
+  refresh()
+}
 
 const { data, pending, error, refresh } = await useAsyncData(
   'admin-kyc',
-  () => api.admin.kyc({ page: page.value }),
+  () => api.admin.kyc(queryParams()),
   { watch: [page] },
 )
 const submissions = computed(() => data.value?.items ?? [])
@@ -63,10 +93,28 @@ async function updateSubmission(s: KycSubmission, status: string, adminNote: str
       <NuxtLink to="/admin" class="text-sm text-secondary">← داشبورد</NuxtLink>
     </div>
 
+    <AdminFilterBar
+      v-model:search="search"
+      search-placeholder="جستجو: نام کاربری، موبایل، ایمیل یا آیدی کاربر..."
+      :show-reset="hasActiveFilters"
+      @apply="applyFilters"
+      @reset="resetFilters"
+    >
+      <template #filters>
+        <AdminFilterField label="وضعیت">
+          <template #control>
+            <select v-model="status" @change="applyFilters">
+              <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </template>
+        </AdminFilterField>
+      </template>
+    </AdminFilterBar>
+
     <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
     <div v-else-if="error" class="text-red-400">{{ (error as Error).message }}</div>
     <div v-else-if="!submissions.length" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
-      هنوز درخواستی ثبت نشده است.
+      درخواستی با این فیلترها یافت نشد.
     </div>
 
     <div v-else class="space-y-4">

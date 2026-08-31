@@ -20,11 +20,38 @@ use Illuminate\Http\Request;
 class ResourceController extends BaseApiController
 {
     use AuthorizesAdmin;
-    public function tournaments(): JsonResponse
+    public function tournaments(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
 
-        $tournaments = Tournament::with('winner')->orderByDesc('start_date')->paginate(30);
+        $query = Tournament::with('winner');
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('game', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        $status = (string) $request->query('status', 'all');
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $sort = (string) $request->query('sort', 'newest');
+        if ($sort === 'start_date') {
+            $query->orderByDesc('start_date');
+        } elseif ($sort === 'entry_fee') {
+            $query->orderByDesc('entry_fee')->orderByDesc('id');
+        } elseif ($sort === 'capacity') {
+            $query->orderByDesc('capacity')->orderByDesc('id');
+        } else {
+            $query->orderByDesc('created_at');
+        }
+
+        $tournaments = $query->paginate(30);
 
         return $this->paginated($tournaments, TournamentResource::class);
     }
@@ -33,29 +60,78 @@ class ResourceController extends BaseApiController
     {
         $this->authorizeAdmin();
 
-        $query = User::query();
+        $query = User::query()
+            ->with([
+                'latestKycSubmission' => fn ($q) => $q->select(
+                    'kyc_submissions.id',
+                    'kyc_submissions.user_id',
+                    'kyc_submissions.status',
+                    'kyc_submissions.created_at',
+                ),
+                'referrer:id,username',
+                'registrations' => function ($q) {
+                    $q->whereNotNull('seat_number')
+                        ->with('tournament:id,title,status')
+                        ->orderByDesc('updated_at');
+                },
+            ])
+            ->withCount('registrations');
+
         if ($request->filled('search')) {
             $search = trim((string) $request->search);
             $query->where(function ($q) use ($search) {
-                $q->where('mobile', $search)
-                    ->orWhere('cod_id', $search)
-                    ->orWhere('username', 'like', "{$search}%")
-                    ->orWhere('email', 'like', "{$search}%")
+                if (ctype_digit($search)) {
+                    $q->orWhere('id', (int) $search);
+                }
+
+                $q->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('cod_id', 'like', "%{$search}%")
                     ->orWhere('username', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('cod_id', 'like', "%{$search}%");
+                    ->orWhere('referral_code', 'like', "%{$search}%")
+                    ->orWhere('name', 'like', "%{$search}%");
             });
         }
 
-        $users = $query
-            ->with(['registrations' => function ($q) {
-                $q->whereNotNull('seat_number')
-                    ->with('tournament:id,title,status')
-                    ->orderByDesc('updated_at');
-            }])
-            ->orderByDesc('created_at')
-            ->paginate(30);
+        $role = (string) $request->query('role', 'all');
+        if ($role === 'admin') {
+            $query->where('is_admin', true);
+        } elseif ($role === 'seat_admin') {
+            $query->where('is_seat_admin', true)->where('is_admin', false);
+        } elseif ($role === 'regular') {
+            $query->where('is_admin', false)->where('is_seat_admin', false);
+        }
+
+        $kyc = (string) $request->query('kyc', 'all');
+        if ($kyc === 'verified') {
+            $query->whereNotNull('kyc_verified_at');
+        } elseif ($kyc === 'pending') {
+            $query->whereNull('kyc_verified_at')
+                ->whereHas('latestKycSubmission', fn ($q) => $q->where('status', 'pending'));
+        } elseif ($kyc === 'unverified') {
+            $query->whereNull('kyc_verified_at')
+                ->whereDoesntHave('latestKycSubmission', fn ($q) => $q->where('status', 'pending'));
+        }
+
+        $deposit = (string) $request->query('deposit', 'all');
+        if ($deposit === 'done') {
+            $query->where('first_deposit_done', true);
+        } elseif ($deposit === 'not_done') {
+            $query->where('first_deposit_done', false);
+        }
+
+        $sort = (string) $request->query('sort', 'newest');
+        if ($sort === 'wallet') {
+            $query->orderByDesc('wallet')->orderByDesc('id');
+        } elseif ($sort === 'kills') {
+            $query->orderByDesc('kills')->orderByDesc('id');
+        } elseif ($sort === 'username') {
+            $query->orderBy('username');
+        } else {
+            $query->orderByDesc('created_at');
+        }
+
+        $users = $query->paginate(30);
 
         return $this->paginated($users, UserResource::class);
     }
@@ -69,6 +145,15 @@ class ResourceController extends BaseApiController
 
         if ($status !== 'all') {
             $query->where('status', $status);
+        }
+
+        if ($request->filled('user_search')) {
+            $search = trim((string) $request->user_search);
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('username', 'like', "%{$search}%")
+                    ->orWhere('mobile', 'like', "%{$search}%")
+                    ->orWhere('cod_id', 'like', "%{$search}%");
+            });
         }
 
         $withdrawals = $query->orderByDesc('created_at')->paginate(30);
@@ -136,11 +221,33 @@ class ResourceController extends BaseApiController
         return $this->paginated($transactions, TransactionResource::class);
     }
 
-    public function kyc(): JsonResponse
+    public function kyc(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
 
-        $submissions = KycSubmission::with('user')->orderByDesc('created_at')->paginate(20);
+        $query = KycSubmission::with('user');
+
+        $status = (string) $request->query('status', 'all');
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($q) use ($search) {
+                if (ctype_digit($search)) {
+                    $q->orWhere('user_id', (int) $search);
+                }
+
+                $q->orWhereHas('user', function ($userQuery) use ($search) {
+                    $userQuery->where('username', 'like', "%{$search}%")
+                        ->orWhere('mobile', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            });
+        }
+
+        $submissions = $query->orderByDesc('created_at')->paginate(20);
 
         return $this->paginated($submissions, KycSubmissionResource::class);
     }

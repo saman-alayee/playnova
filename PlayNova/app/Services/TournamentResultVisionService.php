@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Models\Tournament;
 use App\Models\User;
 use App\Modules\Tournament\Services\TournamentPrizeService;
+use App\Services\TournamentPrizeTableParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -16,19 +17,24 @@ class TournamentResultVisionService
     public function __construct(
         protected AvalAIService $avalai,
         protected TournamentPrizeService $prizes,
+        protected TournamentPrizeTableParser $prizeTableParser,
     ) {
     }
 
-    /** @return array{system_prompt:string,user_prompt:string,seat_mode_label:string,has_saved_prompt:bool} */
+    /** @return array{system_prompt:string,user_prompt:string,seat_mode_label:string,has_saved_prompt:bool,prize_table:array<int,float>,prize_table_text:string,vision_model:string} */
     public function promptConfig(Tournament $tournament): array
     {
         $participants = $this->participants($tournament);
+        $prizeTable = $this->prizeTableParser->parse((string) $tournament->description);
 
         return [
             'system_prompt' => $this->resolveSystemPrompt($tournament),
             'user_prompt' => $this->resolveUserPrompt($tournament, $participants),
             'seat_mode_label' => $tournament->seatModeLabel(),
             'has_saved_prompt' => filled($tournament->result_ai_system_prompt) || filled($tournament->result_ai_user_prompt),
+            'prize_table' => $prizeTable,
+            'prize_table_text' => $this->prizeTableParser->formatForPrompt($prizeTable),
+            'vision_model' => Setting::getResultAiVisionModel(),
         ];
     }
 
@@ -58,13 +64,18 @@ class TournamentResultVisionService
             ? ['type' => 'image_url', 'image_url' => ['url' => $dataUrl, 'detail' => 'high']]
             : ['type' => 'image_url', 'image_url' => ['url' => $dataUrl, 'detail' => 'high']];
 
-        $raw = $this->avalai->chatWithVision([
-            ['type' => 'text', 'text' => $userText],
-            $mediaPart,
-        ], $system);
+        $raw = $this->avalai->chatWithVision(
+            [
+                ['type' => 'text', 'text' => $userText],
+                $mediaPart,
+            ],
+            $system,
+            Setting::getResultAiVisionModel(),
+        );
 
         $players = $this->parsePlayersJson($raw);
         $matchResult = $this->matchPlayers($players, $participants);
+        $prizeTable = $this->prizeTableParser->parse((string) $tournament->description);
 
         return [
             'players' => $players,
@@ -72,6 +83,9 @@ class TournamentResultVisionService
             'unmatched' => $matchResult['unmatched'],
             'suggested_winner_user_id' => $matchResult['suggested_winner_user_id'],
             'participants' => $participants,
+            'prize_table' => $prizeTable,
+            'prize_table_text' => $this->prizeTableParser->formatForPrompt($prizeTable),
+            'vision_model' => Setting::getResultAiVisionModel(),
             'raw_excerpt' => mb_substr($raw, 0, 500),
         ];
     }
@@ -156,10 +170,16 @@ class TournamentResultVisionService
                 $userId = (int) $stat['user_id'];
                 $reg = $registrations->get($userId);
                 $seatNumber = $reg?->seat_number;
+                $placementRank = isset($stat['rank']) ? (int) $stat['rank'] : null;
+                $displayRank = $placementRank;
+
+                if ($tournament->seatMode() > 1 && $seatNumber) {
+                    $displayRank = (int) ceil($seatNumber / $tournament->seatMode());
+                }
 
                 return [
                     'user_id' => $userId,
-                    'rank' => isset($stat['rank']) ? (int) $stat['rank'] : null,
+                    'rank' => $displayRank,
                     'kills' => isset($stat['kills']) ? (int) $stat['kills'] : null,
                     'seat_number' => $seatNumber ? (int) $seatNumber : null,
                     'team_label' => $seatNumber ? $tournament->seatDisplayLabel((int) $seatNumber) : null,
@@ -198,8 +218,15 @@ class TournamentResultVisionService
             ->implode("\n");
 
         return str_replace(
-            ['{tournament_title}', '{seat_mode_label}', '{participants}'],
-            [$tournament->title, $tournament->seatModeLabel(), $participantHint],
+            ['{tournament_title}', '{seat_mode_label}', '{participants}', '{prize_table}'],
+            [
+                $tournament->title,
+                $tournament->seatModeLabel(),
+                $participantHint,
+                $this->prizeTableParser->formatForPrompt(
+                    $this->prizeTableParser->parse((string) $tournament->description),
+                ),
+            ],
             $template,
         );
     }
@@ -207,9 +234,9 @@ class TournamentResultVisionService
     protected function seatModePromptHint(Tournament $tournament): string
     {
         return match ($tournament->seatMode()) {
-            2 => 'Tournament type: DUO (2-player teams). Rank teams or players as shown on the scoreboard.',
-            4 => 'Tournament type: SQUAD (4-player teams). Rank teams or players as shown on the scoreboard.',
-            default => 'Tournament type: SOLO. Rank individual players as shown on the scoreboard.',
+            2 => 'Tournament type: DUO (2-player teams). Return ONE JSON row per TEAM. Rank by team placement, not individual players.',
+            4 => 'Tournament type: SQUAD (4-player teams). Return ONE JSON row per TEAM. Rank by team placement, not individual players.',
+            default => 'Tournament type: SOLO. Return one JSON row per player.',
         };
     }
 
@@ -326,28 +353,47 @@ class TournamentResultVisionService
         if (preg_match('/\[[\s\S]*\]/', $raw, $matches)) {
             $decoded = json_decode($matches[0], true);
             if (is_array($decoded)) {
-                return collect($decoded)
-                    ->map(function ($row) {
-                        if (! is_array($row)) {
-                            return null;
+                $players = [];
+
+                foreach ($decoded as $row) {
+                    if (! is_array($row)) {
+                        continue;
+                    }
+
+                    $rank = (int) ($row['rank'] ?? $row['position'] ?? $row['placement'] ?? 0);
+                    if ($rank <= 0) {
+                        continue;
+                    }
+
+                    $kills = $row['kills'] ?? $row['score'] ?? null;
+                    $names = $row['player_names'] ?? null;
+                    $uids = $row['uids'] ?? null;
+
+                    if (is_array($names) && $names !== []) {
+                        foreach ($names as $index => $name) {
+                            $uid = is_array($uids) ? ($uids[$index] ?? null) : null;
+                            $players[] = [
+                                'rank' => $rank,
+                                'name' => is_string($name) ? $name : null,
+                                'uid' => $this->normalizeUid($uid),
+                                'kills' => $kills !== null ? (int) $kills : null,
+                                'score' => isset($row['score']) ? (int) $row['score'] : null,
+                            ];
                         }
 
-                        $rank = (int) ($row['rank'] ?? $row['position'] ?? 0);
-                        if ($rank <= 0) {
-                            return null;
-                        }
+                        continue;
+                    }
 
-                        $kills = $row['kills'] ?? $row['score'] ?? null;
+                    $players[] = [
+                        'rank' => $rank,
+                        'name' => isset($row['player_name']) ? (string) $row['player_name'] : ($row['name'] ?? null),
+                        'uid' => $this->normalizeUid($row['uid'] ?? $row['cod_id'] ?? $row['player_id'] ?? null),
+                        'kills' => $kills !== null ? (int) $kills : null,
+                        'score' => isset($row['score']) ? (int) $row['score'] : null,
+                    ];
+                }
 
-                        return [
-                            'rank' => $rank,
-                            'name' => isset($row['player_name']) ? (string) $row['player_name'] : ($row['name'] ?? null),
-                            'uid' => $this->normalizeUid($row['uid'] ?? $row['cod_id'] ?? $row['player_id'] ?? null),
-                            'kills' => $kills !== null ? (int) $kills : null,
-                            'score' => isset($row['score']) ? (int) $row['score'] : null,
-                        ];
-                    })
-                    ->filter()
+                return collect($players)
                     ->sortBy('rank')
                     ->values()
                     ->all();

@@ -112,15 +112,28 @@ class UserAdminController extends BaseApiController
         return $this->success(UserResource::make($user->fresh()), 'کیف پول به‌روزرسانی شد.');
     }
 
-    public function activityHistory(User $user): JsonResponse
+    public function activityHistory(Request $request, User $user): JsonResponse
     {
         $this->authorizeAdmin();
 
-        $logs = \App\Models\ActivityLog::query()
+        $query = \App\Models\ActivityLog::query()
             ->where('user_id', $user->id)
-            ->with('actor:id,username')
-            ->orderByDesc('created_at')
-            ->paginate(50);
+            ->with('actor:id,username');
+
+        $category = (string) $request->query('category', 'all');
+        if ($category !== 'all') {
+            $query->where('category', $category);
+        }
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('action', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        $logs = $query->orderByDesc('created_at')->paginate(50);
 
         $logs->getCollection()->transform(function ($log) {
             $log->created_at_display = \App\Support\IranDate::formatString($log->created_at);

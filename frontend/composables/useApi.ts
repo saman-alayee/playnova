@@ -278,7 +278,11 @@ export function useApi() {
 
     wallet: {
       show: () => api.get<import('~/types/api').WalletData>('/wallet'),
-      deposit: (amount: number) => api.post<{ redirect_url?: string }>('/wallet/deposit', { amount }),
+      deposit: (amount: number) =>
+        api.post<{ redirect_url?: string; gateway_url?: string; track_id?: string }>(
+          '/wallet/deposit',
+          { amount },
+        ),
       withdraw: (data: Record<string, unknown>) => api.post<void>('/wallet/withdraw', data),
       processCallback: async (query: Record<string, string>) => {
         const headers: Record<string, string> = { Accept: 'application/json' }
@@ -300,6 +304,22 @@ export function useApi() {
       show: () => api.get<import('~/types/api').KycSubmission>('/kyc'),
       store: (formData: FormData) => api.post<void>('/kyc', formData),
     },
+
+    // بخش تیکت پشتیبانی بسته شد؛ سوالات متداول جایگزین شده است.
+    // tickets: {
+    //   list: (query?: Record<string, string | number | boolean | undefined>) =>
+    //     api.paginated<import('~/types/api').Ticket>('/tickets', query),
+    //   show: (id: number | string) => api.get<import('~/types/api').Ticket>(`/tickets/${id}`),
+    //   create: (formData: FormData) =>
+    //     api.post<import('~/types/api').Ticket>('/tickets', formData),
+    //   reply: (id: number | string, formData: FormData) =>
+    //     api.post<import('~/types/api').Ticket>(`/tickets/${id}/reply`, formData),
+    //   attachmentUrl: (messageId: number | string) => {
+    //     const base = config.public.apiBase as string
+    //     const token = getToken()
+    //     return `${base}/tickets/messages/${messageId}/attachment${token ? `?token=${token}` : ''}`
+    //   },
+    // },
 
     notifications: {
       list: () => api.get<import('~/types/api').NotificationsListData>('/notifications'),
@@ -457,6 +477,20 @@ export function useApi() {
         return `${base}/admin/kyc/${id}/document/${side}${token ? `?token=${token}` : ''}`
       },
 
+      // بخش تیکت‌ها بسته شد.
+      // tickets: (query?: Record<string, string | number | boolean | undefined>) =>
+      //   api.paginated<import('~/types/api').Ticket>('/admin/tickets', query),
+      // ticket: (id: number | string) => api.get<import('~/types/api').Ticket>(`/admin/tickets/${id}`),
+      // updateTicketStatus: (id: number | string, status: string) =>
+      //   api.put<import('~/types/api').Ticket>(`/admin/tickets/${id}/status`, { status }),
+      // replyTicket: (id: number | string, formData: FormData) =>
+      //   api.post<import('~/types/api').Ticket>(`/admin/tickets/${id}/reply`, formData),
+      // ticketAttachmentUrl: (messageId: number | string) => {
+      //   const base = config.public.apiBase as string
+      //   const token = getToken()
+      //   return `${base}/admin/tickets/messages/${messageId}/attachment${token ? `?token=${token}` : ''}`
+      // },
+
       siteSettings: () => api.get<Record<string, string>>('/admin/settings/site'),
 
       updateSiteSettings: (data: Record<string, unknown>) =>
@@ -512,7 +546,7 @@ export function useApi() {
 
       deleteRule: (id: number) => api.delete<void>(`/admin/rules/${id}`),
 
-      logo: () => api.get<{ logo?: string; logo_url?: string }>('/admin/settings/logo'),
+      logo: () => api.get<{ logo?: string; logo_url?: string; has_custom?: boolean }>('/admin/settings/logo'),
 
       updateLogo: (formData: FormData) => api.post<void>('/admin/settings/logo', formData),
 
@@ -583,7 +617,8 @@ export function useApi() {
       tournamentSeatMap: (id: number | string) =>
         api.get<{
           tournament: import('~/types/api').Tournament
-          occupied_seats: Record<number, { username?: string; cod_id?: string }>
+          occupied_seats: Record<number, { username?: string; cod_id?: string; seat_number?: number }>
+          teams_grid?: import('~/types/api').SeatGridTeam[]
           capacity: number
           seat_mode: number
         }>(`/admin/tournament-seats/${id}`),

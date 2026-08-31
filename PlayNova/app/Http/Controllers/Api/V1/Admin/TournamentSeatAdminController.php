@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
+use App\Http\Resources\V1\TournamentResource;
 use App\Models\Registration;
 use App\Models\Tournament;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +21,7 @@ class TournamentSeatAdminController extends BaseApiController
             ->orderByDesc('start_date')
             ->get();
 
-        return $this->success($tournaments);
+        return $this->success(TournamentResource::collection($tournaments));
     }
 
     public function show(Tournament $tournament): JsonResponse
@@ -43,6 +44,7 @@ class TournamentSeatAdminController extends BaseApiController
         return $this->success([
             'tournament' => $tournament,
             'occupied_seats' => $occupiedSeats,
+            'teams_grid' => $tournament->teamsForGrid(),
             'capacity' => $tournament->capacity,
             'seat_mode' => $tournament->seatMode(),
         ]);

@@ -30,7 +30,12 @@ const phoneHref = computed(() => phone.value.replace(/\s+/g, ''))
           <a :href="`tel:${phoneHref}`" dir="ltr" class="text-secondary">{{ phone }}</a>
         </p>
       </div>
-      <NuxtLink to="/tickets" class="inline-block mt-4 btn-glow-primary text-sm px-4 py-2 rounded-xl">
+      <!-- بخش تیکت پشتیبانی بسته شد.
+      <NuxtLink to="/support" class="inline-block mt-4 btn-glow-primary text-sm px-4 py-2 rounded-xl">
+        ثبت تیکت پشتیبانی
+      </NuxtLink>
+      -->
+      <NuxtLink to="/tickets" class="inline-block mt-4 text-sm text-secondary hover:underline">
         مشاهده سوالات متداول
       </NuxtLink>
     </div>

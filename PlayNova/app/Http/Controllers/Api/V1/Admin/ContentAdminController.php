@@ -15,11 +15,36 @@ class ContentAdminController extends BaseApiController
 {
     use AuthorizesAdmin;
 
-    public function discounts(): JsonResponse
+    public function discounts(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
 
-        return $this->paginated(Discount::orderByDesc('created_at')->paginate(25));
+        $query = Discount::query();
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where('code', 'like', "%{$search}%");
+        }
+
+        $type = (string) $request->query('type', 'all');
+        if ($type !== 'all') {
+            $query->where('type', $type === 'percent' ? 'percentage' : $type);
+        }
+
+        $state = (string) $request->query('state', 'all');
+        if ($state === 'active') {
+            $query->where('is_active', true)
+                ->where(function ($q) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                });
+        } elseif ($state === 'expired') {
+            $query->where(function ($q) {
+                $q->where('is_active', false)
+                    ->orWhere('expires_at', '<=', now());
+            });
+        }
+
+        return $this->paginated($query->orderByDesc('created_at')->paginate(25));
     }
 
     public function storeDiscount(Request $request): JsonResponse
@@ -53,11 +78,21 @@ class ContentAdminController extends BaseApiController
         return $this->success(null, 'کد تخفیف حذف شد.');
     }
 
-    public function news(): JsonResponse
+    public function news(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
 
-        return $this->paginated(News::orderByDesc('created_at')->paginate(25));
+        $query = News::query();
+
+        if ($request->filled('search')) {
+            $search = trim((string) $request->search);
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('content', 'like', "%{$search}%");
+            });
+        }
+
+        return $this->paginated($query->orderByDesc('created_at')->paginate(25));
     }
 
     public function storeNews(Request $request): JsonResponse

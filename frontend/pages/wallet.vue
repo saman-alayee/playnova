@@ -37,7 +37,7 @@ async function deposit() {
   try {
     const result = await api.wallet.deposit(depositAmount.value)
     if (result.redirect_url) {
-      window.location.href = result.redirect_url
+      window.location.assign(result.redirect_url)
       return
     }
     flash.value = { success: 'درخواست شارژ ثبت شد.' }

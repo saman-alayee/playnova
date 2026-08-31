@@ -6,6 +6,37 @@ const api = useApi()
 const { formatDateTime } = usePersianDateTime()
 const userId = Number(route.params.id)
 const page = ref(1)
+const search = ref('')
+const category = ref('all')
+
+const categoryOptions = [
+  { value: 'all', label: 'همه دسته‌ها' },
+  { value: 'wallet', label: 'کیف پول' },
+  { value: 'tournament', label: 'مسابقه' },
+  { value: 'profile', label: 'پروفایل' },
+  { value: 'auth', label: 'ورود و احراز' },
+]
+
+function queryParams() {
+  const params: Record<string, string | number> = { page: page.value }
+  if (search.value.trim()) params.search = search.value.trim()
+  if (category.value !== 'all') params.category = category.value
+  return params
+}
+
+const hasActiveFilters = computed(() => !!search.value.trim() || category.value !== 'all')
+
+function applyFilters() {
+  page.value = 1
+  refresh()
+}
+
+function resetFilters() {
+  search.value = ''
+  category.value = 'all'
+  page.value = 1
+  refresh()
+}
 
 interface ActivityLog {
   id: number
@@ -17,9 +48,9 @@ interface ActivityLog {
   created_at?: string
 }
 
-const { data, pending } = await useAsyncData(
+const { data, pending, refresh } = await useAsyncData(
   `admin-user-activity-${userId}`,
-  () => api.admin.userActivity(userId, { page: page.value }),
+  () => api.admin.userActivity(userId, queryParams()),
   { watch: [page] },
 )
 
@@ -35,8 +66,26 @@ useHead({ title: 'تاریخچه کاربر | PlayNova' })
       <NuxtLink to="/admin/users" class="text-sm text-secondary">← کاربران</NuxtLink>
     </div>
 
+    <AdminFilterBar
+      v-model:search="search"
+      search-placeholder="جستجو در عملیات یا توضیحات..."
+      :show-reset="hasActiveFilters"
+      @apply="applyFilters"
+      @reset="resetFilters"
+    >
+      <template #filters>
+        <AdminFilterField label="دسته">
+          <template #control>
+            <select v-model="category" @change="applyFilters">
+              <option v-for="opt in categoryOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </template>
+        </AdminFilterField>
+      </template>
+    </AdminFilterBar>
+
     <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
-    <div v-else-if="!logs.length" class="text-gray-500">فعالیتی ثبت نشده.</div>
+    <div v-else-if="!logs.length" class="text-gray-500">فعالیتی با این فیلترها یافت نشد.</div>
     <div v-else class="space-y-2">
       <div v-for="log in logs" :key="log.id" class="bg-dark-800 border border-dark-600 rounded-xl p-4 text-sm">
         <div class="flex flex-wrap justify-between gap-2 mb-1">
