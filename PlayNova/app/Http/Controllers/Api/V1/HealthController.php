@@ -81,8 +81,14 @@ class HealthController extends BaseApiController
         try {
             $pong = Redis::connection()->ping();
 
+            if (is_object($pong)) {
+                $pong = method_exists($pong, 'getPayload')
+                    ? $pong->getPayload()
+                    : (string) $pong;
+            }
+
             return [
-                'ok' => $pong === true || $pong === 'PONG' || $pong === '+PONG',
+                'ok' => $pong === true || in_array($pong, ['PONG', '+PONG'], true),
                 'driver' => 'redis',
             ];
         } catch (Throwable $e) {

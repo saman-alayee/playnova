@@ -42,6 +42,6 @@ class SendOtpSmsJob implements ShouldQueue
     /** Run inline when caller must know SMS result immediately (register/reset). */
     public static function sendNow(string $mobile, int $code, string $purpose = 'register'): array
     {
-        return static::dispatchSync($mobile, $code, $purpose);
+        return (new self($mobile, $code, $purpose))->handle(app(MelipayamakSmsService::class));
     }
 }
