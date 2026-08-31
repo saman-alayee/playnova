@@ -13,8 +13,12 @@ const captchaAnswer = ref('')
 const loading = ref(false)
 const errors = ref<string[]>([])
 
+if (!auth.initialized) {
+  await auth.init()
+}
+
 if (auth.isAuthenticated) {
-  await navigateTo('/')
+  await navigateTo(auth.isAdmin ? '/admin' : '/profile')
 }
 
 async function submit() {

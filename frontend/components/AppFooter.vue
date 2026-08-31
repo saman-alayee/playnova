@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const auth = useAuthStore()
 const year = new Date().getFullYear()
+const menuReady = computed(() => auth.initialized)
 </script>
 
 <template>
@@ -29,12 +30,12 @@ const year = new Date().getFullYear()
         <div>
           <h3 class="site-footer__title">حساب کاربری</h3>
           <ul class="site-footer__links">
-            <template v-if="auth.isAuthenticated">
+            <template v-if="menuReady && auth.isAuthenticated">
               <li><NuxtLink to="/profile">پروفایل</NuxtLink></li>
               <li><NuxtLink to="/wallet">کیف پول</NuxtLink></li>
               <li><NuxtLink to="/tickets">سوالات متداول</NuxtLink></li>
             </template>
-            <template v-else>
+            <template v-else-if="menuReady">
               <li><NuxtLink to="/login">ورود</NuxtLink></li>
               <li><NuxtLink to="/register">ثبت‌نام</NuxtLink></li>
               <li><NuxtLink to="/wallet">کیف پول</NuxtLink></li>

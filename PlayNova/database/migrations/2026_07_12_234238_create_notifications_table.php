@@ -8,6 +8,14 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('notifications') && Schema::hasColumn('notifications', 'title')) {
+            return;
+        }
+
+        if (Schema::hasTable('notifications')) {
+            Schema::drop('notifications');
+        }
+
         Schema::create('notifications', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();

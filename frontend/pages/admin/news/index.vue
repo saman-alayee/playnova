@@ -6,8 +6,13 @@ useHead({ title: 'اخبار | PlayNova' })
 
 const api = useApi()
 const flash = useState('flash')
+const page = ref(1)
 
-const { data, refresh } = await useAsyncData('admin-news', () => api.admin.news())
+const { data, refresh } = await useAsyncData(
+  'admin-news',
+  () => api.admin.news({ page: page.value }),
+  { watch: [page] },
+)
 const items = computed(() => (data.value?.items ?? []) as NewsItem[])
 
 const form = reactive({ title: '', content: '' })
@@ -50,5 +55,6 @@ async function remove(id: number) {
       <span class="text-white">{{ n.title }}</span>
       <button type="button" class="text-xs text-red-400" @click="remove(n.id)">حذف</button>
     </div>
+    <AdminPagination v-model:page="page" :meta="data?.meta" />
   </div>
 </template>

@@ -7,8 +7,13 @@ useHead({ title: 'احراز هویت | پنل مدیریت' })
 const api = useApi()
 const config = useRuntimeConfig()
 const flash = useState<{ success?: string; error?: string } | null>('flash')
+const page = ref(1)
 
-const { data, pending, error, refresh } = await useAsyncData('admin-kyc', () => api.admin.kyc())
+const { data, pending, error, refresh } = await useAsyncData(
+  'admin-kyc',
+  () => api.admin.kyc({ page: page.value }),
+  { watch: [page] },
+)
 const submissions = computed(() => data.value?.items ?? [])
 
 const statusLabels: Record<string, string> = {
@@ -92,5 +97,6 @@ async function updateSubmission(s: KycSubmission, status: string, adminNote: str
         </form>
       </div>
     </div>
+    <AdminPagination v-model:page="page" :meta="data?.meta" />
   </div>
 </template>

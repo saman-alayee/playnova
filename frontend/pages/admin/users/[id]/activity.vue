@@ -5,6 +5,7 @@ const route = useRoute()
 const api = useApi()
 const { formatDateTime } = usePersianDateTime()
 const userId = Number(route.params.id)
+const page = ref(1)
 
 interface ActivityLog {
   id: number
@@ -16,8 +17,10 @@ interface ActivityLog {
   created_at?: string
 }
 
-const { data, pending } = await useAsyncData(`admin-user-activity-${userId}`, () =>
-  api.admin.userActivity(userId),
+const { data, pending } = await useAsyncData(
+  `admin-user-activity-${userId}`,
+  () => api.admin.userActivity(userId, { page: page.value }),
+  { watch: [page] },
 )
 
 const logs = computed(() => (data.value?.items ?? []) as ActivityLog[])
@@ -43,6 +46,7 @@ useHead({ title: 'تاریخچه کاربر | PlayNova' })
         <p v-if="log.description" class="text-gray-300">{{ log.description }}</p>
         <p v-if="log.actor?.username" class="text-xs text-gray-500 mt-1">توسط: {{ log.actor.username }}</p>
       </div>
+      <AdminPagination v-model:page="page" :meta="data?.meta" />
     </div>
   </div>
 </template>

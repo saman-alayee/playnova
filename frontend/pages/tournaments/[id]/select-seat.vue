@@ -5,6 +5,7 @@ definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const api = useApi()
+const auth = useAuthStore()
 const flash = useState('flash')
 
 const id = computed(() => route.params.id as string)
@@ -61,6 +62,7 @@ async function confirmSeat() {
   try {
     await api.tournaments.storeSeat(id.value, pendingSeat.value)
     flash.value = { success: 'جایگاه با موفقیت ثبت شد.' }
+    await auth.fetchUser()
     await navigateTo(`/tournaments/${id.value}`)
   } catch (e: unknown) {
     const err = e as Error

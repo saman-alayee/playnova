@@ -5,6 +5,8 @@ defineEmits<{ close: [] }>()
 const route = useRoute()
 const auth = useAuthStore()
 
+const menuReady = computed(() => auth.initialized)
+
 const socialItems = computed(() => {
   const social = auth.settings?.social || {}
   return [
@@ -57,7 +59,7 @@ function isActive(path: string) {
       </div>
 
       <nav class="sidebar-menu">
-        <template v-if="auth.isAuthenticated">
+        <template v-if="menuReady && auth.isAuthenticated">
           <NuxtLink to="/profile" class="sidebar-item" @click="$emit('close')">
             <span class="sidebar-item__left">
               <svg class="sidebar-item__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,19 +191,21 @@ function isActive(path: string) {
           </svg>
         </NuxtLink>
 
-        <template v-if="auth.isAuthenticated">
-          <NuxtLink to="/tickets" class="sidebar-item" @click="$emit('close')">
-            <span class="sidebar-item__left">
-              <svg class="sidebar-item__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-              </svg>
-              <span>سوالات متداول</span>
-            </span>
-            <svg width="14" height="14" fill="none" stroke="currentColor" class="opacity-40" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        <NuxtLink to="/tickets" class="sidebar-item" :class="{ 'is-active': isActive('/tickets') }" @click="$emit('close')">
+          <span class="sidebar-item__left">
+            <svg class="sidebar-item__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
             </svg>
-          </NuxtLink>
-          <NuxtLink to="/kyc" class="sidebar-item" @click="$emit('close')">
+            <span>سوالات متداول</span>
+          </span>
+          <svg width="14" height="14" fill="none" stroke="currentColor" class="opacity-40" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </NuxtLink>
+
+        <template v-if="menuReady">
+          <template v-if="auth.isAuthenticated">
+            <NuxtLink to="/kyc" class="sidebar-item" @click="$emit('close')">
             <span class="sidebar-item__left">
               <svg class="sidebar-item__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 12l2 2 4-4m5 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -224,10 +228,10 @@ function isActive(path: string) {
               <path stroke-linecap="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
           </NuxtLink>
-        </template>
-        <template v-else>
-          <div class="sidebar-divider" />
-          <NuxtLink to="/login" class="sidebar-item" @click="$emit('close')">
+          </template>
+          <template v-else>
+            <div class="sidebar-divider" />
+            <NuxtLink to="/login" class="sidebar-item" @click="$emit('close')">
             <span class="sidebar-item__left">
               <svg class="sidebar-item__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
@@ -249,6 +253,7 @@ function isActive(path: string) {
               <path stroke-linecap="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
           </NuxtLink>
+          </template>
         </template>
       </nav>
 
@@ -273,7 +278,7 @@ function isActive(path: string) {
         </div>
       </div>
 
-      <div v-if="auth.isAuthenticated" class="sidebar-footer">
+      <div v-if="menuReady && auth.isAuthenticated" class="sidebar-footer">
         <button type="button" class="sidebar-item sidebar-item--danger" @click="auth.logout(); $emit('close')">
           <span class="sidebar-item__left">
             <svg class="sidebar-item__icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -257,7 +257,8 @@ export function useApi() {
 
     leaderboard: () => api.get<import('~/types/api').LeaderboardEntry[]>('/leaderboard', undefined, false),
 
-    history: () => api.get<import('~/types/api').Tournament[]>('/history', undefined, false),
+    history: (page = 1) =>
+      api.paginated<import('~/types/api').Tournament>('/history', { page }, false),
 
     rules: () => api.get<import('~/types/api').RuleSection[]>('/rules', undefined, false),
 
@@ -279,8 +280,20 @@ export function useApi() {
       show: () => api.get<import('~/types/api').WalletData>('/wallet'),
       deposit: (amount: number) => api.post<{ redirect_url?: string }>('/wallet/deposit', { amount }),
       withdraw: (data: Record<string, unknown>) => api.post<void>('/wallet/withdraw', data),
-      processCallback: (query: Record<string, string>) =>
-        request<{ message?: string }>('/wallet/callback', { query, auth: false }),
+      processCallback: async (query: Record<string, string>) => {
+        const headers: Record<string, string> = { Accept: 'application/json' }
+        const response = await $fetch<import('~/types/api').ApiResponse<unknown>>('/wallet/callback', {
+          baseURL: config.public.apiBase as string,
+          query,
+          headers,
+        })
+        if (!response.success) {
+          const err = new Error(response.message || 'خطای سرور') as import('~/types/api').ApiError
+          err.data = response
+          throw err
+        }
+        return { message: response.message ?? undefined }
+      },
     },
 
     kyc: {
@@ -382,9 +395,13 @@ export function useApi() {
         data: { action: 'add' | 'subtract' | 'set'; amount: number; description?: string; allow_negative?: boolean },
       ) => api.put<void>(`/admin/users/${userId}/wallet`, data),
 
-      userActivity: (userId: number) =>
+      userActivity: (
+        userId: number,
+        query?: Record<string, string | number | boolean | undefined>,
+      ) =>
         api.paginated<{ id: number; category: string; action: string; description?: string; created_at?: string; actor?: { username?: string } }>(
           `/admin/users/${userId}/activity`,
+          query,
         ),
 
       deleteUser: (userId: number) => api.delete<void>(`/admin/users/${userId}`),
@@ -428,7 +445,8 @@ export function useApi() {
         data: { status: string; rejection_reason?: string },
       ) => api.put<void>(`/admin/withdrawals/${txId}`, data),
 
-      kyc: () => api.paginated<import('~/types/api').KycSubmission>('/admin/kyc'),
+      kyc: (query?: Record<string, string | number | boolean | undefined>) =>
+        api.paginated<import('~/types/api').KycSubmission>('/admin/kyc', query),
 
       updateKyc: (id: number, data: { status: string; admin_note?: string }) =>
         api.put<void>(`/admin/kyc/${id}`, data),
@@ -444,13 +462,15 @@ export function useApi() {
       updateSiteSettings: (data: Record<string, unknown>) =>
         api.put<void>('/admin/settings/site', data),
 
-      discounts: () => api.paginated<import('~/types/api').Discount>('/admin/discounts'),
+      discounts: (query?: Record<string, string | number | boolean | undefined>) =>
+        api.paginated<import('~/types/api').Discount>('/admin/discounts', query),
 
       createDiscount: (data: Record<string, unknown>) => api.post<void>('/admin/discounts', data),
 
       deleteDiscount: (id: number) => api.delete<void>(`/admin/discounts/${id}`),
 
-      news: () => api.paginated<import('~/types/api').NewsItem>('/admin/news'),
+      news: (query?: Record<string, string | number | boolean | undefined>) =>
+        api.paginated<import('~/types/api').NewsItem>('/admin/news', query),
 
       createNews: (formData: FormData) => api.post<void>('/admin/news', formData),
 
@@ -462,10 +482,11 @@ export function useApi() {
       sendPersonalNotification: (data: { title: string; message: string; user_id?: number; search?: string }) =>
         api.post<void>('/admin/notifications/personal', data),
 
-      broadcasts: () => api.paginated<import('~/types/api').AdminBroadcastCampaign>('/admin/broadcasts'),
+      broadcasts: (query?: Record<string, string | number | boolean | undefined>) =>
+        api.paginated<import('~/types/api').AdminBroadcastCampaign>('/admin/broadcasts', query),
 
-      personalNotifications: () =>
-        api.paginated<import('~/types/api').Notification>('/admin/notifications/personal'),
+      personalNotifications: (query?: Record<string, string | number | boolean | undefined>) =>
+        api.paginated<import('~/types/api').Notification>('/admin/notifications/personal', query),
 
       updateBroadcast: (groupId: string, data: { title: string; message: string }) =>
         api.put<void>(`/admin/broadcasts/${groupId}`, data),

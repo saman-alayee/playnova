@@ -7,6 +7,7 @@ useHead({ title: 'مدیریت کاربران | PlayNova' })
 const api = useApi()
 const flash = useState<{ success?: string; error?: string } | null>('flash')
 const search = ref('')
+const page = ref(1)
 const route = useRoute()
 const router = useRouter()
 
@@ -14,12 +15,17 @@ if (typeof route.query.search === 'string') search.value = route.query.search
 
 const { data, pending, error, refresh } = await useAsyncData(
   'admin-users',
-  () => api.admin.users(search.value ? { search: search.value } : undefined),
+  () => api.admin.users({
+    page: page.value,
+    ...(search.value ? { search: search.value } : {}),
+  }),
+  { watch: [page] },
 )
 
 const users = computed(() => data.value?.items ?? [])
 
 function applySearch() {
+  page.value = 1
   router.replace({ query: search.value ? { search: search.value } : {} })
   refresh()
 }
@@ -142,6 +148,7 @@ async function removeUser(user: User) {
           </tr>
         </tbody>
       </table>
+      <AdminPagination v-model:page="page" :meta="data?.meta" />
     </div>
   </div>
 </template>

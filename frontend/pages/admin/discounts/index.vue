@@ -14,7 +14,13 @@ interface Discount {
   usage_limit?: number | null
 }
 
-const { data, refresh } = await useAsyncData('admin-discounts', () => api.admin.discounts())
+const page = ref(1)
+
+const { data, refresh } = await useAsyncData(
+  'admin-discounts',
+  () => api.admin.discounts({ page: page.value }),
+  { watch: [page] },
+)
 const discounts = computed(() => (data.value?.items ?? []) as Discount[])
 
 const form = reactive({ code: '', type: 'percentage', value: '', usage_limit: '', expires_at: '' })
@@ -61,5 +67,6 @@ async function remove(id: number) {
       <span class="font-mono text-primary">{{ d.code }}</span>
       <button type="button" class="text-xs text-red-400" @click="remove(d.id)">حذف</button>
     </div>
+    <AdminPagination v-model:page="page" :meta="data?.meta" />
   </div>
 </template>

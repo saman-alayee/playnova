@@ -56,7 +56,8 @@ class AuthController extends BaseApiController
             return $this->error('کد امنیتی صحیح نیست.', 422, ['captcha' => ['کد امنیتی صحیح نیست.']]);
         }
 
-        $user = User::with('latestKycSubmission')->findByLogin($login);
+        $user = User::findByLogin($login);
+        $user?->loadMissing('latestKycSubmission');
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
             return $this->error('اطلاعات ورود صحیح نیست.', 401);

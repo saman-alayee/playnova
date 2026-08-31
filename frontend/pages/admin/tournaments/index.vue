@@ -6,9 +6,12 @@ useHead({ title: 'مدیریت مسابقات | PlayNova' })
 
 const api = useApi()
 const flash = useState<{ success?: string; error?: string } | null>('flash')
+const page = ref(1)
 
-const { data, pending, error, refresh } = await useAsyncData('admin-tournaments', () =>
-  api.admin.tournaments(),
+const { data, pending, error, refresh } = await useAsyncData(
+  'admin-tournaments',
+  () => api.admin.tournaments({ page: page.value }),
+  { watch: [page] },
 )
 
 const tournaments = computed(() => data.value?.items ?? [])
@@ -227,6 +230,7 @@ function prizePaid(t: Tournament): boolean {
           </div>
         </div>
       </div>
+      <AdminPagination v-model:page="page" :meta="data?.meta" />
     </template>
   </div>
 </template>

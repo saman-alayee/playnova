@@ -9,6 +9,8 @@ const flash = useState<{ success?: string; error?: string } | null>('flash')
 const { formatDateTime } = usePersianDateTime()
 
 const tab = ref<'broadcast' | 'personal'>('broadcast')
+const broadcastPage = ref(1)
+const personalPage = ref(1)
 const editing = ref<AdminBroadcastCampaign | Notification | null>(null)
 const editForm = reactive({ title: '', message: '' })
 const saving = ref(false)
@@ -18,12 +20,14 @@ const selectedPersonal = ref<number[]>([])
 
 const { data: broadcastData, pending: broadcastPending, refresh: refreshBroadcasts } = await useAsyncData(
   'admin-broadcast-campaigns',
-  () => api.admin.broadcasts(),
+  () => api.admin.broadcasts({ page: broadcastPage.value }),
+  { watch: [broadcastPage] },
 )
 
 const { data: personalData, pending: personalPending, refresh: refreshPersonal } = await useAsyncData(
   'admin-personal-notifications',
-  () => api.admin.personalNotifications(),
+  () => api.admin.personalNotifications({ page: personalPage.value }),
+  { watch: [personalPage] },
 )
 
 const broadcasts = computed(() => broadcastData.value?.items ?? [])
@@ -246,6 +250,7 @@ function togglePersonal(id: number, checked: boolean) {
           </div>
         </div>
       </div>
+      <AdminPagination v-model:page="broadcastPage" :meta="broadcastData?.meta" />
     </div>
 
     <div v-else>
@@ -283,6 +288,7 @@ function togglePersonal(id: number, checked: boolean) {
           </div>
         </div>
       </div>
+      <AdminPagination v-model:page="personalPage" :meta="personalData?.meta" />
     </div>
 
     <div

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Tournament } from '~/types/api'
+import type { PaginationMeta, Tournament } from '~/types/api'
 
 useHead({ title: 'تاریخچه مسابقات | PlayNova' })
 definePageMeta({ keepalive: true })
@@ -8,11 +8,39 @@ const api = useApi()
 const auth = useAuthStore()
 const { publicAssetUrl } = useMediaUrl()
 
-const { data, pending, error } = await useAsyncData('history', () => api.history(), {
-  default: () => [] as Tournament[],
+const tournaments = ref<Tournament[]>([])
+const meta = ref<PaginationMeta | null>(null)
+const pending = ref(true)
+const loadingMore = ref(false)
+const error = ref(false)
+
+async function loadPage(page = 1) {
+  if (page === 1) pending.value = true
+  else loadingMore.value = true
+  error.value = false
+  try {
+    const result = await api.history(page)
+    if (page === 1) {
+      tournaments.value = result.items
+    } else {
+      tournaments.value.push(...result.items)
+    }
+    meta.value = result.meta
+  } catch {
+    error.value = true
+  } finally {
+    pending.value = false
+    loadingMore.value = false
+  }
+}
+
+await loadPage(1)
+
+const hasMore = computed(() => {
+  if (!meta.value) return false
+  return meta.value.current_page < meta.value.last_page
 })
 
-const tournaments = computed(() => (data.value || []) as Tournament[])
 const resultChannels = computed(() =>
   (auth.settings?.results_channels || []).filter((item) => item.url),
 )
@@ -96,6 +124,17 @@ function formatNumber(value?: number | null) {
           جوایز این مسابقه به کیف پول برندگان واریز شده است.
         </p>
       </article>
+
+      <div v-if="hasMore" class="text-center pt-2">
+        <button
+          type="button"
+          class="btn-glow px-6 py-2 rounded-lg font-bold"
+          :disabled="loadingMore"
+          @click="loadPage((meta?.current_page ?? 1) + 1)"
+        >
+          {{ loadingMore ? 'در حال بارگذاری...' : 'مسابقات بیشتر' }}
+        </button>
+      </div>
     </div>
   </div>
 </template>

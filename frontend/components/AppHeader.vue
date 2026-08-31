@@ -5,6 +5,8 @@ const route = useRoute()
 const auth = useAuthStore()
 const { formatToman } = useFormatToman()
 
+const menuReady = computed(() => auth.initialized)
+
 function isActive(path: string) {
   if (path === '/') return route.path === '/'
   return route.path.startsWith(path)
@@ -36,7 +38,7 @@ function isActive(path: string) {
           <NuxtLink to="/rules" :class="{ 'is-active': isActive('/rules') }">قوانین</NuxtLink>
           <NuxtLink to="/leaderboard" :class="{ 'is-active': isActive('/leaderboard') }">رتبه‌بندی</NuxtLink>
           <NuxtLink to="/history" :class="{ 'is-active': isActive('/history') }">تاریخچه</NuxtLink>
-          <template v-if="auth.isAuthenticated">
+          <template v-if="menuReady && auth.isAuthenticated">
             <NuxtLink to="/profile" :class="{ 'is-active': isActive('/profile') }">پروفایل</NuxtLink>
             <NuxtLink to="/tickets" :class="{ 'is-active': isActive('/tickets') }">سوالات متداول</NuxtLink>
             <NuxtLink v-if="auth.isAdmin" to="/admin" :class="{ 'is-active': isActive('/admin') }">
@@ -47,7 +49,7 @@ function isActive(path: string) {
 
         <div class="header-actions">
           <NuxtLink to="/wallet" class="btn-header-wallet">💼 کیف پول</NuxtLink>
-          <template v-if="auth.isAuthenticated">
+          <template v-if="menuReady && auth.isAuthenticated">
             <span class="show-desktop-only text-xs text-success font-bold">
               {{ formatToman(auth.walletBalance, false) }}
             </span>
@@ -62,7 +64,7 @@ function isActive(path: string) {
               خروج
             </button>
           </template>
-          <template v-else>
+          <template v-else-if="menuReady">
             <NuxtLink to="/login" class="btn-header-login">ورود</NuxtLink>
             <NuxtLink to="/register" class="btn-header-register">ثبت‌نام</NuxtLink>
           </template>

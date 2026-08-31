@@ -161,6 +161,16 @@ export interface AdminWithdrawalsData {
   userTransactions?: Record<string, Transaction[]>
 }
 
+export interface Discount {
+  id: number
+  code: string
+  type: string
+  value: number
+  used_count?: number
+  usage_limit?: number | null
+  expires_at?: string | null
+}
+
 export interface WalletData {
   balance: number
   transactions: Transaction[]

@@ -10,13 +10,18 @@ const { formatDateTime } = usePersianDateTime()
 
 const status = ref('unresolved')
 const search = ref('')
+const page = ref(1)
 const selected = ref<ApiErrorLog | null>(null)
 const detailPending = ref(false)
 
 const { data, pending, error, refresh } = await useAsyncData(
   'admin-api-errors',
-  () => api.admin.apiErrors({ status: status.value, search: search.value || undefined }),
-  { watch: [status] },
+  () => api.admin.apiErrors({
+    status: status.value,
+    search: search.value || undefined,
+    page: page.value,
+  }),
+  { watch: [page] },
 )
 
 const { data: stats, refresh: refreshStats } = await useAsyncData(
@@ -77,8 +82,14 @@ async function deleteAll() {
 }
 
 function applySearch() {
+  page.value = 1
   refresh()
 }
+
+watch(status, () => {
+  page.value = 1
+  refresh()
+})
 
 function statusLabel(code: number) {
   if (code >= 500) return 'خطای سرور'
@@ -170,6 +181,7 @@ function statusLabel(code: number) {
           <p class="text-sm text-gray-300 line-clamp-2">{{ log.message }}</p>
           <p v-if="log.exception_class" class="text-xs text-gray-500 mt-2 truncate">{{ log.exception_class }}</p>
         </div>
+        <AdminPagination v-model:page="page" :meta="data?.meta" />
       </div>
 
       <div class="bg-dark-800 border border-dark-600 rounded-xl p-4 lg:sticky lg:top-4 h-fit">

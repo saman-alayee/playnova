@@ -450,12 +450,12 @@ PROMPT;
     {
         return [
             [
-                'icon' => url('/social-telegram.svg'),
+                'icon' => '/social-telegram.svg',
                 'title' => 'کانال تلگرام اعلام نتایج',
                 'url' => self::telegramUrl(self::get('results_telegram', '')),
             ],
             [
-                'icon' => url('/social-rubika.png'),
+                'icon' => '/social-rubika.png',
                 'title' => 'کانال روبیکا اعلام نتایج',
                 'url' => self::rubikaUrl(self::get('results_rubika', '')),
             ],

@@ -24,6 +24,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     '/privacy',
     '/contact',
     '/tickets',
+    '/notifications',
   ]
 
   if (exemptPaths.some((path) => to.path === path || to.path.startsWith(`${path}/`))) {

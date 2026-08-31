@@ -3,6 +3,7 @@ definePageMeta({ middleware: 'auth' })
 useHead({ title: 'کیف پول | PlayNova' })
 
 const api = useApi()
+const auth = useAuthStore()
 const flash = useState('flash')
 const { formatDateTime } = usePersianDateTime()
 const { formatToman } = useFormatToman()
@@ -12,8 +13,7 @@ const { data, pending, refresh } = await useAsyncData('wallet', () => api.wallet
 const depositAmount = ref<number | null>(null)
 const withdrawForm = reactive({
   amount: null as number | null,
-  bank_card_number: '',
-  bank_account_name: '',
+  bank_card_confirm: '',
 })
 const loadingDeposit = ref(false)
 const loadingWithdraw = ref(false)
@@ -42,6 +42,7 @@ async function deposit() {
     }
     flash.value = { success: 'درخواست شارژ ثبت شد.' }
     await refresh()
+    await auth.fetchUser()
   } catch (e: unknown) {
     const err = e as Error
     errors.value = [err.message || 'شارژ ناموفق بود.']
@@ -56,11 +57,13 @@ async function withdraw() {
   try {
     await api.wallet.withdraw({
       amount: withdrawForm.amount,
-      bank_card_number: withdrawForm.bank_card_number,
-      bank_account_name: withdrawForm.bank_account_name,
+      bank_card_confirm: withdrawForm.bank_card_confirm,
     })
     flash.value = { success: 'درخواست برداشت ثبت شد.' }
+    withdrawForm.amount = null
+    withdrawForm.bank_card_confirm = ''
     await refresh()
+    await auth.fetchUser()
   } catch (e: unknown) {
     const err = e as Error
     errors.value = [err.message || 'برداشت ناموفق بود.']
@@ -112,10 +115,23 @@ async function withdraw() {
 
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-6">
           <h3 class="font-bold mb-2">درخواست برداشت</h3>
+          <p v-if="!auth.user?.bank_card_number" class="text-xs text-amber-400/90 mb-3">
+            ابتدا شماره کارت را در
+            <NuxtLink to="/profile" class="text-secondary hover:underline">پروفایل</NuxtLink>
+            ثبت کنید.
+          </p>
+          <p v-else class="text-xs text-gray-400 mb-3">
+            کارت ثبت‌شده: {{ auth.user.bank_card_number }}
+          </p>
           <form class="space-y-3" @submit.prevent="withdraw">
-            <input v-model.number="withdrawForm.amount" type="number" min="50000" placeholder="مبلغ برداشت" required>
-            <input v-model="withdrawForm.bank_card_number" type="text" placeholder="شماره کارت" required>
-            <input v-model="withdrawForm.bank_account_name" type="text" placeholder="نام صاحب حساب" required>
+            <input v-model.number="withdrawForm.amount" type="number" min="50000" placeholder="مبلغ برداشت (تومان)" required>
+            <input
+              v-model="withdrawForm.bank_card_confirm"
+              type="text"
+              inputmode="numeric"
+              placeholder="تأیید شماره کارت (مطابق پروفایل)"
+              required
+            >
             <button type="submit" class="bg-primary hover:opacity-90 text-white rounded px-4 py-2 font-bold" :disabled="loadingWithdraw">
               ثبت درخواست
             </button>
