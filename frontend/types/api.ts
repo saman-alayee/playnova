@@ -70,6 +70,7 @@ export interface Tournament {
   end_date_display?: string | null
   status: 'upcoming' | 'active' | 'ongoing' | 'ended' | 'cancelled' | string
   status_label?: string
+  winner?: { id: number; username?: string } | null
   seat_mode?: number
   seat_mode_label?: string
   winner_id?: number | null
@@ -204,7 +205,14 @@ export interface SiteSettings {
     rubika?: string | null
     telegram?: string | null
   }
+  results_channels?: Array<{
+    icon?: string
+    title?: string
+    url?: string | null
+  }>
   support_phone?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
 }
 
 export interface TeamInvite {
@@ -318,6 +326,12 @@ export interface PageContent {
   title?: string
   content?: string
   body?: string
+}
+
+export interface ContactInfo {
+  email?: string
+  phone?: string
+  address?: string
 }
 
 export interface ProfileData {

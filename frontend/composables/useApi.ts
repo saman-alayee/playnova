@@ -257,14 +257,14 @@ export function useApi() {
 
     leaderboard: () => api.get<import('~/types/api').LeaderboardEntry[]>('/leaderboard', undefined, false),
 
-    history: () => api.get<import('~/types/api').HistoryItem[]>('/history', undefined, false),
+    history: () => api.get<import('~/types/api').Tournament[]>('/history', undefined, false),
 
     rules: () => api.get<import('~/types/api').RuleSection[]>('/rules', undefined, false),
 
     pages: {
       privacy: () => api.get<import('~/types/api').PageContent>('/pages/privacy', undefined, false),
       about: () => api.get<import('~/types/api').PageContent>('/pages/about', undefined, false),
-      contact: () => api.get<import('~/types/api').PageContent>('/pages/contact', undefined, false),
+      contact: () => api.get<import('~/types/api').ContactInfo>('/pages/contact', undefined, false),
     },
 
     faq: (cat?: string) =>

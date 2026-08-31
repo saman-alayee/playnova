@@ -15,6 +15,30 @@ const { data, pending } = await useAsyncData(
 const categories = computed(() => data.value?.categories || {})
 const activeCategory = computed(() => data.value?.active_category)
 const supportPhone = computed(() => data.value?.support_phone)
+
+function scrollToFaqAnswers() {
+  if (!import.meta.client) return
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      document.getElementById('faq-answers')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  })
+}
+
+watch(activeCategory, (category) => {
+  if (category) scrollToFaqAnswers()
+})
+
+watch(
+  () => route.hash,
+  (hash) => {
+    if (hash === '#faq-answers' && activeCategory.value) scrollToFaqAnswers()
+  },
+)
+
+onMounted(() => {
+  if (route.hash === '#faq-answers' && activeCategory.value) scrollToFaqAnswers()
+})
 </script>
 
 <template>
@@ -26,11 +50,11 @@ const supportPhone = computed(() => data.value?.support_phone)
 
     <div v-if="pending" class="text-center text-gray-500 py-10">در حال بارگذاری...</div>
     <template v-else>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <div id="faq-categories" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8 scroll-mt-24">
         <NuxtLink
           v-for="(cat, key) in categories"
           :key="key"
-          :to="{ path: '/tickets', query: { cat: key } }"
+          :to="{ path: '/tickets', query: { cat: key }, hash: '#faq-answers' }"
           class="block rounded-xl border p-4 text-center transition"
           :class="activeCat === key ? 'border-secondary bg-secondary/10 shadow-glowprimary' : 'border-dark-600 bg-dark-800 hover:border-secondary/50'"
         >

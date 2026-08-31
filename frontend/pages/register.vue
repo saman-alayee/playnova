@@ -66,7 +66,7 @@ async function submit() {
 
 <template>
   <div class="auth-page max-w-md mx-auto bg-dark-800 border border-dark-600 rounded-xl p-6">
-    <h1 class="text-2xl font-bold mb-6 text-center">ثبت‌نام</h1>
+    <h1 class="text-2xl font-bold mb-6 text-center">ثبت‌نام در PlayNova</h1>
 
     <div v-if="errors.length" class="bg-danger/20 border border-danger/50 text-danger px-4 py-3 rounded-xl text-sm mb-4">
       <ul class="list-disc list-inside space-y-1">
@@ -81,10 +81,18 @@ async function submit() {
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">شماره موبایل</label>
-        <input v-model="form.mobile" type="text" required inputmode="numeric" autocomplete="tel">
+        <input
+          v-model="form.mobile"
+          type="text"
+          required
+          inputmode="numeric"
+          autocomplete="tel"
+          placeholder="09123456789"
+        >
+        <p class="text-xs text-gray-500 mt-1">با همین شماره موبایل وارد حساب کاربری می‌شوید.</p>
       </div>
       <div>
-        <label class="block text-sm mb-1 text-gray-400">آیدی کالاف</label>
+        <label class="block text-sm mb-1 text-gray-400">آیدی کالاف <span class="text-gray-500">(نام شما در بازی کالاف دیوتی)</span></label>
         <input v-model="form.cod_id" type="text" required>
       </div>
       <div>

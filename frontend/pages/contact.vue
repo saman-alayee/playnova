@@ -2,30 +2,42 @@
 useHead({ title: 'ارتباط با ما | PlayNova' })
 
 const api = useApi()
-const auth = useAuthStore()
 const { data, pending, error } = await useAsyncData('contact', () => api.pages.contact())
 
-const supportPhone = computed(() => data.value?.content || auth.settings?.support_phone)
+const email = computed(() => data.value?.email?.trim() || '')
+const phone = computed(() => data.value?.phone?.trim() || '')
+const address = computed(() => data.value?.address?.trim() || '')
+const phoneHref = computed(() => phone.value.replace(/\s+/g, ''))
 </script>
 
 <template>
   <div class="max-w-2xl mx-auto">
-    <h1 class="text-2xl font-bold mb-6 text-white text-center">{{ data?.title || 'ارتباط با ما' }}</h1>
-
-    <div v-if="pending" class="text-center text-gray-500">در حال بارگذاری...</div>
-    <div v-else class="bg-dark-800 border border-dark-600 rounded-xl p-6 text-center space-y-4">
-      <p class="text-sm text-gray-300 leading-7 whitespace-pre-line">
-        {{ data?.body || 'برای پشتیبانی با ما در ارتباط باشید.' }}
+    <div v-if="pending" class="text-center text-gray-500 py-10">در حال بارگذاری...</div>
+    <div v-else-if="error" class="bg-dark-800 border border-dark-600 rounded-xl p-6 text-center text-gray-400">
+      بارگذاری اطلاعات تماس ممکن نشد.
+    </div>
+    <div v-else class="bg-dark-800 border border-dark-600 rounded-xl p-6 space-y-4">
+      <h1 class="text-2xl font-bold mb-2 text-white">ارتباط با ما</h1>
+      <p class="text-sm text-gray-400">
+        برای پاسخ سوالات رایج، ابتدا بخش سوالات متداول را ببینید.
       </p>
-      <a
-        v-if="supportPhone"
-        :href="`tel:${String(supportPhone).replace(/\s+/g, '')}`"
-        dir="ltr"
-        class="inline-flex items-center justify-center gap-2 bg-secondary hover:opacity-90 text-white font-bold px-6 py-3 rounded-xl"
-      >
-        📞 {{ supportPhone }}
-      </a>
-      <NuxtLink to="/tickets" class="block text-primary text-sm font-bold">سوالات متداول</NuxtLink>
+      <div class="space-y-2 text-sm">
+        <p v-if="email">
+          <span class="text-gray-500">ایمیل:</span>
+          <a :href="`mailto:${email}`" class="text-secondary">{{ email }}</a>
+        </p>
+        <p v-if="phone">
+          <span class="text-gray-500">تلفن:</span>
+          <a :href="`tel:${phoneHref}`" dir="ltr" class="text-secondary">{{ phone }}</a>
+        </p>
+        <p v-if="address">
+          <span class="text-gray-500">آدرس:</span>
+          <span class="text-gray-300">{{ address }}</span>
+        </p>
+      </div>
+      <NuxtLink to="/tickets" class="inline-block mt-4 btn-glow-primary text-sm px-4 py-2 rounded-xl">
+        مشاهده سوالات متداول
+      </NuxtLink>
     </div>
   </div>
 </template>

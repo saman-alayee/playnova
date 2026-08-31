@@ -5,8 +5,37 @@ const route = useRoute()
 const auth = useAuthStore()
 const { mediaUrl } = useMediaUrl()
 
-const logoUrl = computed(() => mediaUrl(auth.logoUrl))
 const logoFailed = ref(false)
+const logoIndex = ref(0)
+
+const logoCandidates = computed(() => {
+  const candidates = [
+    auth.logoUrl,
+    '/playnova-logo.png',
+    '/logo.png',
+  ]
+
+  const urls = candidates
+    .map((path) => mediaUrl(path))
+    .filter((url): url is string => !!url)
+
+  return [...new Set(urls)]
+})
+
+const logoSrc = computed(() => logoCandidates.value[logoIndex.value] ?? null)
+
+function onLogoError() {
+  if (logoIndex.value < logoCandidates.value.length - 1) {
+    logoIndex.value += 1
+    return
+  }
+  logoFailed.value = true
+}
+
+watch(logoCandidates, () => {
+  logoIndex.value = 0
+  logoFailed.value = false
+})
 
 function isActive(path: string) {
   if (path === '/') return route.path === '/'
@@ -31,14 +60,15 @@ function isActive(path: string) {
           </button>
           <NuxtLink to="/" class="site-header-logo">
             <img
-              v-if="logoUrl && !logoFailed"
-              :src="logoUrl"
+              v-if="logoSrc && !logoFailed"
+              :key="logoSrc"
+              :src="logoSrc"
               class="site-logo"
               alt="PlayNova"
               width="160"
               height="56"
               decoding="async"
-              @error="logoFailed = true"
+              @error="onLogoError"
             >
             <span v-else class="text-lg font-black text-gradient whitespace-nowrap">PlayNova</span>
           </NuxtLink>

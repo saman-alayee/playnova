@@ -8,6 +8,8 @@ const {
   closeRegisterModal,
 } = useModals()
 
+await useAsyncData('site-settings', () => auth.fetchSettings())
+
 function closeSidebar() {
   sidebarOpen.value = false
 }

@@ -10,5 +10,14 @@ export function useMediaUrl() {
     return `${backend}${value.startsWith('/') ? value : `/${value}`}`
   }
 
-  return { mediaUrl, backend }
+  /** Icons shipped in frontend/public (or nginx static) — avoid backend URL prefix. */
+  function publicAssetUrl(path?: string | null): string | null {
+    if (!path) return null
+    const socialMatch = path.match(/\/(social-[^/?#]+)$/i)
+    if (socialMatch) return `/${socialMatch[1]}`
+    if (path.startsWith('/social-')) return path
+    return mediaUrl(path)
+  }
+
+  return { mediaUrl, publicAssetUrl, backend }
 }

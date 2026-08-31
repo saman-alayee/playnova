@@ -4,26 +4,25 @@ defineEmits<{ close: [] }>()
 
 const route = useRoute()
 const auth = useAuthStore()
-const config = useRuntimeConfig()
 
 const socialItems = computed(() => {
   const social = auth.settings?.social || {}
   return [
     {
       key: 'instagram',
-      icon: `${config.public.backendUrl}/social-instagram.svg`,
+      icon: '/social-instagram.svg',
       title: 'اینستاگرام',
       url: buildSocialUrl(social.instagram, 'https://instagram.com/'),
     },
     {
       key: 'rubika',
-      icon: `${config.public.backendUrl}/social-rubika.png`,
+      icon: '/social-rubika.png',
       title: 'روبیکا',
       url: buildSocialUrl(social.rubika, 'https://rubika.ir/'),
     },
     {
       key: 'telegram',
-      icon: `${config.public.backendUrl}/social-telegram.svg`,
+      icon: '/social-telegram.svg',
       title: 'تلگرام',
       url: buildSocialUrl(social.telegram, 'https://t.me/'),
     },
