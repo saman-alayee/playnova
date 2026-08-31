@@ -1,13 +1,7 @@
 <script setup lang="ts">
 const auth = useAuthStore()
-const { mediaUrl, publicAssetUrl } = useMediaUrl()
+const { logoSrc, logoFailed, onLogoError } = useSiteLogo()
 const year = new Date().getFullYear()
-
-const logoUrl = computed(() =>
-  publicAssetUrl('/playnova-logo.png')
-  || publicAssetUrl('/logo.png')
-  || mediaUrl(auth.logoUrl),
-)
 </script>
 
 <template>
@@ -17,14 +11,16 @@ const logoUrl = computed(() =>
       <div class="site-footer__grid">
         <div>
           <img
-            v-if="logoUrl"
-            :src="logoUrl"
+            v-if="logoSrc && !logoFailed"
+            :key="logoSrc"
+            :src="logoSrc"
             alt="PlayNova"
             class="site-footer__logo"
             width="180"
             height="64"
             loading="lazy"
             decoding="async"
+            @error="onLogoError"
           >
           <p v-else class="text-xl font-black text-gradient mb-3">PlayNova</p>
           <p class="site-footer__desc">

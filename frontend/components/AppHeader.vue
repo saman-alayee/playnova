@@ -3,36 +3,8 @@ defineEmits<{ 'open-sidebar': [] }>()
 
 const route = useRoute()
 const auth = useAuthStore()
-const { mediaUrl, publicAssetUrl } = useMediaUrl()
 const { formatToman } = useFormatToman()
-
-const logoFailed = ref(false)
-const logoIndex = ref(0)
-
-const logoCandidates = computed(() => {
-  const candidates = [
-    publicAssetUrl('/playnova-logo.png'),
-    publicAssetUrl('/logo.png'),
-    mediaUrl(auth.logoUrl),
-  ].filter((url): url is string => !!url)
-
-  return [...new Set(candidates)]
-})
-
-const logoSrc = computed(() => logoCandidates.value[logoIndex.value] ?? null)
-
-function onLogoError() {
-  if (logoIndex.value < logoCandidates.value.length - 1) {
-    logoIndex.value += 1
-    return
-  }
-  logoFailed.value = true
-}
-
-watch(logoCandidates, () => {
-  logoIndex.value = 0
-  logoFailed.value = false
-})
+const { logoSrc, logoFailed, onLogoError } = useSiteLogo()
 
 function isActive(path: string) {
   if (path === '/') return route.path === '/'
