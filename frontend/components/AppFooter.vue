@@ -1,6 +1,5 @@
 <script setup lang="ts">
 const auth = useAuthStore()
-const { logoSrc, logoFailed, onLogoError } = useSiteLogo()
 const year = new Date().getFullYear()
 </script>
 
@@ -10,19 +9,7 @@ const year = new Date().getFullYear()
     <div class="container mx-auto px-4 max-w-7xl site-footer__inner">
       <div class="site-footer__grid">
         <div>
-          <img
-            v-if="logoSrc && !logoFailed"
-            :key="logoSrc"
-            :src="logoSrc"
-            alt="PlayNova"
-            class="site-footer__logo"
-            width="180"
-            height="64"
-            loading="lazy"
-            decoding="async"
-            @error="onLogoError"
-          >
-          <p v-else class="text-xl font-black text-gradient mb-3">PlayNova</p>
+          <SiteLogoImage img-class="site-footer__logo" :width="180" :height="64" />
           <p class="site-footer__desc">
             پلتفرم برگزاری مسابقات آنلاین Call of Duty Mobile — رقابت، هیجان و جوایز نقدی.
           </p>

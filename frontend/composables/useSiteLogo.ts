@@ -12,7 +12,7 @@ export function useSiteLogo() {
     const custom = auth.settings?.logo_url || auth.logoUrl
     if (custom && /\/storage\//i.test(custom)) {
       const resolved = mediaUrl(custom)
-      if (resolved) candidates.unshift(resolved)
+      if (resolved) candidates.push(resolved)
     }
 
     return [...new Set(candidates)]

@@ -18,6 +18,7 @@ export default defineNuxtConfig({
         { property: 'og:type', content: 'website' },
         { property: 'og:site_name', content: 'PlayNova' },
         { property: 'og:locale', content: 'fa_IR' },
+        { property: 'og:image', content: '/logo.png' },
       ],
       link: [
         { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },

@@ -4,7 +4,6 @@ defineEmits<{ 'open-sidebar': [] }>()
 const route = useRoute()
 const auth = useAuthStore()
 const { formatToman } = useFormatToman()
-const { logoSrc, logoFailed, onLogoError } = useSiteLogo()
 
 function isActive(path: string) {
   if (path === '/') return route.path === '/'
@@ -28,18 +27,7 @@ function isActive(path: string) {
             </svg>
           </button>
           <NuxtLink to="/" class="site-header-logo">
-            <img
-              v-if="logoSrc && !logoFailed"
-              :key="logoSrc"
-              :src="logoSrc"
-              class="site-logo"
-              alt="PlayNova"
-              width="160"
-              height="56"
-              decoding="async"
-              @error="onLogoError"
-            >
-            <span v-else class="text-lg font-black text-gradient whitespace-nowrap">PlayNova</span>
+            <SiteLogoImage />
           </NuxtLink>
         </div>
 
