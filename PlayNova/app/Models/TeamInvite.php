@@ -30,6 +30,7 @@ class TeamInvite extends Model
         'seat_number_invitee',
         'expires_at',
         'team_group_id',
+        'team_first_seat',
     ];
 
     protected $casts = [
@@ -38,6 +39,7 @@ class TeamInvite extends Model
         'tournament_id' => 'integer',
         'seat_number_inviter' => 'integer',
         'seat_number_invitee' => 'integer',
+        'team_first_seat' => 'integer',
         'expires_at' => 'datetime',
     ];
 

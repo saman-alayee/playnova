@@ -311,6 +311,11 @@ const prizeTable = computed<Record<number, number>>(() => {
 
 const hasPrizeTable = computed(() => Object.keys(prizeTable.value).length > 0)
 
+const lastPrizeRank = computed(() => {
+  const ranks = Object.keys(prizeTable.value).map(Number).filter((rank) => rank > 0)
+  return ranks.length ? Math.max(...ranks) : 0
+})
+
 const totalPrizePreview = computed(() =>
   rankedRows.value.reduce((sum, row, index) => sum + prizeAmountForRow(index, row), 0),
 )
@@ -483,7 +488,7 @@ onBeforeUnmount(() => {
             rows="5"
             class="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm font-mono"
           />
-          <p class="text-xs text-gray-500 mt-1">متغیرها: {tournament_title}، {seat_mode_label}، {participants}، {prize_table}</p>
+          <p class="text-xs text-gray-500 mt-1">متغیرها: {tournament_title}، {seat_mode_label}، {participants}، {prize_table}، {last_prize_rank}، {prize_rank_count}</p>
         </div>
         <div v-if="promptConfig?.prize_table_text" class="rounded-lg border border-secondary/30 bg-secondary/5 p-3">
           <p class="text-xs text-secondary font-bold mb-1">جدول جایزه (از توضیحات مسابقه)</p>
@@ -500,6 +505,9 @@ onBeforeUnmount(() => {
       <h2 class="font-bold text-white mb-2">۲. آپلود تصویر یا ویدیو</h2>
       <p class="text-sm text-gray-400 mb-4">
         اسکرین‌شات یا ویدیوی صفحه پایان مسابقه را آپلود کنید. برای ویدیو می‌توانید فریم دلخواه را انتخاب کنید.
+        <span v-if="hasPrizeTable && lastPrizeRank > 0" class="block mt-1 text-amber-300/90">
+          جایزه تا رتبه {{ lastPrizeRank }} پرداخت می‌شود — AI باید همه رتبه‌ها تا رتبه {{ lastPrizeRank }} را بخواند (نه فقط ۳ تای اول). برای ویدیوی اسکرول‌شده «تحلیل چند فریم» را بزنید.
+        </span>
       </p>
 
       <div class="flex flex-wrap gap-3 items-start">

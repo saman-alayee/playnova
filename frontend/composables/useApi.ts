@@ -237,12 +237,15 @@ export function useApi() {
       cancelPending: (id: number | string) =>
         api.post<void>(`/tournaments/${id}/cancel-pending`),
 
-      teamInvite: (id: number | string, teammateCodId: string | string[]) =>
+      teamInvite: (
+        id: number | string,
+        payload: { seatNumber: number; teammateCodId?: string; teammateCodIds?: string[] },
+      ) =>
         api.post<void>(`/tournaments/${id}/team-invite`, {
-          ...(Array.isArray(teammateCodId)
-            ? { teammate_cod_ids: teammateCodId }
-            : { teammate_cod_id: teammateCodId }),
-          accept_rules: '1',
+          seat_number: payload.seatNumber,
+          ...(payload.teammateCodIds
+            ? { teammate_cod_ids: payload.teammateCodIds }
+            : { teammate_cod_id: payload.teammateCodId }),
         }),
 
       gameLogin: (id: number | string) =>
@@ -576,6 +579,8 @@ export function useApi() {
           has_api_key: boolean
           api_key_source: 'database' | 'env' | 'none'
           available_models: string[]
+          premium_models: string[]
+          recommended_result_model: string
           suggested_models: string[]
         }>('/admin/settings/ai'),
 

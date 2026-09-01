@@ -18,6 +18,8 @@ const props = defineProps<{
   seatMode: number
   interactive?: boolean
   selectedSeat?: number | null
+  selectedTeam?: number | null
+  teamSelectMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -37,8 +39,30 @@ function teamTitle(team: number) {
   return `تیم ${toPersianDigits(team)}`
 }
 
-function onPick(seatNumber: number, label: string) {
-  if (props.interactive) emit('select', seatNumber, label)
+function teamIsFullyEmpty(teamRow: GridTeam): boolean {
+  return teamRow.slots.every((slot) => !occupant(slot.seat_number))
+}
+
+function slotIsSelected(teamRow: GridTeam, seatNumber: number): boolean {
+  if (props.teamSelectMode && props.selectedTeam === teamRow.team) {
+    return true
+  }
+
+  return props.selectedSeat === seatNumber
+}
+
+function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
+  if (!props.interactive) return
+
+  if (props.teamSelectMode) {
+    if (!teamIsFullyEmpty(teamRow)) return
+    const first = teamRow.slots[0]
+    const teamLabel = `${teamTitle(teamRow.team)} — ${teamRow.slots.map((s) => s.label).join(' / ')}`
+    emit('select', first.seat_number, teamLabel)
+    return
+  }
+
+  emit('select', seatNumber, label)
 }
 </script>
 
@@ -48,6 +72,7 @@ function onPick(seatNumber: number, label: string) {
       v-for="teamRow in teams"
       :key="teamRow.team"
       class="seat-grid__card"
+      :class="{ 'seat-grid__card--selected': teamSelectMode && selectedTeam === teamRow.team }"
     >
       <legend class="seat-grid__legend">{{ teamTitle(teamRow.team) }}</legend>
       <div
@@ -67,12 +92,12 @@ function onPick(seatNumber: number, label: string) {
             v-else
             type="button"
             class="seat-grid__slot seat-grid__slot--empty"
-            :class="{ 'seat-grid__slot--selected': selectedSeat === slot.seat_number }"
-            :disabled="!interactive"
-            @click="onPick(slot.seat_number, slot.label)"
+            :class="{ 'seat-grid__slot--selected': slotIsSelected(teamRow, slot.seat_number) }"
+            :disabled="!interactive || (teamSelectMode && !teamIsFullyEmpty(teamRow))"
+            @click="onPick(teamRow, slot.seat_number, slot.label)"
           >
             <div class="seat-grid__label">{{ slot.label }}</div>
-            <div class="seat-grid__empty">خالی</div>
+            <div class="seat-grid__empty">{{ teamSelectMode ? 'انتخاب تیم' : 'خالی' }}</div>
           </button>
         </template>
       </div>
@@ -119,6 +144,11 @@ function onPick(seatNumber: number, label: string) {
   padding: 0.15rem 0.35rem 0.4rem;
 }
 
+.seat-grid__card--selected {
+  border-color: #d4af37;
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.35);
+}
+
 .seat-grid__legend {
   width: auto;
   margin: 0 auto;
@@ -157,6 +187,7 @@ function onPick(seatNumber: number, label: string) {
 
 .seat-grid__slot--empty:disabled {
   cursor: default;
+  opacity: 0.45;
 }
 
 .seat-grid__slot--selected {

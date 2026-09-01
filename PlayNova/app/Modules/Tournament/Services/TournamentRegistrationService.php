@@ -47,6 +47,10 @@ class TournamentRegistrationService
                 throw new RuntimeException('already_selected');
             }
 
+            if (($registration->reservation_type ?? 'solo') === 'team') {
+                throw new RuntimeException('team_use_invite');
+            }
+
             if ($this->userHasConfirmedSeat($lockedUser->id, $lockedTournament->id, $registration->id)) {
                 throw new RuntimeException('already_selected');
             }
@@ -91,13 +95,19 @@ class TournamentRegistrationService
         });
     }
 
-    public function createPendingIntent(User $user, Tournament $tournament): Registration
+    public function createPendingIntent(User $user, Tournament $tournament, string $reservationType = 'solo'): Registration
     {
-        return DB::transaction(function () use ($user, $tournament) {
+        $reservationType = in_array($reservationType, ['solo', 'team'], true) ? $reservationType : 'solo';
+
+        return DB::transaction(function () use ($user, $tournament, $reservationType) {
             $lockedTournament = Tournament::query()->whereKey($tournament->id)->lockForUpdate()->firstOrFail();
 
             if (! $lockedTournament->acceptsRegistration()) {
                 throw new RuntimeException('registration_closed');
+            }
+
+            if ($reservationType === 'team' && ! $lockedTournament->supportsTeamInvite()) {
+                throw new RuntimeException('team_not_supported');
             }
 
             if ($this->seatedCountForTournament($lockedTournament) >= (int) $lockedTournament->capacity) {
@@ -117,7 +127,11 @@ class TournamentRegistrationService
                     throw new RuntimeException('already_registered');
                 }
 
-                return $existing;
+                if (($existing->reservation_type ?? 'solo') !== $reservationType) {
+                    $existing->update(['reservation_type' => $reservationType]);
+                }
+
+                return $existing->fresh();
             }
 
             if ($lockedUser->wallet < (float) $lockedTournament->entry_fee) {
@@ -128,7 +142,7 @@ class TournamentRegistrationService
                 'user_id' => $lockedUser->id,
                 'tournament_id' => $lockedTournament->id,
                 'status' => 'waiting',
-                'reservation_type' => 'solo',
+                'reservation_type' => $reservationType,
             ]);
         });
     }

@@ -316,6 +316,21 @@ class Setting extends Model
         return (string) config('services.avalai.vision_model', 'gpt-4o');
     }
 
+    /** @return list<string> */
+    public static function avalAiPremiumVisionModels(): array
+    {
+        return [
+            'gpt-5.5',
+            'claude-opus-4-7',
+            'claude-opus-4-6',
+            'claude-sonnet-4-6',
+            'gemini-3.1-pro-preview',
+            'gpt-4o',
+            'gpt-4.1',
+            'claude-sonnet-4-20250514',
+        ];
+    }
+
     public static function getResultAiVisionModel(): string
     {
         $fromDb = trim((string) self::get('result_ai_vision_model', ''));
@@ -388,6 +403,13 @@ Field rules:
 - uids: numeric CODM UID if shown; otherwise null for each player. RANK tab often has no UID — that is OK.
 - kills: per-player kill counts aligned with player_names (crosshair number). Use null if missing.
 
+CRITICAL — FULL RANK LIST:
+- Prizes are paid to EVERY configured rank, NOT only top 3 (gold/silver/bronze).
+- You MUST return one JSON row per TEAM for ranks 1 through the last prize rank in the prize table.
+- On scrolling screen recordings, keep reading frames until the lowest prize rank is captured. Do NOT stop early at rank 3.
+- If the prize table lists N ranks, your JSON must contain at least N rows with ranks 1..N (unless a rank is genuinely absent from all frames).
+- Include every other visible team/rank beyond the prize cutoff when shown on screen.
+
 Include every team visible across all frames. If the same team appears twice, keep one row (clearest names). Sort by rank ascending.
 PROMPT;
     }
@@ -404,8 +426,11 @@ PROMPT;
 Tournament: {tournament_title}
 Mode: {seat_mode_label} ({players_per_team} players per team)
 
-Prize amounts (from tournament description / prize ranks). For duo/squad these are TEAM totals split equally between teammates. Lower placements may also have prizes — include every rank listed:
+Prize amounts (from tournament description / prize ranks). For duo/squad these are TEAM totals split equally between teammates. Every rank below receives a prize — you MUST read ALL ranks through the last prize rank:
 {prize_table}
+
+Total prize ranks: {prize_rank_count}. Last prize rank: {last_prize_rank}.
+MANDATORY: Return JSON rows for ranks 1 through {last_prize_rank}. Missing any prize rank is an error. Scroll all video frames until rank {last_prize_rank} is found.
 
 Registered participants (TEAM N = lobby team / seat group). Match detected players ONLY by their registered COD ID (not site username). Compare in-game names and numeric UIDs against COD ID:
 {participants}
@@ -413,7 +438,7 @@ Registered participants (TEAM N = lobby team / seat group). Match detected playe
 Read the RANK result screen from this media.
 - rank = placement badge (1=winner). TEAM11 is lobby team 11, not place 11.
 - Solo: 1 name per card. Duo: 2 names. Squad: up to 4 names.
-- Merge all scrolling frames into one complete ranked list.
+- Merge all scrolling frames into one complete ranked list from rank 1 to rank {last_prize_rank} at minimum.
 PROMPT;
     }
 

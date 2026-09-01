@@ -40,7 +40,7 @@ class TeamInviteController extends BaseApiController
         $requiredInvites = $tournament->requiredTeammateInvites();
 
         $rules = [
-            'accept_rules' => 'required|accepted',
+            'seat_number' => 'required|integer|min:1|max:' . max(1, (int) $tournament->capacity),
         ];
 
         if ($requiredInvites > 1) {
@@ -51,11 +51,11 @@ class TeamInviteController extends BaseApiController
         }
 
         $request->validate($rules, [
+            'seat_number.required' => 'انتخاب جایگاه تیم الزامی است.',
             'teammate_cod_id.required' => 'آیدی کالاف هم‌تیمی الزامی است.',
             'teammate_cod_ids.required' => 'آیدی کالاف هم‌تیمی‌ها الزامی است.',
             'teammate_cod_ids.size' => "برای این مسابقه {$requiredInvites} آیدی هم‌تیمی لازم است.",
             'teammate_cod_ids.*.distinct' => 'آیدی‌های هم‌تیمی نباید تکراری باشند.',
-            'accept_rules.accepted' => 'برای ثبت‌نام باید قوانین را بپذیرید.',
         ]);
 
         if (! $tournament->supportsTeamInvite()) {
@@ -70,9 +70,18 @@ class TeamInviteController extends BaseApiController
             return $this->error('برای ارسال درخواست تیمی، موجودی کیف پول شما باید حداقل برابر هزینه ورودی باشد.', 422);
         }
 
-        if (! $service->hasAvailableTeamSlot($tournament)) {
-            return $this->error('جایگاه تیمی خالی برای این مسابقه وجود ندارد.', 422);
+        $seatNumber = (int) $request->seat_number;
+        $teamSeats = $service->teamSeatsFromAnchor($tournament, $seatNumber);
+
+        if ($teamSeats === []) {
+            return $this->error('جایگاه انتخاب‌شده معتبر نیست.', 422);
         }
+
+        if (! $service->validateTeamSeatsAvailable($tournament, $teamSeats)) {
+            return $this->error('تیم انتخاب‌شده دیگر خالی نیست. جایگاه دیگری انتخاب کنید.', 409);
+        }
+
+        $teamFirstSeat = $teamSeats[0];
 
         $codIds = $requiredInvites > 1
             ? array_map('trim', $request->input('teammate_cod_ids', []))
@@ -109,23 +118,27 @@ class TeamInviteController extends BaseApiController
             return $this->error('هم‌تیمی‌های انتخاب‌شده نباید تکراری باشند.', 422);
         }
 
-        Registration::where('user_id', $userId)
+        $registration = Registration::where('user_id', $userId)
             ->where('tournament_id', $tournament->id)
             ->whereNull('seat_number')
-            ->where(function ($q) {
-                $q->where('reservation_type', 'solo')->orWhereNull('reservation_type');
-            })
-            ->delete();
+            ->where('status', 'waiting')
+            ->where('reservation_type', 'team')
+            ->first();
+
+        if (! $registration) {
+            return $this->error('ابتدا نوع ثبت‌نام «رزرو تیمی» را انتخاب کنید.', 422);
+        }
 
         $participantIds = array_merge([$userId], $inviteeIds);
 
         $existingReg = Registration::where('tournament_id', $tournament->id)
             ->whereIn('user_id', $participantIds)
-            ->where(function ($q) {
+            ->where(function ($q) use ($userId) {
                 $q->whereNotNull('seat_number')
-                    ->orWhere(function ($q2) {
+                    ->orWhere(function ($q2) use ($userId) {
                         $q2->where('status', 'waiting')
-                            ->where('reservation_type', 'team');
+                            ->where('reservation_type', 'team')
+                            ->where('user_id', '!=', $userId);
                     });
             })
             ->exists();
@@ -133,6 +146,12 @@ class TeamInviteController extends BaseApiController
         if ($existingReg) {
             return $this->error('یکی از اعضای تیم قبلاً در این مسابقه ثبت‌نام کرده است.', 422);
         }
+
+        TeamInvite::query()
+            ->where('inviter_id', $userId)
+            ->where('tournament_id', $tournament->id)
+            ->where('status', TeamInvite::STATUS_PENDING)
+            ->update(['status' => TeamInvite::STATUS_CANCELLED]);
 
         $pendingInvite = TeamInvite::where('tournament_id', $tournament->id)
             ->where('status', TeamInvite::STATUS_PENDING)
@@ -147,13 +166,13 @@ class TeamInviteController extends BaseApiController
         }
 
         try {
-            $invites = DB::transaction(function () use ($user, $tournament, $userId, $inviteeIds) {
-                Registration::create([
-                    'user_id' => $user->id,
-                    'tournament_id' => $tournament->id,
-                    'status' => 'waiting',
-                    'reservation_type' => 'team',
-                ]);
+            $invites = DB::transaction(function () use ($service, $tournament, $userId, $inviteeIds, $teamFirstSeat) {
+                $lockedTournament = Tournament::whereKey($tournament->id)->lockForUpdate()->firstOrFail();
+                $teamSeats = $service->teamSeatsFromAnchor($lockedTournament, $teamFirstSeat);
+
+                if ($teamSeats === [] || ! $service->validateTeamSeatsAvailable($lockedTournament, $teamSeats)) {
+                    throw new \RuntimeException('seat_taken');
+                }
 
                 $teamGroupId = (string) Str::uuid();
                 $expiresAt = now()->addSeconds(TeamInvite::INVITE_TTL_SECONDS);
@@ -161,8 +180,9 @@ class TeamInviteController extends BaseApiController
 
                 foreach ($inviteeIds as $inviteeId) {
                     $created[] = TeamInvite::create([
-                        'tournament_id' => $tournament->id,
+                        'tournament_id' => $lockedTournament->id,
                         'team_group_id' => count($inviteeIds) > 1 ? $teamGroupId : null,
+                        'team_first_seat' => $teamFirstSeat,
                         'inviter_id' => $userId,
                         'invitee_id' => $inviteeId,
                         'status' => TeamInvite::STATUS_PENDING,
@@ -183,6 +203,12 @@ class TeamInviteController extends BaseApiController
                     'team_invite',
                 );
             }
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'seat_taken') {
+                return $this->error('تیم انتخاب‌شده دیگر خالی نیست. جایگاه دیگری انتخاب کنید.', 409);
+            }
+
+            throw $e;
         } catch (\Throwable $e) {
             report($e);
 
@@ -196,9 +222,10 @@ class TeamInviteController extends BaseApiController
         $firstInvite = $invites[0];
         $firstInvite->load(['tournament', 'inviter', 'invitee']);
 
+        $teamLabel = $tournament->seatDisplayLabel($teamFirstSeat);
         $message = count($invites) > 1
-            ? 'درخواست‌های رزرو تیمی برای ' . count($invites) . ' هم‌تیمی ارسال شد. پس از تأیید همه، جایگاه تیمی رزرو می‌شود.'
-            : "درخواست رزرو تیمی برای «{$firstInvite->invitee?->cod_id}» ارسال شد. پس از تأیید هم‌تیمی، جایگاه تیمی رزرو می‌شود.";
+            ? 'درخواست‌های رزرو تیمی برای ' . count($invites) . ' هم‌تیمی ارسال شد. تا تأیید همه، مبلغی کسر نمی‌شود و جایگاه اشغال نمی‌شود.'
+            : "درخواست رزرو تیمی برای «{$firstInvite->invitee?->cod_id}» ارسال شد. تا تأیید هم‌تیمی، مبلغی کسر نمی‌شود و جایگاه {$teamLabel} اشغال نمی‌شود.";
 
         return $this->success(
             TeamInviteResource::collection(collect($invites)->each->load(['tournament', 'inviter', 'invitee'])),

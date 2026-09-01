@@ -227,14 +227,27 @@ class TournamentResultVisionService
             })
             ->implode("\n");
 
+        $lastPrizeRank = $prizeTable !== [] && $prizeTable !== null ? max(array_keys($prizeTable)) : 0;
+        $prizeRankCount = $prizeTable !== [] && $prizeTable !== null ? count($prizeTable) : 0;
+
         return str_replace(
-            ['{tournament_title}', '{seat_mode_label}', '{players_per_team}', '{participants}', '{prize_table}'],
+            [
+                '{tournament_title}',
+                '{seat_mode_label}',
+                '{players_per_team}',
+                '{participants}',
+                '{prize_table}',
+                '{last_prize_rank}',
+                '{prize_rank_count}',
+            ],
             [
                 $tournament->title,
                 $tournament->seatModeLabel(),
                 (string) $seatMode,
                 $participantHint,
-                $this->prizeTableParser->formatForPrompt($prizeTable, $seatMode),
+                $this->prizeTableParser->formatForPrompt($prizeTable ?? [], $seatMode),
+                (string) $lastPrizeRank,
+                (string) $prizeRankCount,
             ],
             $template,
         );
@@ -242,11 +255,13 @@ class TournamentResultVisionService
 
     protected function seatModePromptHint(Tournament $tournament): string
     {
-        return match ($tournament->seatMode()) {
+        $base = match ($tournament->seatMode()) {
             2 => 'Tournament type: DUO (2-player teams). Return ONE JSON row per TEAM. Rank by team placement, not individual players.',
             4 => 'Tournament type: SQUAD (4-player teams). Return ONE JSON row per TEAM. Rank by team placement, not individual players.',
             default => 'Tournament type: SOLO. Return one JSON row per player.',
         };
+
+        return $base . ' Extract every prize rank through the last configured rank — prizes are paid to all ranks, not only top 3.';
     }
 
     /** @return array{0:string,1:string} */

@@ -21,6 +21,57 @@ class TeamReservationService
     ) {
     }
 
+    /** @return list<int> */
+    public function teamSeatsFromAnchor(Tournament $tournament, int $seatNumber): array
+    {
+        $mode = $tournament->seatMode();
+        if ($mode < 2) {
+            return [$seatNumber];
+        }
+
+        $team = $tournament->teamNumberForSeat($seatNumber);
+        if (! $team) {
+            return [];
+        }
+
+        $seats = [];
+        for ($slot = 1; $slot <= $mode; $slot++) {
+            $sn = ($team - 1) * $mode + $slot;
+            if ($sn > (int) $tournament->capacity) {
+                break;
+            }
+            $seats[] = $sn;
+        }
+
+        return count($seats) === $mode ? $seats : [];
+    }
+
+    /** @param  list<int>  $seats */
+    public function validateTeamSeatsAvailable(Tournament $tournament, array $seats): bool
+    {
+        if ($seats === [] || count($seats) !== $tournament->seatMode()) {
+            return false;
+        }
+
+        return ! Registration::query()
+            ->where('tournament_id', $tournament->id)
+            ->whereNotNull('seat_number')
+            ->whereIn('seat_number', $seats)
+            ->exists();
+    }
+
+    /** @return list<int>|null */
+    public function resolveTeamSeatsForInvite(TeamInvite $invite, Tournament $tournament): ?array
+    {
+        if ($invite->team_first_seat) {
+            $seats = $this->teamSeatsFromAnchor($tournament, (int) $invite->team_first_seat);
+
+            return $seats !== [] ? $seats : null;
+        }
+
+        return $this->findAvailableTeamSeats($tournament);
+    }
+
     /** @return list<int>|null */
     public function findAvailableTeamSeats(Tournament $tournament): ?array
     {
@@ -102,9 +153,13 @@ class TeamReservationService
                     throw new \RuntimeException('closed');
                 }
 
-                $teamSeats = $this->findAvailableTeamSeats($tournament);
+                $teamSeats = $this->resolveTeamSeatsForInvite($lockedInvite, $tournament);
                 if ($teamSeats === null || count($teamSeats) < 2) {
                     throw new \RuntimeException('no_team_slot');
+                }
+
+                if (! $this->validateTeamSeatsAvailable($tournament, $teamSeats)) {
+                    throw new \RuntimeException('seat_taken');
                 }
 
                 [$seatInviter, $seatInvitee] = [$teamSeats[0], $teamSeats[1]];
@@ -286,10 +341,14 @@ class TeamReservationService
             throw new \RuntimeException('closed');
         }
 
-        $teamSeats = $this->findAvailableTeamSeats($lockedTournament);
+        $teamSeats = $this->resolveTeamSeatsForInvite($groupInvites->first(), $lockedTournament);
         $mode = $lockedTournament->seatMode();
         if ($teamSeats === null || count($teamSeats) < $mode) {
             throw new \RuntimeException('no_team_slot');
+        }
+
+        if (! $this->validateTeamSeatsAvailable($lockedTournament, $teamSeats)) {
+            throw new \RuntimeException('seat_taken');
         }
 
         $inviter = User::where('id', $groupInvites->first()->inviter_id)->lockForUpdate()->first();

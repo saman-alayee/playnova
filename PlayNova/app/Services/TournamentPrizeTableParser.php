@@ -139,6 +139,13 @@ class TournamentPrizeTableParser
             }
         }
 
+        $lastRank = max(array_keys($table));
+        $lines[] = sprintf(
+            'REQUIRED: Extract teams for ALL prize ranks 1 through %d (%d ranks). Do not stop at rank 3.',
+            $lastRank,
+            count($table),
+        );
+
         return implode("\n", $lines);
     }
 

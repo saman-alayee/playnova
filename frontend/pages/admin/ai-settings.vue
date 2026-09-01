@@ -9,7 +9,7 @@ const { data, refresh } = await useAsyncData('admin-ai', () => api.admin.aiSetti
 const form = reactive({
   base_url: '',
   vision_model: 'gpt-4o',
-  result_vision_model: 'gpt-4o',
+  result_vision_model: 'gpt-5.5',
   timeout: 120,
   api_key: '',
   is_active: true,
@@ -20,18 +20,42 @@ const testing = ref(false)
 const refreshingModels = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
 const modelOptions = ref<string[]>([])
+const premiumModels = ref<string[]>([])
 
 watch(data, (d) => {
   if (!d) return
   form.base_url = String(d.base_url || '')
   form.vision_model = String(d.vision_model || 'gpt-4o')
-  form.result_vision_model = String(d.result_vision_model || d.vision_model || 'gpt-4o')
+  form.result_vision_model = String(d.result_vision_model || d.recommended_result_model || 'gpt-5.5')
   form.timeout = Number(d.timeout || 120)
   form.is_active = !!d.is_active
   form.api_key = ''
   form.clear_api_key = false
   modelOptions.value = d.available_models?.length ? [...d.available_models] : [...(d.suggested_models || [])]
+  premiumModels.value = d.premium_models?.length ? [...d.premium_models] : []
 }, { immediate: true })
+
+const premiumModelOptions = computed(() => {
+  const premiumSet = new Set(premiumModels.value)
+  const fromList = modelOptions.value.filter((m) => premiumSet.has(m))
+  for (const m of premiumModels.value) {
+    if (!fromList.includes(m)) fromList.push(m)
+  }
+  return fromList
+})
+
+const otherModelOptions = computed(() =>
+  modelOptions.value.filter((m) => !premiumModelOptions.value.includes(m)),
+)
+
+function modelOptionLabel(model: string, forResult = false) {
+  if (!premiumModels.value.includes(model)) return model
+  const recommended = data.value?.recommended_result_model
+  if (forResult && model === recommended) {
+    return `⭐ ${model} — پیشنهاد برای تحلیل نتیجه`
+  }
+  return `⭐ ${model} — بهترین کیفیت`
+}
 
 const apiKeySourceLabel = computed(() => {
   const source = data.value?.api_key_source
@@ -140,7 +164,14 @@ async function testConnection() {
           v-model="form.vision_model"
           class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
         >
-          <option v-for="m in modelOptions" :key="'v-' + m" :value="m">{{ m }}</option>
+          <optgroup v-if="premiumModelOptions.length" label="⭐ بهترین کیفیت">
+            <option v-for="m in premiumModelOptions" :key="'vp-' + m" :value="m">
+              {{ modelOptionLabel(m) }}
+            </option>
+          </optgroup>
+          <optgroup v-if="otherModelOptions.length" label="سایر مدل‌ها">
+            <option v-for="m in otherModelOptions" :key="'vo-' + m" :value="m">{{ m }}</option>
+          </optgroup>
         </select>
       </div>
 
@@ -150,9 +181,18 @@ async function testConnection() {
           v-model="form.result_vision_model"
           class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
         >
-          <option v-for="m in modelOptions" :key="'r-' + m" :value="m">{{ m }}</option>
+          <optgroup v-if="premiumModelOptions.length" label="⭐ بهترین کیفیت — برای خواندن همه رتبه‌های جایزه">
+            <option v-for="m in premiumModelOptions" :key="'rp-' + m" :value="m">
+              {{ modelOptionLabel(m, true) }}
+            </option>
+          </optgroup>
+          <optgroup v-if="otherModelOptions.length" label="سایر مدل‌ها">
+            <option v-for="m in otherModelOptions" :key="'ro-' + m" :value="m">{{ m }}</option>
+          </optgroup>
         </select>
-        <p class="text-xs text-gray-500 mt-1">برای تحلیل اسکرین‌شات RANK در صفحه ثبت نتیجه مسابقه استفاده می‌شود.</p>
+        <p class="text-xs text-gray-500 mt-1">
+          برای تحلیل اسکرین‌شات RANK استفاده می‌شود. مدل‌های ⭐ برای خواندن همه رتبه‌ها تا آخرین رتبه جایزه توصیه می‌شوند.
+        </p>
       </div>
 
       <div>

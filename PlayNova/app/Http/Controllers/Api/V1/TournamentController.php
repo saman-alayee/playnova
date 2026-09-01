@@ -77,9 +77,6 @@ class TournamentController extends BaseApiController
             ->whereIn('tournament_id', $tournamentIds)
             ->whereNull('seat_number')
             ->where('status', 'waiting')
-            ->where(function ($q) {
-                $q->where('reservation_type', 'solo')->orWhereNull('reservation_type');
-            })
             ->pluck('tournament_id')
             ->flip();
 
@@ -93,8 +90,11 @@ class TournamentController extends BaseApiController
         foreach ($collections as $items) {
             foreach ($items as $tournament) {
                 $tournament->setAttribute('is_registered', $registeredIds->has($tournament->id));
-                $tournament->setAttribute('pending_seat', $pendingSeatIds->has($tournament->id));
                 $tournament->setAttribute('pending_team', $pendingTeamIds->has($tournament->id));
+                $tournament->setAttribute(
+                    'pending_seat',
+                    $pendingSeatIds->has($tournament->id) && ! $pendingTeamIds->has($tournament->id),
+                );
             }
         }
     }
@@ -111,8 +111,14 @@ class TournamentController extends BaseApiController
                 ->first();
 
             if ($registration) {
-                $pendingSeat = $registration->seat_number === null;
-                $isRegistered = ! $pendingSeat;
+                $hasPendingTeamInvite = TeamInvite::query()
+                    ->where('inviter_id', Auth::id())
+                    ->where('tournament_id', $tournament->id)
+                    ->where('status', TeamInvite::STATUS_PENDING)
+                    ->exists();
+
+                $pendingSeat = $registration->seat_number === null && ! $hasPendingTeamInvite;
+                $isRegistered = $registration->seat_number !== null;
             }
         }
 
@@ -142,17 +148,23 @@ class TournamentController extends BaseApiController
 
     public function register(Request $request, Tournament $tournament, TournamentRegistrationService $registrations, TournamentRegistrationGuard $guard): JsonResponse
     {
+        $request->validate([
+            'reservation_type' => 'nullable|in:solo,team',
+        ]);
+
         $user = $request->user();
+        $reservationType = $request->input('reservation_type', 'solo');
 
         try {
             $guard->assertCanRegister($tournament);
-            $registration = $registrations->createPendingIntent($user, $tournament);
+            $registration = $registrations->createPendingIntent($user, $tournament, $reservationType);
         } catch (\RuntimeException $e) {
             return match ($e->getMessage()) {
                 'registration_closed' => $this->error('ثبت‌نام این مسابقه بسته شده است.', 422),
                 'tournament_full' => $this->error('ظرفیت مسابقه تکمیل شده است.', 422),
                 'already_registered' => $this->error('شما قبلاً در این مسابقه ثبت‌نام کرده‌اید.', 422),
                 'insufficient_wallet' => $this->error('موجودی کیف پول کافی نیست.', 422),
+                'team_not_supported' => $this->error('رزرو تیمی برای این مسابقه فعال نیست.', 422),
                 default => $this->error('ثبت‌نام ناموفق بود.', 422),
             };
         } catch (\Throwable $e) {
@@ -164,6 +176,7 @@ class TournamentController extends BaseApiController
         return $this->success([
             'registration' => new RegistrationResource($registration),
             'next_step' => 'select_seat',
+            'reservation_type' => $registration->reservation_type ?? 'solo',
         ], 'برای تکمیل ثبت‌نام، جایگاه خود را انتخاب و تأیید کنید.', 201);
     }
 
@@ -185,15 +198,21 @@ class TournamentController extends BaseApiController
             return $this->error('ابتدا در این مسابقه ثبت‌نام کنید.', 422);
         }
 
-        if ($registration->seat_number === null && ($registration->reservation_type ?? 'solo') === 'team') {
-            return $this->error('درخواست رزرو تیمی شما در انتظار تأیید هم‌تیمی است.', 422);
-        }
-
         if ($registration->seat_number !== null) {
             return $this->success([
                 'registration' => new RegistrationResource($registration->load('tournament')),
                 'seat_label' => $tournament->seatDisplayLabel((int) $registration->seat_number),
             ], 'جایگاه شما قبلاً ثبت شده است.');
+        }
+
+        $hasPendingTeamInvite = TeamInvite::query()
+            ->where('inviter_id', $user->id)
+            ->where('tournament_id', $tournament->id)
+            ->where('status', TeamInvite::STATUS_PENDING)
+            ->exists();
+
+        if ($hasPendingTeamInvite) {
+            return $this->error('درخواست رزرو تیمی شما در انتظار تأیید هم‌تیمی است.', 422);
         }
 
         $occupiedSeats = Registration::where('tournament_id', $tournament->id)
@@ -229,11 +248,21 @@ class TournamentController extends BaseApiController
 
         try {
             $guard->assertCanRegister($tournament);
+
+            $existingRegistration = Registration::where('user_id', $user->id)
+                ->where('tournament_id', $tournament->id)
+                ->first();
+
+            if ($existingRegistration && ($existingRegistration->reservation_type ?? 'solo') === 'team') {
+                throw new \RuntimeException('team_use_invite');
+            }
+
             $registration = $registrations->confirmSoloSeat($user, $tournament, $seatNumber);
         } catch (\RuntimeException $e) {
             return match ($e->getMessage()) {
                 'registration_closed' => $this->error('ثبت‌نام این مسابقه بسته شده است.', 422),
                 'not_registered' => $this->error('ابتدا در این مسابقه ثبت‌نام کنید.', 422),
+                'team_use_invite' => $this->error('برای رزرو تیمی، هم‌تیمی‌ها را در مرحله تأیید جایگاه وارد کنید.', 422),
                 'already_selected' => $this->success([
                     'seat_label' => $tournament->seatDisplayLabel($seatNumber),
                 ], 'جایگاه شما قبلاً انتخاب شده است.'),

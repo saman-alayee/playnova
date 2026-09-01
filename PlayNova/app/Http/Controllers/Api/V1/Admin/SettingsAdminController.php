@@ -303,6 +303,8 @@ class SettingsAdminController extends BaseApiController
             'has_api_key' => filled(Setting::getAvalAiApiKey()),
             'api_key_source' => Setting::avalAiApiKeySource(),
             'available_models' => array_values(array_unique($availableModels)),
+            'premium_models' => Setting::avalAiPremiumVisionModels(),
+            'recommended_result_model' => 'gpt-5.5',
             'suggested_models' => $fallbackModels,
         ]);
     }
