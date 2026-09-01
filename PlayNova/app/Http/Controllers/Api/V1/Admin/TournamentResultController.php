@@ -41,6 +41,8 @@ class TournamentResultController extends BaseApiController
             'screenshot' => 'nullable|file|mimes:jpeg,jpg,png,webp|max:10240',
             'video' => 'nullable|file|mimes:mp4,webm,mov,quicktime|max:51200',
             'media' => 'nullable|file|mimes:jpeg,jpg,png,webp,mp4,webm,mov,quicktime|max:51200',
+            'frames' => 'nullable|array|max:8',
+            'frames.*' => 'file|mimes:jpeg,jpg,png,webp|max:10240',
             'system_prompt' => 'nullable|string|max:10000',
             'user_prompt' => 'nullable|string|max:10000',
             'save_prompt' => 'nullable|boolean',
@@ -64,7 +66,8 @@ class TournamentResultController extends BaseApiController
         }
 
         try {
-            $result = $vision->analyzeMedia($tournament, $file, $systemPrompt, $userPrompt);
+            $extraFrames = array_values(array_filter($request->file('frames') ?? []));
+            $result = $vision->analyzeMedia($tournament, $file, $systemPrompt, $userPrompt, $extraFrames);
         } catch (RuntimeException $e) {
             return $this->error($e->getMessage(), 422);
         }

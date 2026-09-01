@@ -24,7 +24,48 @@ class TournamentPrizeTableParser
     ];
 
     /**
+     * Parse prize table from text; if values look like percentages of prize pool, convert to Toman.
+     *
      * @return array<int, float> rank => amount in Toman
+     */
+    public function parseWithPool(?string $text, float $prizePool): array
+    {
+        $table = $this->parse($text);
+
+        if ($table === [] || $prizePool <= 0) {
+            return $table;
+        }
+
+        return $this->convertPercentagesIfNeeded($table, $prizePool);
+    }
+
+    /**
+     * @param  array<int, float>  $table
+     * @return array<int, float>
+     */
+    public function convertPercentagesIfNeeded(array $table, float $prizePool): array
+    {
+        if ($table === [] || $prizePool <= 0) {
+            return $table;
+        }
+
+        $sum = array_sum($table);
+        $allWholeNumbers = collect($table)->every(fn ($value) => abs($value - round($value)) < 0.001);
+
+        if ($allWholeNumbers && $sum >= 95 && $sum <= 105 && max($table) <= 100) {
+            $converted = [];
+            foreach ($table as $rank => $percent) {
+                $converted[$rank] = round($prizePool * (float) $percent / 100, 0);
+            }
+
+            return $converted;
+        }
+
+        return $table;
+    }
+
+    /**
+     * @return array<int, float> rank => amount in Toman (or percent if marked with %)
      */
     public function parse(?string $text): array
     {
@@ -74,10 +115,15 @@ class TournamentPrizeTableParser
 
         if ($teamSize > 1) {
             $lines[] = sprintf(
-                'Amounts are TEAM totals (%d players per team). Split equally between teammates when paying.',
+                'Mode: %d players per team. Each amount below is the TEAM total for that placement (split equally between teammates).',
                 $teamSize,
             );
+            $lines[] = 'Example: Place 1 = 70,000 Toman team total → each duo teammate gets 35,000 Toman.';
+        } else {
+            $lines[] = 'Mode: solo. Each amount is paid to one player at that placement.';
         }
+
+        $lines[] = sprintf('Configured prize ranks: %d', count($table));
 
         foreach ($table as $rank => $amount) {
             if ($teamSize > 1) {
@@ -137,7 +183,7 @@ class TournamentPrizeTableParser
         foreach ($this->ordinalsLongestFirst() as $word => $rank) {
             $pattern = '/(?:تیم|نفر|رتبه|مقام)?\s*' . preg_quote($word, '/')
                 . '\s*(?:در\s*)?(?:مجموع(?:اً)?|جایزه|مبلغ)?'
-                . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/u';
+                . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)\s*(هزار|میلیون|درصد|٪|%)?/u';
             if (preg_match($pattern, $line, $matches)) {
                 $amount = $this->normalizeAmount($matches[1], $matches[2] ?? '');
                 if ($amount > 0) {
@@ -181,7 +227,7 @@ class TournamentPrizeTableParser
         foreach ($this->ordinalsLongestFirst() as $word => $rank) {
             $pattern = '/(?:تیم|نفر|رتبه|مقام)?\s*' . preg_quote($word, '/')
                 . '\s*(?:در\s*)?(?:مجموع(?:اً)?|جایزه|مبلغ)?'
-                . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/u';
+                . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)\s*(هزار|میلیون|درصد|٪|%)?/u';
             if (preg_match($pattern, $text, $matches)) {
                 $amount = $this->normalizeAmount($matches[1], $matches[2] ?? '');
                 if ($amount > 0) {
@@ -229,6 +275,7 @@ class TournamentPrizeTableParser
         return match (trim($multiplier)) {
             'هزار' => $amount * 1000,
             'میلیون' => $amount * 1_000_000,
+            'درصد', '٪', '%' => $amount,
             default => $amount,
         };
     }

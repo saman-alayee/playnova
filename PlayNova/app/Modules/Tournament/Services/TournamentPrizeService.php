@@ -128,7 +128,8 @@ class TournamentPrizeService
     /** @return array<int, float> */
     public function prizeTableFor(Tournament $tournament): array
     {
-        $fromDescription = $this->prizeTableParser->parse((string) $tournament->description);
+        $pool = (float) ($tournament->prize_pool ?? 0);
+        $fromDescription = $this->prizeTableParser->parseWithPool((string) $tournament->description, $pool);
         $configured = $tournament->prizeRanksTable();
 
         if ($fromDescription !== []) {

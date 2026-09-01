@@ -87,6 +87,7 @@ class PlayerNameMatcher
         ?string $detectedUid,
         array $participants,
         array &$usedUserIds,
+        float $minScore = 0.72,
     ): ?array {
         $detectedUid = self::normalizeUid($detectedUid);
 
@@ -171,14 +172,14 @@ class PlayerNameMatcher
                 self::similarity($detectedSkeleton, $storedSkeleton),
             );
 
-            if ($score >= 0.72 && $score > $bestScore) {
+            if ($score >= $minScore && $score > $bestScore) {
                 $best = $participant;
                 $bestScore = $score;
                 $bestMethod = $score >= 0.9 ? 'name_fuzzy_high' : 'name_fuzzy';
             }
         }
 
-        if ($best !== null && $bestScore >= 0.72) {
+        if ($best !== null && $bestScore >= $minScore) {
             $userId = (int) $best['user_id'];
             $usedUserIds[$userId] = true;
 
@@ -188,7 +189,7 @@ class PlayerNameMatcher
             ]);
         }
 
-        if ($detectedSkeleton && strlen($detectedSkeleton) >= 3) {
+        if ($minScore <= 0.72 && $detectedSkeleton && strlen($detectedSkeleton) >= 3) {
             foreach ($participants as $participant) {
                 $userId = (int) $participant['user_id'];
                 if (isset($usedUserIds[$userId])) {

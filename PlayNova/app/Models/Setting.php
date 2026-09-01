@@ -323,7 +323,7 @@ class Setting extends Model
             return $fromDb;
         }
 
-        return (string) config('services.avalai.result_vision_model', 'gpt-4.1');
+        return (string) config('services.avalai.result_vision_model', 'gpt-4o');
     }
 
     public static function getAvalAiTimeout(): int
@@ -373,27 +373,22 @@ class Setting extends Model
         }
 
         return <<<'PROMPT'
-You are an expert at reading Call of Duty Mobile (CODM) post-match result screens (scoreboard, placement, leaderboard, BR standings).
+You are an expert at reading Call of Duty Mobile (CODM) Battle Royale post-match RANK screens (scoreboard / standings). Frames may come from a scrolling screen-recording.
 
 Return ONLY a valid JSON array. No markdown, no code fences, no explanation.
 
-Each item is one ranked placement. rank=1 is the winner / best placement.
-
-SOLO (1-player teams):
-{"rank":1,"player_name":"ExactInGameName","uid":"123456789012345678","kills":12}
-
-DUO / SQUAD — return ONE item per TEAM (not one per squad member):
-{"rank":1,"team_label":"#5","player_names":["NameA","NameB"],"uids":["123456789012345678","987654321098765432"],"kills":24}
+Each item is ONE TEAM placement (solo = 1 player, duo = 2, squad = 4):
+{"rank":1,"team_number":11,"team_label":"TEAM11","player_names":["NameA","NameB"],"uids":[null,null],"kills":[0,6]}
 
 Field rules:
-- rank: integer from the placement / # / رتبه column (1=first). Never guess rank from kills alone.
-- player_name OR player_names: copy EXACTLY as shown (Unicode, emoji, stylized fonts). Do not clean or latinize.
-- uid / uids: numeric CODM player ID when visible (digits only string). Prefer UID matching over names.
-- kills: kills/score when visible; null if not shown.
-- Include every ranked row visible on screen, in order.
-- Ignore lobby UI, spectators, ads, and buttons.
+- rank: integer from the RANK badge on the card (gold/silver/bronze = 1/2/3). Never use TEAM number as rank. Never rank by kills.
+- team_number: integer from the "TEAM12" label on the card (TEAM11 → 11). This is the lobby slot, NOT placement.
+- team_label: copy "TEAM12" exactly when visible.
+- player_names: every name on that card, top to bottom, copied EXACTLY (Unicode, emoji, stylized glyphs). Do not latinize.
+- uids: numeric CODM UID if shown; otherwise null for each player. RANK tab often has no UID — that is OK.
+- kills: per-player kill counts aligned with player_names (crosshair number). Use null if missing.
 
-Sort by rank ascending.
+Include every team visible across all frames. If the same team appears twice, keep one row (clearest names). Sort by rank ascending.
 PROMPT;
     }
 
@@ -407,18 +402,18 @@ PROMPT;
 
         return <<<'PROMPT'
 Tournament: {tournament_title}
-Mode: {seat_mode_label}
+Mode: {seat_mode_label} ({players_per_team} players per team)
 
-Prize amounts (fixed Toman per rank — from tournament description):
+Prize amounts (from tournament description / prize ranks). For duo/squad these are TEAM totals split equally between teammates. Lower placements may also have prizes — include every rank listed:
 {prize_table}
 
-Registered participants (match by UID first; names may use special Unicode):
+Registered participants (TEAM N = lobby team / seat group). Match by UID, then exact name, then TEAM number:
 {participants}
 
-Extract the final standings from this media.
-- For duo/squad modes, rank TEAMS (one JSON row per team).
-- Use placement/# column for rank, not kill count.
-- Copy names and UIDs exactly as displayed.
+Read the RANK result screen from this media.
+- rank = placement badge (1=winner). TEAM11 is lobby team 11, not place 11.
+- Solo: 1 name per card. Duo: 2 names. Squad: up to 4 names.
+- Merge all scrolling frames into one complete ranked list.
 PROMPT;
     }
 

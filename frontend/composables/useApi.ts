@@ -373,7 +373,7 @@ export function useApi() {
         api.post<import('~/types/api').TournamentResultAnalysis>(
           `/admin/tournaments/${id}/result-ai/analyze`,
           formData,
-          { timeout: 180000 },
+          { timeout: 240000 },
         ),
 
       tournamentResultAiConfig: (id: number | string) =>

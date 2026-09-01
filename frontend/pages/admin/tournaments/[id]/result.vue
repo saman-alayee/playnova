@@ -31,6 +31,7 @@ interface RankRow {
   username: string
   cod_id?: string | null
   kills: number | null
+  rank: number | null
   detected_name?: string | null
   detected_uid?: string | null
   match_method?: string | null
@@ -95,11 +96,45 @@ async function captureVideoFrame(): Promise<File | null> {
     return null
   }
 
+  return snapshotVideoFrame(video, 'frame.jpg')
+}
+
+async function captureVideoFrames(count = 6): Promise<File[]> {
+  const video = videoRef.value
+  if (!video || video.videoWidth === 0 || !Number.isFinite(video.duration) || video.duration <= 0) {
+    return []
+  }
+
+  const frames: File[] = []
+  const duration = video.duration
+  const offsets = Array.from({ length: count }, (_, i) =>
+    Math.min(duration - 0.05, Math.max(0.05, (duration * (i + 1)) / (count + 1))),
+  )
+
+  const previousTime = video.currentTime
+  for (let i = 0; i < offsets.length; i++) {
+    video.currentTime = offsets[i]
+    await new Promise<void>((resolve) => {
+      const onSeeked = () => {
+        video.removeEventListener('seeked', onSeeked)
+        resolve()
+      }
+      video.addEventListener('seeked', onSeeked)
+    })
+    const frame = await snapshotVideoFrame(video, `frame-${i + 1}.jpg`)
+    if (frame) frames.push(frame)
+  }
+
+  video.currentTime = previousTime
+  return frames
+}
+
+function snapshotVideoFrame(video: HTMLVideoElement, filename: string): Promise<File | null> {
   const canvas = document.createElement('canvas')
   canvas.width = video.videoWidth
   canvas.height = video.videoHeight
   const ctx = canvas.getContext('2d')
-  if (!ctx) return null
+  if (!ctx) return Promise.resolve(null)
 
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
 
@@ -109,7 +144,7 @@ async function captureVideoFrame(): Promise<File | null> {
         resolve(null)
         return
       }
-      resolve(new File([blob], 'frame.jpg', { type: 'image/jpeg' }))
+      resolve(new File([blob], filename, { type: 'image/jpeg' }))
     }, 'image/jpeg', 0.92)
   })
 }
@@ -125,6 +160,7 @@ function buildRankedRows(result: TournamentResultAnalysis) {
       username: row.username,
       cod_id: row.cod_id,
       kills: row.kills ?? null,
+      rank: row.rank,
       detected_name: row.detected_name,
       detected_uid: row.detected_uid,
       match_method: row.match_method,
@@ -144,13 +180,14 @@ function buildRankedRows(result: TournamentResultAnalysis) {
       username: p.username,
       cod_id: p.cod_id,
       kills: null,
+      rank: null,
     })
   }
 
   rankedRows.value = rows
 }
 
-async function analyze(useVideoFrame = false) {
+async function analyze(mode: 'image' | 'video-frame' | 'video-multi' = 'image') {
   if (!selectedFile.value) {
     error.value = 'لطفاً تصویر یا ویدیو انتخاب کنید.'
     return
@@ -163,7 +200,7 @@ async function analyze(useVideoFrame = false) {
   const form = new FormData()
   let fileToSend: File = selectedFile.value
 
-  if (isVideo.value && useVideoFrame) {
+  if (isVideo.value && mode === 'video-frame') {
     const frame = await captureVideoFrame()
     if (!frame) {
       analyzing.value = false
@@ -171,6 +208,18 @@ async function analyze(useVideoFrame = false) {
     }
     fileToSend = frame
     form.append('screenshot', frame)
+  } else if (isVideo.value && mode === 'video-multi') {
+    const frames = await captureVideoFrames()
+    if (frames.length === 0) {
+      error.value = 'استخراج فریم از ویدیو ممکن نشد.'
+      analyzing.value = false
+      return
+    }
+    fileToSend = frames[0]
+    form.append('screenshot', frames[0])
+    for (const frame of frames.slice(1)) {
+      form.append('frames[]', frame)
+    }
   } else if (isVideo.value) {
     form.append('video', selectedFile.value)
   } else {
@@ -239,6 +288,7 @@ function addParticipant(participant: TournamentResultParticipant) {
     username: participant.username,
     cod_id: participant.cod_id,
     kills: null,
+    rank: null,
   })
 }
 
@@ -246,7 +296,9 @@ function removeRow(index: number) {
   rankedRows.value.splice(index, 1)
 }
 
-const winnerPreview = computed(() => rankedRows.value[0] ?? null)
+const winnerPreview = computed(() =>
+  rankedRows.value.find((row, index) => prizeRankForRow(index, row) === 1 && row.user_id) ?? rankedRows.value[0] ?? null,
+)
 
 const prizeTable = computed<Record<number, number>>(() => {
   const raw = analysis.value?.prize_table ?? promptConfig.value?.prize_table ?? {}
@@ -263,28 +315,46 @@ const totalPrizePreview = computed(() =>
   rankedRows.value.reduce((sum, row, index) => sum + prizeAmountForRow(index, row), 0),
 )
 
+function splitTeamShares(total: number, count: number): number[] {
+  const safeTotal = Math.max(0, Math.round(total))
+  const safeCount = Math.max(1, count)
+  const base = Math.floor(safeTotal / safeCount)
+  const remainder = safeTotal % safeCount
+  const shares = Array.from({ length: safeCount }, () => base)
+  shares[safeCount - 1] += remainder
+  return shares
+}
+
 function prizeRankForRow(index: number, row: RankRow): number {
-  const seatMode = tournament.value?.seat_mode ?? 1
-  const participant = availableParticipants.value.find((p) => p.user_id === row.user_id)
-  const seatNumber = participant?.seat_number
-
-  if (seatMode > 1 && seatNumber) {
-    return Math.ceil(seatNumber / seatMode)
-  }
-
+  if (row.rank && row.rank > 0) return row.rank
   return index + 1
 }
 
-function prizeAmountForRow(index: number, row: RankRow): number {
-  const rank = prizeRankForRow(index, row)
+function teammatesAtRank(rank: number): RankRow[] {
+  return rankedRows.value.filter((row, index) => row.user_id && prizeRankForRow(index, row) === rank)
+}
+
+function teamPrizeTotal(rank: number): number {
   const amount = prizeTable.value[rank]
-  if (amount !== undefined && amount > 0) {
-    return amount
-  }
+  if (amount !== undefined && amount > 0) return amount
   if (!hasPrizeTable.value && rank === 1) {
     return Number(tournament.value?.prize_pool ?? 0)
   }
   return 0
+}
+
+function prizeAmountForRow(index: number, row: RankRow): number {
+  const rank = prizeRankForRow(index, row)
+  const teamTotal = teamPrizeTotal(rank)
+  if (teamTotal <= 0) return 0
+
+  const seatMode = tournament.value?.seat_mode ?? 1
+  if (seatMode <= 1) return teamTotal
+
+  const teammates = teammatesAtRank(rank)
+  const shares = splitTeamShares(teamTotal, Math.max(1, teammates.length))
+  const position = teammates.findIndex((item) => item.user_id === row.user_id)
+  return shares[position >= 0 ? position : 0] ?? 0
 }
 
 function formatToman(amount: number): string {
@@ -305,6 +375,8 @@ function matchMethodLabel(method?: string | null) {
       return 'تطبیق نزدیک نام'
     case 'name_fuzzy':
       return 'تطبیق تقریبی نام'
+    case 'team_number':
+      return 'تطبیق شماره TEAM'
     case 'username_partial':
       return 'تطبیق جزئی نام'
     default:
@@ -331,7 +403,7 @@ async function applyResult() {
     .filter((row) => row.user_id)
     .map((row, index) => ({
       user_id: row.user_id!,
-      rank: index + 1,
+      rank: row.rank ?? prizeRankForRow(index, row),
       kills: row.kills ?? undefined,
     }))
 
@@ -437,7 +509,7 @@ onBeforeUnmount(() => {
           type="button"
           class="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-bold"
           :disabled="analyzing || !selectedFile"
-          @click="analyze(false)"
+          @click="analyze('image')"
         >
           {{ analyzing ? 'در حال تحلیل...' : 'تحلیل تصویر' }}
         </button>
@@ -446,17 +518,17 @@ onBeforeUnmount(() => {
             type="button"
             class="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-bold"
             :disabled="analyzing || !selectedFile"
-            @click="analyze(true)"
+            @click="analyze('video-multi')"
           >
-            {{ analyzing ? 'در حال تحلیل...' : 'تحلیل فریم فعلی' }}
+            {{ analyzing ? 'در حال تحلیل...' : 'تحلیل ویدیو' }}
           </button>
           <button
             type="button"
             class="bg-dark-600 hover:bg-dark-500 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-bold"
             :disabled="analyzing || !selectedFile"
-            @click="analyze(false)"
+            @click="analyze('video-frame')"
           >
-            ارسال ویدیو (ffmpeg)
+            فقط فریم فعلی
           </button>
         </template>
       </div>
@@ -488,7 +560,7 @@ onBeforeUnmount(() => {
         مدل تحلیل: <span dir="ltr">{{ analysis.vision_model }}</span>
       </p>
       <p v-if="hasPrizeTable" class="text-sm text-secondary mb-4">
-        جوایز بر اساس جدول ثابت توضیحات مسابقه محاسبه می‌شود (نه درصدی).
+        جوایز از توضیحات / جدول prize ranks خوانده می‌شود. در بازی تیمی هر مبلغ «جایزه کل تیم» است و بین هم‌تیمی‌ها تقسیم می‌شود.
         مجموع پیش‌نمایش: <span class="font-bold">{{ formatToman(totalPrizePreview) }} تومان</span>
       </p>
       <p v-else class="text-sm text-amber-300/90 mb-4">
@@ -515,7 +587,7 @@ onBeforeUnmount(() => {
           @drop.prevent="onDrop(index)"
         >
           <span class="w-8 h-8 flex items-center justify-center rounded-full bg-secondary text-white text-sm font-bold shrink-0">
-            {{ index + 1 }}
+            {{ prizeRankForRow(index, row) }}
           </span>
           <span class="text-gray-500 text-lg shrink-0">⠿</span>
           <div class="flex-1 min-w-[180px]">

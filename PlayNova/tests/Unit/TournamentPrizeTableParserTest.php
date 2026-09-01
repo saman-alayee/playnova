@@ -37,4 +37,13 @@ class TournamentPrizeTableParserTest extends TestCase
         $this->assertSame([25.0, 25.0, 25.0, 25.0], $this->parser->splitAmongPlayers(100, 4));
         $this->assertSame([33.0, 33.0, 34.0], $this->parser->splitAmongPlayers(100, 3));
     }
+
+    public function test_parses_percentages_from_prize_pool(): void
+    {
+        $table = $this->parser->parseWithPool("تیم اول 70%\nتیم دوم 20%\nتیم سوم 10%", 100_000);
+
+        $this->assertSame(70000.0, $table[1]);
+        $this->assertSame(20000.0, $table[2]);
+        $this->assertSame(10000.0, $table[3]);
+    }
 }
