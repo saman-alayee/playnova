@@ -31,6 +31,11 @@ const form = reactive({
   status: 'upcoming',
   winner_id: null as number | null,
   game_login_info: '',
+  prize_ranks: [
+    { rank: 1, amount: '' as number | '' },
+    { rank: 2, amount: '' as number | '' },
+    { rank: 3, amount: '' as number | '' },
+  ],
 })
 
 watch(tournament, (t) => {
@@ -49,6 +54,9 @@ watch(tournament, (t) => {
     status: t.status,
     winner_id: t.winner_id ?? null,
     game_login_info: t.game_login_info || '',
+    prize_ranks: t.prize_ranks?.length
+      ? t.prize_ranks.map((row) => ({ rank: row.rank, amount: row.amount }))
+      : [{ rank: 1, amount: '' }, { rank: 2, amount: '' }, { rank: 3, amount: '' }],
   })
 }, { immediate: true })
 
@@ -57,7 +65,12 @@ const saving = ref(false)
 async function submit() {
   saving.value = true
   try {
-    await api.admin.updateTournament(id.value, { ...form })
+    await api.admin.updateTournament(id.value, {
+      ...form,
+      prize_ranks: form.prize_ranks
+        .filter((row) => Number(row.amount) > 0)
+        .map((row) => ({ rank: row.rank, amount: Number(row.amount) })),
+    })
     flash.value = { success: 'مسابقه به‌روزرسانی شد.' }
     router.push('/admin/tournaments')
   } catch (e: unknown) {
@@ -88,7 +101,7 @@ async function submit() {
       </select>
       <div class="grid sm:grid-cols-2 gap-3">
         <input v-model.number="form.entry_fee" type="number" min="0" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" placeholder="ورودی">
-        <input v-model.number="form.prize_pool" type="number" min="0" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" placeholder="جایزه">
+        <input v-model.number="form.prize_pool" type="number" min="0" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" placeholder="بودجه جوایز">
         <input v-model.number="form.capacity" type="number" min="1" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" placeholder="ظرفیت">
         <select v-model.number="form.seat_mode" class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
           <option :value="1">۱ نفره</option>
@@ -108,6 +121,7 @@ async function submit() {
         <option value="cancelled">لغو شده</option>
       </select>
       <textarea v-model="form.description" rows="3" class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" placeholder="توضیحات" />
+      <AdminPrizeRanksEditor v-model="form.prize_ranks" :budget="Number(form.prize_pool || 0)" :seat-mode="Number(form.seat_mode || 1)" />
       <textarea v-model="form.game_login_info" rows="3" class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" placeholder="اطلاعات ورود" />
       <button type="submit" class="bg-success text-white rounded px-4 py-2 font-bold" :disabled="saving">{{ saving ? '...' : 'ذخیره' }}</button>
     </form>

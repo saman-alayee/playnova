@@ -71,6 +71,11 @@ const createForm = reactive({
   start_date: '',
   description: '',
   game_login_info: '',
+  prize_ranks: [
+    { rank: 1, amount: '' as number | '' },
+    { rank: 2, amount: '' as number | '' },
+    { rank: 3, amount: '' as number | '' },
+  ],
 })
 
 const creating = ref(false)
@@ -91,16 +96,22 @@ async function createTournament() {
   }
   creating.value = true
   try {
+    const prizeRanks = createForm.prize_ranks
+      .filter((row) => Number(row.amount) > 0)
+      .map((row) => ({ rank: row.rank, amount: Number(row.amount) }))
+
     await api.admin.createTournament({
       ...createForm,
       entry_fee: Number(createForm.entry_fee),
       prize_pool: Number(createForm.prize_pool),
       capacity: Number(createForm.capacity),
       seat_mode: Number(createForm.seat_mode),
+      prize_ranks: prizeRanks,
     })
     flash.value = { success: 'مسابقه ایجاد شد.' }
     Object.assign(createForm, {
       title: '', entry_fee: '', prize_pool: '', capacity: '', start_date: '', description: '', game_login_info: '',
+      prize_ranks: [{ rank: 1, amount: '' }, { rank: 2, amount: '' }, { rank: 3, amount: '' }],
     })
     await refresh()
   } catch (e: unknown) {
@@ -231,7 +242,7 @@ function prizePaid(t: Tournament): boolean {
             <option value="professional">حرفه‌ای</option>
           </select>
           <input v-model="createForm.entry_fee" type="number" min="0" placeholder="مبلغ ورودی" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
-          <input v-model="createForm.prize_pool" type="number" min="0" placeholder="جایزه کل" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
+          <input v-model="createForm.prize_pool" type="number" min="0" placeholder="بودجه جوایز (مجموع)" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
           <input v-model="createForm.capacity" type="number" min="1" placeholder="ظرفیت" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
           <select v-model="createForm.seat_mode" required class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white">
             <option value="1">چیدمان یک‌نفره</option>
@@ -243,6 +254,9 @@ function prizePaid(t: Tournament): boolean {
             <PersianDateTimeInput v-model="createForm.start_date" required />
           </div>
           <textarea v-model="createForm.description" placeholder="توضیحات" class="sm:col-span-2 bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" />
+          <div class="sm:col-span-2">
+            <AdminPrizeRanksEditor v-model="createForm.prize_ranks" :budget="Number(createForm.prize_pool || 0)" :seat-mode="Number(createForm.seat_mode || 1)" />
+          </div>
           <textarea v-model="createForm.game_login_info" rows="2" placeholder="اطلاعات ورود به مسابقه (اختیاری)" class="sm:col-span-2 bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white" />
           <button type="submit" class="sm:col-span-2 bg-success hover:bg-green-700 text-white rounded py-2 font-bold" :disabled="creating">
             {{ creating ? '...' : 'ایجاد مسابقه' }}

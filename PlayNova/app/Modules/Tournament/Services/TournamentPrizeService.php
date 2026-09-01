@@ -3,7 +3,6 @@
 namespace App\Modules\Tournament\Services;
 
 use App\Models\Registration;
-use App\Models\TeamInvite;
 use App\Models\Tournament;
 use App\Models\TournamentPrizeBatch;
 use App\Models\TournamentPrizeEntry;
@@ -82,75 +81,183 @@ class TournamentPrizeService
      */
     protected function buildSuggestedEntries(Tournament $tournament, array $rankedEntries, int $winnerUserId): array
     {
-        $prizeTable = $this->prizeTableParser->parse((string) $tournament->description);
+        $prizeTable = $this->prizeTableFor($tournament);
+        $registrations = Registration::query()
+            ->where('tournament_id', $tournament->id)
+            ->whereNotNull('seat_number')
+            ->get()
+            ->keyBy('user_id');
 
         if ($rankedEntries === []) {
-            $winnerReg = Registration::query()
-                ->where('tournament_id', $tournament->id)
-                ->where('user_id', $winnerUserId)
-                ->whereNotNull('seat_number')
-                ->first();
-
-            $prizeRank = $this->resolvePrizeRank($tournament, 1, $winnerReg?->seat_number);
-            $amount = $this->prizeTableParser->amountForRank(
-                $prizeTable,
-                $prizeRank,
-                (float) $tournament->prize_pool,
-            );
-
-            return [[
+            $winnerReg = $registrations->get($winnerUserId);
+            $rows = [[
                 'user_id' => $winnerUserId,
                 'rank' => 1,
                 'kills' => null,
                 'team_label' => $winnerReg ? $tournament->seatDisplayLabel((int) $winnerReg->seat_number) : null,
                 'seat_number' => $winnerReg?->seat_number,
-                'prize_amount' => $amount,
-                'metadata' => $prizeTable !== [] ? ['prize_rank' => $prizeRank] : null,
             ]];
+        } else {
+            $rows = collect($rankedEntries)
+                ->map(function (array $row) use ($tournament, $registrations) {
+                    $userId = (int) $row['user_id'];
+                    $reg = $registrations->get($userId);
+                    $seatNumber = isset($row['seat_number'])
+                        ? (int) $row['seat_number']
+                        : ($reg?->seat_number ? (int) $reg->seat_number : null);
+                    $rank = isset($row['rank']) ? (int) $row['rank'] : null;
+
+                    return [
+                        'user_id' => $userId,
+                        'rank' => $rank && $rank > 0 ? $rank : null,
+                        'kills' => isset($row['kills']) ? (int) $row['kills'] : null,
+                        'team_label' => $row['team_label'] ?? ($seatNumber ? $tournament->seatDisplayLabel($seatNumber) : null),
+                        'seat_number' => $seatNumber,
+                    ];
+                })
+                ->unique('user_id')
+                ->values()
+                ->all();
         }
 
-        return collect($rankedEntries)
-            ->map(function (array $row) use ($tournament, $prizeTable) {
-                $rank = isset($row['rank']) ? (int) $row['rank'] : null;
-                $seatNumber = isset($row['seat_number']) ? (int) $row['seat_number'] : null;
-                $teamLabel = $row['team_label'] ?? ($seatNumber ? $tournament->seatDisplayLabel($seatNumber) : null);
-                $prizeRank = $this->resolvePrizeRank($tournament, $rank, $seatNumber);
-                $amount = $prizeRank
-                    ? $this->prizeTableParser->amountForRank($prizeTable, $prizeRank, (float) $tournament->prize_pool)
-                    : 0.0;
+        $rows = $this->expandTeammates($tournament, $rows, $registrations);
 
-                if ($amount <= 0 && $prizeTable === [] && $rank === 1) {
-                    $amount = (float) $tournament->prize_pool;
-                }
-
-                return [
-                    'user_id' => (int) $row['user_id'],
-                    'rank' => $rank,
-                    'kills' => isset($row['kills']) ? (int) $row['kills'] : null,
-                    'team_label' => $teamLabel,
-                    'seat_number' => $seatNumber,
-                    'prize_amount' => $amount,
-                    'metadata' => $prizeRank ? ['prize_rank' => $prizeRank] : ($row['metadata'] ?? null),
-                ];
-            })
-            ->unique('user_id')
-            ->values()
-            ->all();
+        return $this->assignPrizeAmounts($tournament, $rows, $prizeTable);
     }
 
     /** @return array<int, float> */
     public function prizeTableFor(Tournament $tournament): array
     {
-        return $this->prizeTableParser->parse((string) $tournament->description);
-    }
+        $fromDescription = $this->prizeTableParser->parse((string) $tournament->description);
+        $configured = $tournament->prizeRanksTable();
 
-    protected function resolvePrizeRank(Tournament $tournament, ?int $placementRank, ?int $seatNumber): ?int
-    {
-        if ($tournament->seatMode() > 1 && $seatNumber) {
-            return (int) ceil($seatNumber / $tournament->seatMode());
+        if ($fromDescription !== []) {
+            return $fromDescription + $configured;
         }
 
-        return $placementRank;
+        return $configured;
+    }
+
+    /**
+     * @param  list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int}>  $rows
+     * @param  \Illuminate\Support\Collection<int, Registration>  $registrations
+     * @return list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int}>
+     */
+    protected function expandTeammates(Tournament $tournament, array $rows, $registrations): array
+    {
+        if ($tournament->seatMode() <= 1) {
+            return $rows;
+        }
+
+        $byUser = [];
+        foreach ($rows as $row) {
+            $byUser[(int) $row['user_id']] = $row;
+        }
+
+        $teamRank = [];
+        foreach ($byUser as $row) {
+            $seat = isset($row['seat_number']) ? (int) $row['seat_number'] : null;
+            if (! $seat) {
+                $reg = $registrations->get((int) $row['user_id']);
+                $seat = $reg?->seat_number ? (int) $reg->seat_number : null;
+            }
+
+            $team = $tournament->teamNumberForSeat($seat);
+            $rank = isset($row['rank']) ? (int) $row['rank'] : 0;
+            if (! $team || $rank < 1) {
+                continue;
+            }
+
+            $teamRank[$team] = isset($teamRank[$team]) ? min($teamRank[$team], $rank) : $rank;
+        }
+
+        foreach ($registrations as $reg) {
+            $team = $tournament->teamNumberForSeat((int) $reg->seat_number);
+            if (! $team || ! isset($teamRank[$team])) {
+                continue;
+            }
+
+            $userId = (int) $reg->user_id;
+            $seatNumber = (int) $reg->seat_number;
+            $label = $tournament->seatDisplayLabel($seatNumber);
+
+            if (! isset($byUser[$userId])) {
+                $byUser[$userId] = [
+                    'user_id' => $userId,
+                    'rank' => $teamRank[$team],
+                    'kills' => null,
+                    'team_label' => $label,
+                    'seat_number' => $seatNumber,
+                ];
+
+                continue;
+            }
+
+            $byUser[$userId]['rank'] = $teamRank[$team];
+            $byUser[$userId]['seat_number'] = $byUser[$userId]['seat_number'] ?: $seatNumber;
+            $byUser[$userId]['team_label'] = $byUser[$userId]['team_label'] ?: $label;
+        }
+
+        return array_values($byUser);
+    }
+
+    /**
+     * @param  list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int}>  $rows
+     * @param  array<int, float>  $prizeTable
+     * @return list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int,prize_amount:float,metadata:?array}>
+     */
+    protected function assignPrizeAmounts(Tournament $tournament, array $rows, array $prizeTable): array
+    {
+        $groups = [];
+        foreach ($rows as $index => $row) {
+            $rank = (int) ($row['rank'] ?? 0);
+            $groups[$rank][] = $index;
+        }
+
+        $amounts = array_fill(0, count($rows), 0.0);
+        foreach ($groups as $rank => $indexes) {
+            if ($rank < 1) {
+                continue;
+            }
+
+            $teamTotal = $this->prizeTableParser->amountForRank($prizeTable, $rank, 0);
+            $shares = $this->prizeTableParser->splitAmongPlayers($teamTotal, count($indexes));
+            foreach ($indexes as $shareIndex => $rowIndex) {
+                $amounts[$rowIndex] = $shares[$shareIndex];
+            }
+        }
+
+        $result = [];
+        foreach ($rows as $index => $row) {
+            $rank = isset($row['rank']) ? (int) $row['rank'] : null;
+            $teamTotal = $rank ? $this->prizeTableParser->amountForRank($prizeTable, $rank, 0) : 0.0;
+
+            $result[] = [
+                'user_id' => (int) $row['user_id'],
+                'rank' => $rank && $rank > 0 ? $rank : null,
+                'kills' => isset($row['kills']) ? (int) $row['kills'] : null,
+                'team_label' => $row['team_label'] ?? null,
+                'seat_number' => isset($row['seat_number']) ? (int) $row['seat_number'] : null,
+                'prize_amount' => $amounts[$index],
+                'metadata' => $rank ? [
+                    'prize_rank' => $rank,
+                    'team_prize' => $teamTotal,
+                    'player_share' => $amounts[$index],
+                    'seat_mode' => $tournament->seatMode(),
+                ] : null,
+            ];
+        }
+
+        usort($result, function (array $left, array $right) {
+            $rankCmp = ($left['rank'] ?? 9999) <=> ($right['rank'] ?? 9999);
+            if ($rankCmp !== 0) {
+                return $rankCmp;
+            }
+
+            return ($left['seat_number'] ?? 0) <=> ($right['seat_number'] ?? 0);
+        });
+
+        return $result;
     }
 
     /** @param  list<array{id:int,prize_amount:float}>  $updates */
@@ -172,6 +279,16 @@ class TournamentPrizeService
 
             $total = (float) TournamentPrizeEntry::query()->where('batch_id', $locked->id)->sum('prize_amount');
             $locked->update(['total_amount' => round($total, 2)]);
+            $locked->loadMissing('tournament');
+
+            $ranks = [];
+            foreach (TournamentPrizeEntry::query()->where('batch_id', $locked->id)->get(['rank', 'prize_amount']) as $entry) {
+                $rank = (int) $entry->rank;
+                if ($rank > 0 && (float) $entry->prize_amount > 0) {
+                    $ranks[$rank] = (float) ($ranks[$rank] ?? 0) + (float) $entry->prize_amount;
+                }
+            }
+            $locked->tournament?->update(['prize_ranks' => $ranks !== [] ? $ranks : null]);
 
             return $locked->fresh(['entries.user', 'winner', 'approver', 'tournament']);
         });
@@ -188,6 +305,14 @@ class TournamentPrizeService
 
             $locked->load(['entries.user', 'tournament']);
             $tournament = $locked->tournament;
+            $budget = (float) ($tournament?->prize_pool ?? 0);
+            $total = round((float) $locked->entries->sum('prize_amount'), 0);
+
+            if ($budget > 0 && abs($total - $budget) > 0.5) {
+                throw new RuntimeException(
+                    'مجموع جوایز (' . number_format($total) . ' تومان) باید برابر بودجه مسابقه (' . number_format($budget) . ' تومان) باشد.'
+                );
+            }
 
             foreach ($locked->entries as $entry) {
                 $amount = (float) $entry->prize_amount;

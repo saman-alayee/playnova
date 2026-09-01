@@ -28,7 +28,7 @@ class TournamentPrizeTableParser
      */
     public function parse(?string $text): array
     {
-        if (! filled($text)) {
+        if ($text === null || trim(strip_tags((string) $text)) === '') {
             return [];
         }
 
@@ -63,15 +63,34 @@ class TournamentPrizeTableParser
     /**
      * @param  array<int, float>  $table
      */
-    public function formatForPrompt(array $table): string
+    public function formatForPrompt(array $table, int $seatMode = 1): string
     {
         if ($table === []) {
             return 'جدول جایزه در توضیحات مسابقه یافت نشد. فقط رتبه‌بندی را استخراج کنید.';
         }
 
         $lines = [];
+        $teamSize = max(1, $seatMode);
+
+        if ($teamSize > 1) {
+            $lines[] = sprintf(
+                'Amounts are TEAM totals (%d players per team). Split equally between teammates when paying.',
+                $teamSize,
+            );
+        }
+
         foreach ($table as $rank => $amount) {
-            $lines[] = sprintf('رتبه %d: %s تومان', $rank, number_format((float) $amount));
+            if ($teamSize > 1) {
+                $share = $this->splitAmongPlayers((float) $amount, $teamSize)[0];
+                $lines[] = sprintf(
+                    'Place %d: %s Toman for the whole team (%s Toman per player)',
+                    $rank,
+                    number_format((float) $amount),
+                    number_format($share),
+                );
+            } else {
+                $lines[] = sprintf('رتبه %d: %s تومان', $rank, number_format((float) $amount));
+            }
         }
 
         return implode("\n", $lines);
@@ -91,6 +110,23 @@ class TournamentPrizeTableParser
     }
 
     /**
+     * Split a rank/team total among N players so the shares sum back to the total.
+     *
+     * @return list<float>
+     */
+    public function splitAmongPlayers(float $total, int $playerCount): array
+    {
+        $playerCount = max(1, $playerCount);
+        $total = (int) max(0, round($total, 0));
+        $base = intdiv($total, $playerCount);
+        $remainder = $total % $playerCount;
+        $shares = array_fill(0, $playerCount, (float) $base);
+        $shares[$playerCount - 1] += $remainder;
+
+        return $shares;
+    }
+
+    /**
      * @return array{0:int,1:float}|null
      */
     protected function parseLine(string $line): ?array
@@ -98,32 +134,34 @@ class TournamentPrizeTableParser
         $line = $this->persianToAsciiDigits($line);
         $line = preg_replace('/\s+/u', ' ', $line) ?? $line;
 
-        foreach (self::ORDINAL_WORDS as $word => $rank) {
-            $pattern = '/(?:تیم|نفر|رتبه|مقام)?\s*' . preg_quote($word, '/') . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)/u';
+        foreach ($this->ordinalsLongestFirst() as $word => $rank) {
+            $pattern = '/(?:تیم|نفر|رتبه|مقام)?\s*' . preg_quote($word, '/')
+                . '\s*(?:در\s*)?(?:مجموع(?:اً)?|جایزه|مبلغ)?'
+                . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/u';
             if (preg_match($pattern, $line, $matches)) {
-                $amount = $this->normalizeAmount($matches[1]);
+                $amount = $this->normalizeAmount($matches[1], $matches[2] ?? '');
                 if ($amount > 0) {
                     return [$rank, $amount];
                 }
             }
         }
 
-        if (preg_match('/(?:تیم|نفر|رتبه|مقام|place|team|rank)\s*[#№]?\s*(\d{1,2})\s*[:：\-–\.]\s*([\d][\d,\.]*)/iu', $line, $matches)) {
-            $amount = $this->normalizeAmount($matches[2]);
+        if (preg_match('/(?:تیم|نفر|رتبه|مقام|place|team|rank)\s*[#№]?\s*(\d{1,2})\s*[:：\-–\.]\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/iu', $line, $matches)) {
+            $amount = $this->normalizeAmount($matches[2], $matches[3] ?? '');
             if ($amount > 0) {
                 return [(int) $matches[1], $amount];
             }
         }
 
-        if (preg_match('/^(\d{1,2})\s*[:：\-–\.]\s*([\d][\d,\.]*)/u', $line, $matches)) {
-            $amount = $this->normalizeAmount($matches[2]);
+        if (preg_match('/^(\d{1,2})\s*[:：\-–\.]\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/u', $line, $matches)) {
+            $amount = $this->normalizeAmount($matches[2], $matches[3] ?? '');
             if ($amount > 0) {
                 return [(int) $matches[1], $amount];
             }
         }
 
-        if (preg_match('/(?:تیم|نفر|رتبه|مقام)\s*(\d{1,2})\s+([\d][\d,\.]*)/u', $line, $matches)) {
-            $amount = $this->normalizeAmount($matches[2]);
+        if (preg_match('/(?:تیم|نفر|رتبه|مقام)\s*(\d{1,2})\s+(?:در\s*)?(?:مجموع(?:اً)?|جایزه|مبلغ)?\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/u', $line, $matches)) {
+            $amount = $this->normalizeAmount($matches[2], $matches[3] ?? '');
             if ($amount > 0) {
                 return [(int) $matches[1], $amount];
             }
@@ -140,19 +178,21 @@ class TournamentPrizeTableParser
         $table = [];
         $text = $this->persianToAsciiDigits($text);
 
-        foreach (self::ORDINAL_WORDS as $word => $rank) {
-            $pattern = '/(?:تیم|نفر|رتبه|مقام)?\s*' . preg_quote($word, '/') . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)/u';
+        foreach ($this->ordinalsLongestFirst() as $word => $rank) {
+            $pattern = '/(?:تیم|نفر|رتبه|مقام)?\s*' . preg_quote($word, '/')
+                . '\s*(?:در\s*)?(?:مجموع(?:اً)?|جایزه|مبلغ)?'
+                . '\s*[:：\-–\.]?\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/u';
             if (preg_match($pattern, $text, $matches)) {
-                $amount = $this->normalizeAmount($matches[1]);
+                $amount = $this->normalizeAmount($matches[1], $matches[2] ?? '');
                 if ($amount > 0) {
                     $table[$rank] = $amount;
                 }
             }
         }
 
-        if (preg_match_all('/(?:تیم|نفر|رتبه|مقام)\s*(\d{1,2})\s*[:：\-–\.]?\s*([\d][\d,\.]*)/u', $text, $matches, PREG_SET_ORDER)) {
+        if (preg_match_all('/(?:تیم|نفر|رتبه|مقام)\s*(\d{1,2})\s*[:：\-–\.]?\s*([\d][\d,\.]*)\s*(هزار|میلیون)?/u', $text, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
-                $amount = $this->normalizeAmount($match[2]);
+                $amount = $this->normalizeAmount($match[2], $match[3] ?? '');
                 if ($amount > 0) {
                     $table[(int) $match[1]] = $amount;
                 }
@@ -164,7 +204,18 @@ class TournamentPrizeTableParser
         return $table;
     }
 
-    protected function normalizeAmount(string $raw): float
+    /**
+     * @return array<string, int>
+     */
+    protected function ordinalsLongestFirst(): array
+    {
+        $words = self::ORDINAL_WORDS;
+        uksort($words, fn (string $left, string $right) => mb_strlen($right) <=> mb_strlen($left));
+
+        return $words;
+    }
+
+    protected function normalizeAmount(string $raw, string $multiplier = ''): float
     {
         $value = $this->persianToAsciiDigits($raw);
         $value = preg_replace('/[^\d.]/', '', $value) ?? '';
@@ -173,7 +224,13 @@ class TournamentPrizeTableParser
             return 0.0;
         }
 
-        return (float) $value;
+        $amount = (float) $value;
+
+        return match (trim($multiplier)) {
+            'هزار' => $amount * 1000,
+            'میلیون' => $amount * 1_000_000,
+            default => $amount,
+        };
     }
 
     protected function persianToAsciiDigits(string $value): string

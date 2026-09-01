@@ -18,6 +18,7 @@ class TournamentResource extends JsonResource
             'description' => $this->description,
             'entry_fee' => (int) $this->entry_fee,
             'prize_pool' => (int) $this->prize_pool,
+            'prize_ranks' => $this->prizeRanksList(),
             'capacity' => (int) $this->capacity,
             'registered_count' => (int) $this->registered_count,
             'remaining_capacity' => $this->remaining_capacity,

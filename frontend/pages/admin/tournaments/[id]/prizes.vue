@@ -37,6 +37,14 @@ const totalAmount = computed(() =>
   editableEntries.value.reduce((sum, entry) => sum + Number(entry.prize_amount || 0), 0),
 )
 
+const prizeBudget = computed(() =>
+  Number(batch.value?.prize_pool ?? tournament.value?.prize_pool ?? 0),
+)
+
+const prizeBudgetDiff = computed(() => prizeBudget.value - totalAmount.value)
+
+const budgetMatches = computed(() => Math.abs(prizeBudgetDiff.value) < 1)
+
 async function saveAmounts() {
   try {
     await api.admin.updateTournamentPrizes(tournamentId.value, editableEntries.value)
@@ -48,6 +56,10 @@ async function saveAmounts() {
 }
 
 async function approvePrizes() {
+  if (!budgetMatches.value) {
+    flash.value = { error: `مجموع جوایز باید برابر بودجه مسابقه (${prizeBudget.value.toLocaleString('fa-IR')} تومان) باشد.` }
+    return
+  }
   if (!confirm('جوایز تأیید و یکجا به کیف پول برندگان واریز شوند؟')) return
   try {
     await api.admin.approveTournamentPrizes(tournamentId.value)
@@ -82,8 +94,14 @@ async function approvePrizes() {
           <span class="text-white mr-2">{{ batch.status_label }}</span>
         </div>
         <div>
+          <span class="text-gray-400">بودجه مسابقه:</span>
+          <span class="text-white font-bold mr-2">{{ prizeBudget.toLocaleString('fa-IR') }} تومان</span>
+        </div>
+        <div>
           <span class="text-gray-400">مجموع جوایز:</span>
-          <span class="text-secondary font-bold mr-2">{{ totalAmount.toLocaleString('fa-IR') }} تومان</span>
+          <span class="font-bold mr-2" :class="budgetMatches ? 'text-secondary' : 'text-amber-300'">
+            {{ totalAmount.toLocaleString('fa-IR') }} تومان
+          </span>
         </div>
         <div v-if="batch.winner">
           <span class="text-gray-400">برنده:</span>
@@ -134,11 +152,21 @@ async function approvePrizes() {
         </table>
       </div>
 
+      <p v-if="batch.status === 'pending_approval' && !budgetMatches" class="text-sm text-amber-300">
+        قبل از واریز، مجموع جوایز را برابر بودجه کنید. اختلاف فعلی:
+        {{ prizeBudgetDiff.toLocaleString('fa-IR') }} تومان
+      </p>
+
       <div v-if="batch.status === 'pending_approval'" class="flex gap-3">
         <button type="button" class="bg-secondary text-white px-4 py-2 rounded font-bold" @click="saveAmounts">
           ذخیره مبالغ
         </button>
-        <button type="button" class="bg-success text-white px-4 py-2 rounded font-bold" @click="approvePrizes">
+        <button
+          type="button"
+          class="bg-success text-white px-4 py-2 rounded font-bold disabled:opacity-50"
+          :disabled="!budgetMatches"
+          @click="approvePrizes"
+        >
           تأیید نهایی و واریز یکجا
         </button>
       </div>

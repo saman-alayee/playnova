@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { OccupiedSeatInfo } from '~/types/api'
 
-definePageMeta({ middleware: 'auth', layout: 'blank' })
+definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const api = useApi()
@@ -78,30 +78,35 @@ async function cancelRegistration() {
 
 <template>
   <div class="seat-page">
-    <div v-if="pending" class="seat-page__state">در حال بارگذاری...</div>
+    <div v-if="pending" class="text-gray-500 py-10 text-center">در حال بارگذاری...</div>
 
-    <div v-else-if="error || !data" class="seat-page__state">
+    <div v-else-if="error || !data" class="text-gray-500 py-10 text-center">
       امکان انتخاب جایگاه وجود ندارد.
     </div>
 
-    <div v-else-if="alreadySelected" class="seat-page__selected">
-      <p>جایگاه شما قبلاً ثبت شده است:</p>
+    <div v-else-if="alreadySelected" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center">
+      <p class="text-gray-400">جایگاه شما قبلاً ثبت شده است:</p>
       <p class="seat-page__selected-value" dir="ltr">{{ data.seat_label }}</p>
-      <NuxtLink :to="`/tournaments/${id}`" class="seat-page__link">بازگشت به مسابقه</NuxtLink>
+      <NuxtLink :to="`/tournaments/${id}`" class="text-secondary">بازگشت به مسابقه</NuxtLink>
     </div>
 
     <template v-else>
-      <div class="seat-page__toolbar">
-        <NuxtLink to="/" class="seat-page__back">بازگشت</NuxtLink>
-        <h1 class="seat-page__title">جایگاه‌ها</h1>
-        <button
-          type="button"
-          class="seat-page__cancel"
-          :disabled="cancelling"
-          @click="cancelRegistration"
-        >
-          {{ cancelling ? '...' : 'انصراف' }}
-        </button>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h1 class="text-2xl font-bold text-white">جایگاه‌ها</h1>
+          <p v-if="data.tournament?.title" class="text-sm text-gray-400 mt-1">{{ data.tournament.title }}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <NuxtLink :to="`/tournaments/${id}`" class="text-sm text-secondary">← بازگشت</NuxtLink>
+          <button
+            type="button"
+            class="text-sm text-red-400"
+            :disabled="cancelling"
+            @click="cancelRegistration"
+          >
+            {{ cancelling ? '...' : 'انصراف از ثبت‌نام' }}
+          </button>
+        </div>
       </div>
 
       <div v-if="errors.length" class="seat-page__errors">
@@ -142,17 +147,8 @@ async function cancelRegistration() {
 
 <style scoped>
 .seat-page {
-  direction: rtl;
-  min-height: 100dvh;
-  background: #000;
-  color: #f5f5f5;
-}
-
-.seat-page__state,
-.seat-page__selected {
-  padding: 2rem 1rem;
-  text-align: center;
-  color: #9ca3af;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .seat-page__selected-value {
@@ -163,64 +159,24 @@ async function cancelRegistration() {
   font-family: ui-monospace, monospace;
 }
 
-.seat-page__link {
-  color: #a78bfa;
-}
-
-.seat-page__toolbar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 0.65rem;
-  border-bottom: 1px solid rgba(197, 160, 89, 0.35);
-}
-
-.seat-page__title {
-  margin: 0;
-  text-align: center;
-  font-size: 1rem;
-  font-weight: 800;
-  color: #d4af37;
-}
-
-.seat-page__back,
-.seat-page__cancel {
-  font-size: 0.72rem;
-  font-weight: 700;
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-.seat-page__back {
-  color: #9ca3af;
-  text-decoration: none;
-  justify-self: start;
-}
-
-.seat-page__cancel {
-  color: #f87171;
-  justify-self: end;
-}
-
-.seat-page__cancel:disabled {
-  opacity: 0.5;
-}
-
 .seat-page__errors {
-  margin: 0.5rem 0.65rem 0;
+  margin-bottom: 0.75rem;
   padding: 0.55rem 0.7rem;
   border: 1px solid #b91c1c;
+  border-radius: 0.75rem;
   background: rgba(127, 29, 29, 0.35);
   color: #fca5a5;
   font-size: 0.8rem;
 }
 
 .seat-page__body {
-  padding: 0.55rem;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
+  border: 1px solid rgba(197, 160, 89, 0.28);
+  border-radius: 0.75rem;
+  background: #050505;
+  padding: 0.65rem;
 }
 
 .seat-modal {

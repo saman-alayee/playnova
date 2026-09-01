@@ -86,6 +86,7 @@ class TournamentPrizeAdminController extends BaseApiController
             'id' => $batch->id,
             'tournament_id' => $batch->tournament_id,
             'tournament_title' => $batch->tournament?->title,
+            'prize_pool' => (float) ($batch->tournament?->prize_pool ?? 0),
             'status' => $batch->status,
             'status_label' => match ($batch->status) {
                 TournamentPrizeBatch::STATUS_PENDING => 'در انتظار تأیید',

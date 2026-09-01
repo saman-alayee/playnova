@@ -69,6 +69,7 @@ export interface Tournament {
   description?: string | null
   entry_fee: number
   prize_pool: number
+  prize_ranks?: Array<{ rank: number; amount: number }>
   capacity: number
   registered_count?: number
   registrations_count?: number
@@ -448,6 +449,7 @@ export interface TournamentPrizeBatch {
   id: number
   tournament_id: number
   tournament_title?: string
+  prize_pool?: number
   status: string
   status_label: string
   total_amount: number
@@ -502,6 +504,7 @@ export interface TournamentResultAiConfig {
   has_saved_prompt: boolean
   prize_table?: Record<number, number>
   prize_table_text?: string
+  prize_pool?: number
   vision_model?: string
 }
 
@@ -515,6 +518,7 @@ export interface TournamentResultAnalysis {
   participants: TournamentResultParticipant[]
   prize_table?: Record<number, number>
   prize_table_text?: string
+  prize_pool?: number
   vision_model?: string
   raw_excerpt?: string
 }

@@ -16,6 +16,7 @@ use App\Modules\Tournament\Services\TournamentRegistrationGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class TournamentAdminController extends BaseApiController
 {
@@ -68,6 +69,7 @@ class TournamentAdminController extends BaseApiController
             'description' => 'nullable|string',
             'entry_fee' => 'required|numeric|min:0|max:999999999999',
             'prize_pool' => 'required|numeric|min:0|max:999999999999',
+            'prize_ranks' => 'nullable|array',
             'capacity' => 'required|integer|min:1|max:10000',
             'seat_mode' => 'required|in:1,2,4',
             'start_date' => 'required|date',
@@ -89,6 +91,7 @@ class TournamentAdminController extends BaseApiController
             'game_login_info' => $validated['game_login_info'] ?? null,
             'status' => 'upcoming',
             'registered_count' => 0,
+            'prize_ranks' => $this->prizeRanksFromRequest($request, (float) $validated['prize_pool']),
         ]);
 
         TournamentListingService::forgetHomeCache();
@@ -108,6 +111,7 @@ class TournamentAdminController extends BaseApiController
             'description' => 'nullable|string',
             'entry_fee' => 'required|numeric|min:0|max:999999999999',
             'prize_pool' => 'required|numeric|min:0|max:999999999999',
+            'prize_ranks' => 'nullable|array',
             'capacity' => 'required|integer|min:1|max:10000',
             'seat_mode' => 'required|in:1,2,4',
             'start_date' => 'required|date',
@@ -116,6 +120,10 @@ class TournamentAdminController extends BaseApiController
             'winner_id' => 'nullable|exists:users,id',
             'game_login_info' => 'nullable|string|max:5000',
         ]);
+
+        if ($request->exists('prize_ranks')) {
+            $validated['prize_ranks'] = $this->prizeRanksFromRequest($request, (float) $validated['prize_pool']);
+        }
 
         $tournament->update($validated);
 
@@ -221,5 +229,22 @@ class TournamentAdminController extends BaseApiController
             'prize_pending' => $batch?->isPending() ?? false,
             'batch_status' => $batch?->status,
         ]);
+    }
+
+    /**
+     * @return array<int, float>
+     */
+    protected function prizeRanksFromRequest(Request $request, float $prizePool): array
+    {
+        $table = Tournament::normalizePrizeRanks($request->input('prize_ranks'));
+        $sum = array_sum($table);
+
+        if ($table !== [] && abs($sum - $prizePool) > 0.5) {
+            throw ValidationException::withMessages([
+                'prize_ranks' => 'مجموع جوایز باید برابر بودجه مسابقه (' . number_format($prizePool) . ' تومان) باشد. مجموع فعلی: ' . number_format($sum) . ' تومان.',
+            ]);
+        }
+
+        return $table;
     }
 }

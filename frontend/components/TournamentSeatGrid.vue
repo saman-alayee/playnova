@@ -87,6 +87,8 @@ function onPick(seatNumber: number, label: string) {
   gap: 0.5rem 0.45rem;
   direction: ltr;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 @media (max-width: 1100px) {
@@ -110,6 +112,8 @@ function onPick(seatNumber: number, label: string) {
 .seat-grid__card {
   margin: 0;
   min-width: 0;
+  min-inline-size: 0;
+  max-width: 100%;
   border: 1px solid #c5a059;
   background: #000;
   padding: 0.15rem 0.35rem 0.4rem;

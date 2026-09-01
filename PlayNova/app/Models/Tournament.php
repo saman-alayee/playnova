@@ -16,6 +16,7 @@ class Tournament extends Model
         'description',
         'entry_fee',
         'prize_pool',
+        'prize_ranks',
         'capacity',
         'seat_mode',
         'registered_count',
@@ -33,6 +34,7 @@ class Tournament extends Model
         'end_date' => 'datetime',
         'entry_fee' => 'integer',
         'prize_pool' => 'integer',
+        'prize_ranks' => 'array',
         'capacity' => 'integer',
         'seat_mode' => 'integer',
         'registered_count' => 'integer',
@@ -164,6 +166,15 @@ class Tournament extends Model
         return $team . '.' . $slot;
     }
 
+    public function teamNumberForSeat(?int $seatNumber): ?int
+    {
+        if (! $seatNumber || $seatNumber < 1) {
+            return null;
+        }
+
+        return (int) ceil($seatNumber / max(1, $this->seatMode()));
+    }
+
     /** @return list<array{team:int, slots:list<array{seat_number:int, label:string, slot:int}>}> */
     public function teamsForGrid(): array
     {
@@ -189,5 +200,71 @@ class Tournament extends Model
         }
 
         return $teams;
+    }
+
+    /**
+     * Rank => amount in Toman. Empty means admin has not set a split yet.
+     *
+     * @return array<int, float>
+     */
+    public function prizeRanksTable(): array
+    {
+        return self::normalizePrizeRanks($this->prize_ranks);
+    }
+
+    /**
+     * @return list<array{rank:int,amount:float}>
+     */
+    public function prizeRanksList(): array
+    {
+        $rows = [];
+        foreach ($this->prizeRanksTable() as $rank => $amount) {
+            $rows[] = ['rank' => $rank, 'amount' => $amount];
+        }
+
+        return $rows;
+    }
+
+    public function prizeAmountForRank(int $rank): float
+    {
+        return (float) ($this->prizeRanksTable()[$rank] ?? 0);
+    }
+
+    /**
+     * @param  mixed  $input
+     * @return array<int, float>
+     */
+    public static function normalizePrizeRanks(mixed $input): array
+    {
+        if (! is_array($input) || $input === []) {
+            return [];
+        }
+
+        $table = [];
+
+        $isList = array_is_list($input);
+        foreach ($input as $key => $value) {
+            if ($isList && is_array($value)) {
+                $rank = (int) ($value['rank'] ?? 0);
+                $amount = (float) ($value['amount'] ?? 0);
+            } else {
+                $rank = (int) $key;
+                $amount = is_array($value) ? (float) ($value['amount'] ?? 0) : (float) $value;
+            }
+
+            if ($rank < 1 || $rank > 100 || $amount < 0) {
+                continue;
+            }
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $table[$rank] = round($amount, 0);
+        }
+
+        ksort($table);
+
+        return $table;
     }
 }
