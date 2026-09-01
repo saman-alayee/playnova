@@ -29,15 +29,6 @@ const hasDescription = computed(() => !!props.tournament.description?.trim())
 
 <template>
   <div class="tournament-actions" :class="hasDescription ? '' : 'tournament-actions--single'">
-    <button
-      v-if="hasDescription"
-      type="button"
-      class="tournament-actions__btn tournament-actions__btn--outline"
-      @click="openDescriptionModal(tournament.title, tournament.description!)"
-    >
-      توضیحات
-    </button>
-
     <template v-if="auth.isAuthenticated">
       <button
         v-if="tournament.is_registered && tournament.allows_game_login"
@@ -69,8 +60,9 @@ const hasDescription = computed(() => !!props.tournament.description?.trim())
       <button
         v-else-if="tournament.accepts_registration && regCount < capacity"
         type="button"
-        class="tournament-actions__btn tournament-actions__btn--primary tournament-actions__btn--success"
-        @click="openRegisterModal(tournament)"
+        class="tournament-actions__btn tournament-actions__btn--primary tournament-actions__btn--success tournament-actions__btn--register"
+        @mousedown.stop.prevent
+        @click.stop.prevent="openRegisterModal(tournament)"
       >
         {{ compact ? 'ثبت‌نام' : 'ثبت‌نام' }}
       </button>
@@ -95,5 +87,14 @@ const hasDescription = computed(() => !!props.tournament.description?.trim())
     >
       {{ compact ? 'ورود' : 'ورود و ثبت‌نام' }}
     </NuxtLink>
+
+    <button
+      v-if="hasDescription"
+      type="button"
+      class="tournament-actions__desc-link"
+      @click.stop.prevent="openDescriptionModal(tournament.title, tournament.description!)"
+    >
+      📝 مشاهده توضیحات مسابقه
+    </button>
   </div>
 </template>

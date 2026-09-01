@@ -53,6 +53,12 @@ onMounted(() => {
   }, 5000)
 })
 
+onActivated(() => {
+  if (auth.isAuthenticated) {
+    void refresh()
+  }
+})
+
 onUnmounted(() => {
   if (slideTimer) clearInterval(slideTimer)
 })

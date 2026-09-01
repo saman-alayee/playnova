@@ -183,7 +183,7 @@ async function removeUser(user: User) {
 <template>
   <div class="admin-users-page">
     <div class="admin-users-page__header">
-      <div>
+  <div>
         <h1 class="admin-users-page__title">مدیریت کاربران</h1>
         <p v-if="!pending && !error" class="admin-users-page__subtitle">
           {{ totalUsers.toLocaleString('fa-IR') }} نتیجه

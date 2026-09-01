@@ -40,14 +40,17 @@ def collect_files():
 
 
 FILES = collect_files()
+EXTRA_DEPLOY = [
+    ("deploy/fix_storage.sh", f"{REMOTE_ROOT}/deploy/fix_storage.sh"),
+]
 
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-client.connect(HOST, username=USER, password=PASSWORD, timeout=30)
+client.connect(HOST, username=USER, password=PASSWORD, timeout=60, banner_timeout=60)
 
-print(f"=== UPLOAD ({len(FILES)} files) ===")
+print(f"=== UPLOAD ({len(FILES)} app + {len(EXTRA_DEPLOY)} deploy files) ===")
 sftp = client.open_sftp()
-for local_rel, remote in FILES:
+for local_rel, remote in EXTRA_DEPLOY + FILES:
     local_path = ROOT / local_rel
     remote_dir = "/".join(remote.split("/")[:-1])
     client.exec_command(f"mkdir -p {remote_dir}")
@@ -56,6 +59,7 @@ for local_rel, remote in FILES:
 sftp.close()
 
 cmds = [
+    f"bash {REMOTE_ROOT}/deploy/fix_storage.sh {REMOTE_ROOT}/PlayNova apache",
     f"cd {REMOTE_ROOT}/PlayNova && php artisan migrate --force",
     f"cd {REMOTE_ROOT}/PlayNova && php artisan route:cache",
     f"cd {REMOTE_ROOT}/PlayNova && php artisan config:cache",

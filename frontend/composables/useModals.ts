@@ -13,11 +13,20 @@ const descriptionContent = ref('')
 
 const registerOpen = ref(false)
 const registerTournament = ref<Tournament | null>(null)
+/** Blocks ghost clicks on card buttons right after register modal closes. */
+const suppressDescriptionUntil = ref(0)
 
 export function useModals() {
   const api = useApi()
 
+  function armDescriptionSuppression(ms = 600) {
+    suppressDescriptionUntil.value = Date.now() + ms
+  }
+
   function openDescriptionModal(title: string, content: string) {
+    if (registerOpen.value || Date.now() < suppressDescriptionUntil.value) {
+      return
+    }
     descriptionTitle.value = title
     descriptionContent.value = content
     descriptionOpen.value = true
@@ -67,6 +76,8 @@ export function useModals() {
       void navigateTo('/login')
       return
     }
+    closeDescriptionModal()
+    armDescriptionSuppression(1200)
     registerTournament.value = tournament
     registerOpen.value = true
   }
@@ -74,6 +85,7 @@ export function useModals() {
   function closeRegisterModal() {
     registerOpen.value = false
     registerTournament.value = null
+    armDescriptionSuppression(1200)
   }
 
   return {
@@ -94,5 +106,6 @@ export function useModals() {
     openGameLoginModalById,
     openRegisterModal,
     closeRegisterModal,
+    armDescriptionSuppression,
   }
 }

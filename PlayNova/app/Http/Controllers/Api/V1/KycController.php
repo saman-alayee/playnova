@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Concerns\HandlesKycDocuments;
+use App\Http\Controllers\Concerns\HandlesUploadLimits;
 use App\Models\KycSubmission;
 use App\Services\KycEncryptionService;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,7 @@ use RuntimeException;
 class KycController extends BaseApiController
 {
     use HandlesKycDocuments;
+    use HandlesUploadLimits;
 
     public function index(): JsonResponse
     {
@@ -34,6 +36,10 @@ class KycController extends BaseApiController
 
     public function store(Request $request, KycEncryptionService $crypto): JsonResponse
     {
+        if ($uploadError = $this->uploadLimitError($request, 'document')) {
+            return $this->error($uploadError, 422, ['document' => [$uploadError]]);
+        }
+
         $maxKb = $this->kycUploadMaxKilobytes();
 
         $request->validate([
@@ -61,27 +67,33 @@ class KycController extends BaseApiController
             return $this->error($e->getMessage(), 422, ['document' => [$e->getMessage()]]);
         }
 
-        $userId = Auth::id();
-        $baseDir = storage_path('app/private/kyc/' . $userId);
-        if (! is_dir($baseDir)) {
-            mkdir($baseDir, 0700, true);
+        try {
+            $userId = Auth::id();
+            $baseDir = storage_path('app/private/kyc/' . $userId);
+            if (! is_dir($baseDir) && ! mkdir($baseDir, 0700, true) && ! is_dir($baseDir)) {
+                throw new RuntimeException('امکان ایجاد پوشه امن ذخیره مدارک وجود ندارد.');
+            }
+
+            $documentPath = $baseDir . '/document_' . Str::random(16) . '.enc';
+            $crypto->encryptFile($preparedPath, $documentPath);
+
+            if ($preparedPath !== $uploaded->getRealPath()) {
+                @unlink($preparedPath);
+            }
+
+            $submission = KycSubmission::create([
+                'user_id' => $userId,
+                'national_id_encrypted' => null,
+                'card_front_path' => null,
+                'card_back_path' => null,
+                'document_path' => $documentPath,
+                'status' => 'pending',
+            ]);
+        } catch (RuntimeException $e) {
+            return $this->error($e->getMessage(), 422, ['document' => [$e->getMessage()]]);
+        } catch (\Throwable $e) {
+            return $this->error('ارسال مدارک ناموفق بود. لطفاً دوباره تلاش کنید.', 500);
         }
-
-        $documentPath = $baseDir . '/document_' . Str::random(16) . '.enc';
-        $crypto->encryptFile($preparedPath, $documentPath);
-
-        if ($preparedPath !== $uploaded->getRealPath()) {
-            @unlink($preparedPath);
-        }
-
-        $submission = KycSubmission::create([
-            'user_id' => $userId,
-            'national_id_encrypted' => null,
-            'card_front_path' => null,
-            'card_back_path' => null,
-            'document_path' => $documentPath,
-            'status' => 'pending',
-        ]);
 
         return $this->success([
             'status' => $submission->status,

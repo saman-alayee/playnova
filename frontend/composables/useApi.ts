@@ -305,7 +305,7 @@ export function useApi() {
 
     kyc: {
       show: () => api.get<import('~/types/api').KycSubmission>('/kyc'),
-      store: (formData: FormData) => api.post<void>('/kyc', formData),
+      store: (formData: FormData) => api.post<void>('/kyc', formData, { timeout: 120000 }),
     },
 
     // بخش تیکت پشتیبانی بسته شد؛ سوالات متداول جایگزین شده است.
@@ -509,7 +509,7 @@ export function useApi() {
       news: (query?: Record<string, string | number | boolean | undefined>) =>
         api.paginated<import('~/types/api').NewsItem>('/admin/news', query),
 
-      createNews: (formData: FormData) => api.post<void>('/admin/news', formData),
+      createNews: (formData: FormData) => api.post<void>('/admin/news', formData, { timeout: 120000 }),
 
       deleteNews: (id: number) => api.delete<void>(`/admin/news/${id}`),
 
@@ -551,7 +551,7 @@ export function useApi() {
 
       logo: () => api.get<{ logo?: string; logo_url?: string; has_custom?: boolean }>('/admin/settings/logo'),
 
-      updateLogo: (formData: FormData) => api.post<void>('/admin/settings/logo', formData),
+      updateLogo: (formData: FormData) => api.post<void>('/admin/settings/logo', formData, { timeout: 120000 }),
 
       deleteLogo: () => api.delete<void>('/admin/settings/logo'),
 

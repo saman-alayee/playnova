@@ -23,6 +23,20 @@ const { data, pending, error, refresh } = await useAsyncData(
   () => api.tournaments.selectSeat(id.value),
 )
 
+const loadError = computed(() => {
+  if (pending.value) return null
+  if (error.value) {
+    const err = error.value as { message?: string; data?: { message?: string } }
+    return err.data?.message || err.message || 'امکان انتخاب جایگاه وجود ندارد.'
+  }
+  if (!data.value) return 'امکان انتخاب جایگاه وجود ندارد.'
+  return null
+})
+
+onMounted(() => {
+  void refresh()
+})
+
 useHead(() => ({ title: `جایگاه‌ها | ${data.value?.tournament?.title || 'مسابقه'}` }))
 
 const alreadySelected = computed(() => !!data.value?.seat_label && !data.value?.teams_grid)
@@ -131,8 +145,10 @@ async function cancelRegistration() {
   <div class="seat-page">
     <div v-if="pending" class="text-gray-500 py-10 text-center">در حال بارگذاری...</div>
 
-    <div v-else-if="error || !data" class="text-gray-500 py-10 text-center">
-      امکان انتخاب جایگاه وجود ندارد.
+    <div v-else-if="loadError" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center space-y-3">
+      <p class="text-red-300">{{ loadError }}</p>
+      <NuxtLink to="/wallet" class="inline-block text-secondary text-sm font-bold underline">شارژ کیف پول</NuxtLink>
+      <NuxtLink :to="`/tournaments/${id}`" class="block text-sm text-gray-400">بازگشت به مسابقه</NuxtLink>
     </div>
 
     <div v-else-if="alreadySelected" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center">

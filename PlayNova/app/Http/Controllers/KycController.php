@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\HandlesKycDocuments;
+use App\Http\Controllers\Concerns\HandlesUploadLimits;
 use App\Models\KycSubmission;
 use App\Services\KycEncryptionService;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use RuntimeException;
 class KycController extends Controller
 {
     use HandlesKycDocuments;
+    use HandlesUploadLimits;
 
     public function index()
     {
@@ -23,6 +25,10 @@ class KycController extends Controller
 
     public function store(Request $request, KycEncryptionService $crypto)
     {
+        if ($uploadError = $this->uploadLimitError($request, 'document')) {
+            return back()->withErrors(['document' => $uploadError])->withInput();
+        }
+
         $maxKb = $this->kycUploadMaxKilobytes();
 
         $request->validate([

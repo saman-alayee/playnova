@@ -46,6 +46,15 @@ body {
   overflow-x: hidden;
 }
 
+body.register-modal-active .page-main,
+body.register-modal-active .page-shell {
+  pointer-events: none;
+}
+
+body.register-modal-active .modal-overlay {
+  pointer-events: auto;
+}
+
 html,
 body,
 #__nuxt {
@@ -907,13 +916,13 @@ select:focus {
 }
 
 .tournament-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
 .tournament-actions--single {
-  grid-template-columns: 1fr;
+  display: flex;
 }
 
 .tournament-actions__btn {
@@ -931,6 +940,35 @@ select:focus {
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+}
+
+.tournament-actions__btn--register {
+  min-height: 44px;
+  font-size: 0.8rem;
+}
+
+.tournament-actions__desc-link {
+  margin-top: 0.15rem;
+  padding: 0.35rem 0.25rem 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: #93c5fd;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.tournament-actions__desc-link:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
 }
 
 .tournament-actions__btn--primary {
