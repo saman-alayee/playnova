@@ -570,12 +570,16 @@ export function useApi() {
         api.get<{
           base_url: string
           vision_model: string
+          result_vision_model: string
           timeout: number
           is_active: boolean
           has_api_key: boolean
           api_key_source: 'database' | 'env' | 'none'
+          available_models: string[]
           suggested_models: string[]
         }>('/admin/settings/ai'),
+
+      aiModels: () => api.get<{ models: string[] }>('/admin/settings/ai/models'),
 
       updateAiSettings: (data: Record<string, unknown>) => api.put<void>('/admin/settings/ai', data),
 

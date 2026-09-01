@@ -38,6 +38,17 @@ class PlayerNameMatcher
         return $digits !== '' ? $digits : null;
     }
 
+    public static function normalizeCodId(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $value = trim(preg_replace('/\s+/u', ' ', (string) $value));
+
+        return $value === '' ? null : mb_strtolower($value, 'UTF-8');
+    }
+
     public static function normalizeName(mixed $value): ?string
     {
         if (! is_string($value)) {
@@ -59,7 +70,7 @@ class PlayerNameMatcher
         $name = mb_strtolower($name, 'UTF-8');
         $name = self::replaceHomoglyphs($name);
         $name = self::stripEmoji($name);
-        $name = preg_replace('/[\s\-_.|•·]+/u', '', $name) ?? $name;
+        $name = preg_replace('/[\s\-_.|•·#]+/u', '', $name) ?? $name;
         $name = preg_replace('/[^\p{L}\p{N}]+/u', '', $name) ?? $name;
 
         return $name !== '' ? $name : null;
@@ -88,39 +99,73 @@ class PlayerNameMatcher
         array $participants,
         array &$usedUserIds,
         float $minScore = 0.72,
+        bool $allowUsernameMatch = false,
     ): ?array {
-        $detectedUid = self::normalizeUid($detectedUid);
+        $codMatch = self::findCodIdMatch($detectedName, $detectedUid, $participants, $usedUserIds, $minScore);
+        if ($codMatch !== null) {
+            return $codMatch;
+        }
 
-        if ($detectedUid) {
+        if (! $allowUsernameMatch) {
+            return null;
+        }
+
+        return self::findUsernameMatch($detectedName, $participants, $usedUserIds, $minScore);
+    }
+
+    /**
+     * @param  list<array{user_id:int,username:string,cod_id:?string,seat_number:?int}>  $participants
+     * @param  array<int, true>  $usedUserIds
+     * @return array{user_id:int,username:string,cod_id:?string,seat_number:?int,match_method:string,match_score:float}|null
+     */
+    protected static function findCodIdMatch(
+        ?string $detectedName,
+        ?string $detectedUid,
+        array $participants,
+        array &$usedUserIds,
+        float $minScore,
+    ): ?array {
+        $detectedUidDigits = self::normalizeUid($detectedUid);
+        $detectedCodKeys = array_values(array_filter(array_unique([
+            self::normalizeCodId($detectedUid),
+            self::normalizeCodId($detectedName),
+        ])));
+        $detectedNormalized = self::normalizeName($detectedName);
+        $detectedSkeleton = self::skeleton($detectedName);
+        $detectedUidNormalized = self::normalizeName($detectedUid);
+        $detectedUidSkeleton = self::skeleton($detectedUid);
+
+        if ($detectedUidDigits) {
             foreach ($participants as $participant) {
                 $userId = (int) $participant['user_id'];
                 if (isset($usedUserIds[$userId])) {
                     continue;
                 }
 
-                if (self::normalizeUid($participant['cod_id']) === $detectedUid) {
+                $storedDigits = self::normalizeUid($participant['cod_id']);
+                if ($storedDigits && $storedDigits === $detectedUidDigits) {
                     $usedUserIds[$userId] = true;
 
                     return array_merge($participant, [
-                        'match_method' => 'uid',
+                        'match_method' => 'cod_id_uid',
                         'match_score' => 1.0,
                     ]);
                 }
             }
 
-            if (strlen($detectedUid) >= 8) {
+            if (strlen($detectedUidDigits) >= 8) {
                 foreach ($participants as $participant) {
                     $userId = (int) $participant['user_id'];
                     if (isset($usedUserIds[$userId])) {
                         continue;
                     }
 
-                    $storedUid = self::normalizeUid($participant['cod_id']);
-                    if ($storedUid && str_ends_with($storedUid, substr($detectedUid, -8))) {
+                    $storedDigits = self::normalizeUid($participant['cod_id']);
+                    if ($storedDigits && str_ends_with($storedDigits, substr($detectedUidDigits, -8))) {
                         $usedUserIds[$userId] = true;
 
                         return array_merge($participant, [
-                            'match_method' => 'uid_suffix',
+                            'match_method' => 'cod_id_uid_suffix',
                             'match_score' => 0.98,
                         ]);
                     }
@@ -128,6 +173,166 @@ class PlayerNameMatcher
             }
         }
 
+        foreach ($participants as $participant) {
+            $userId = (int) $participant['user_id'];
+            if (isset($usedUserIds[$userId])) {
+                continue;
+            }
+
+            $storedCodKey = self::normalizeCodId($participant['cod_id']);
+            if ($storedCodKey === null) {
+                continue;
+            }
+
+            foreach ($detectedCodKeys as $detectedCodKey) {
+                if ($detectedCodKey === $storedCodKey) {
+                    $usedUserIds[$userId] = true;
+
+                    return array_merge($participant, [
+                        'match_method' => 'cod_id_exact',
+                        'match_score' => 1.0,
+                    ]);
+                }
+            }
+        }
+
+        foreach ($participants as $participant) {
+            $userId = (int) $participant['user_id'];
+            if (isset($usedUserIds[$userId])) {
+                continue;
+            }
+
+            $storedCod = (string) ($participant['cod_id'] ?? '');
+            if ($storedCod === '') {
+                continue;
+            }
+
+            $storedNormalized = self::normalizeName($storedCod);
+            $storedSkeleton = self::skeleton($storedCod);
+
+            if ($detectedNormalized && $storedNormalized && $detectedNormalized === $storedNormalized) {
+                $usedUserIds[$userId] = true;
+
+                return array_merge($participant, [
+                    'match_method' => 'cod_id_name',
+                    'match_score' => 1.0,
+                ]);
+            }
+
+            if ($detectedSkeleton && $storedSkeleton && $detectedSkeleton === $storedSkeleton) {
+                $usedUserIds[$userId] = true;
+
+                return array_merge($participant, [
+                    'match_method' => 'cod_id_skeleton',
+                    'match_score' => 0.99,
+                ]);
+            }
+
+            if ($detectedUidNormalized && $storedNormalized && $detectedUidNormalized === $storedNormalized) {
+                $usedUserIds[$userId] = true;
+
+                return array_merge($participant, [
+                    'match_method' => 'cod_id_uid_name',
+                    'match_score' => 1.0,
+                ]);
+            }
+
+            if ($detectedUidSkeleton && $storedSkeleton && $detectedUidSkeleton === $storedSkeleton) {
+                $usedUserIds[$userId] = true;
+
+                return array_merge($participant, [
+                    'match_method' => 'cod_id_uid_skeleton',
+                    'match_score' => 0.99,
+                ]);
+            }
+        }
+
+        $best = null;
+        $bestScore = 0.0;
+        $bestMethod = 'cod_id_fuzzy';
+
+        foreach ($participants as $participant) {
+            $userId = (int) $participant['user_id'];
+            if (isset($usedUserIds[$userId])) {
+                continue;
+            }
+
+            $storedCod = (string) ($participant['cod_id'] ?? '');
+            if ($storedCod === '') {
+                continue;
+            }
+
+            $storedNormalized = self::normalizeName($storedCod);
+            $storedSkeleton = self::skeleton($storedCod);
+
+            $score = max(
+                self::similarity($detectedNormalized, $storedNormalized),
+                self::similarity($detectedSkeleton, $storedSkeleton),
+                self::similarity($detectedUidNormalized, $storedNormalized),
+                self::similarity($detectedUidSkeleton, $storedSkeleton),
+            );
+
+            if ($score >= $minScore && $score > $bestScore) {
+                $best = $participant;
+                $bestScore = $score;
+                $bestMethod = $score >= 0.9 ? 'cod_id_fuzzy_high' : 'cod_id_fuzzy';
+            }
+        }
+
+        if ($best !== null && $bestScore >= $minScore) {
+            $userId = (int) $best['user_id'];
+            $usedUserIds[$userId] = true;
+
+            return array_merge($best, [
+                'match_method' => $bestMethod,
+                'match_score' => round($bestScore, 3),
+            ]);
+        }
+
+        $partialNeedle = $detectedSkeleton ?: $detectedUidSkeleton;
+        if ($partialNeedle && strlen($partialNeedle) >= 6) {
+            foreach ($participants as $participant) {
+                $userId = (int) $participant['user_id'];
+                if (isset($usedUserIds[$userId])) {
+                    continue;
+                }
+
+                $storedSkeleton = self::skeleton($participant['cod_id']);
+                if (! $storedSkeleton) {
+                    continue;
+                }
+
+                $minLen = min(strlen($partialNeedle), strlen($storedSkeleton));
+                $maxLen = max(strlen($partialNeedle), strlen($storedSkeleton));
+                if ($maxLen === 0 || ($minLen / $maxLen) < 0.6) {
+                    continue;
+                }
+
+                if (str_contains($storedSkeleton, $partialNeedle) || str_contains($partialNeedle, $storedSkeleton)) {
+                    $usedUserIds[$userId] = true;
+
+                    return array_merge($participant, [
+                        'match_method' => 'cod_id_partial',
+                        'match_score' => 0.7,
+                    ]);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array{user_id:int,username:string,cod_id:?string,seat_number:?int}>  $participants
+     * @param  array<int, true>  $usedUserIds
+     * @return array{user_id:int,username:string,cod_id:?string,seat_number:?int,match_method:string,match_score:float}|null
+     */
+    protected static function findUsernameMatch(
+        ?string $detectedName,
+        array $participants,
+        array &$usedUserIds,
+        float $minScore,
+    ): ?array {
         $detectedNormalized = self::normalizeName($detectedName);
         $detectedSkeleton = self::skeleton($detectedName);
 

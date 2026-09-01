@@ -261,25 +261,67 @@ class SettingsAdminController extends BaseApiController
         return $this->success(null, 'تنظیمات دعوت ذخیره شد.');
     }
 
-    public function aiSettings(): JsonResponse
+    public function aiSettings(AvalAIService $avalai): JsonResponse
     {
         $this->authorizeAdmin();
 
+        $fallbackModels = [
+            'gpt-4o',
+            'gpt-4o-mini',
+            'gpt-4.1',
+            'gpt-4.1-mini',
+            'claude-sonnet-4-20250514',
+        ];
+
+        $availableModels = $fallbackModels;
+        if ($avalai->isConfigured()) {
+            try {
+                $fetched = $avalai->listModels();
+                if ($fetched !== []) {
+                    $availableModels = $fetched;
+                }
+            } catch (\Throwable) {
+                // Keep fallback list when API is unreachable.
+            }
+        }
+
+        $visionModel = Setting::get('avalai_vision_model') ?: config('services.avalai.vision_model', 'gpt-4o');
+        $resultVisionModel = Setting::getResultAiVisionModel();
+
+        foreach ([$visionModel, $resultVisionModel] as $selected) {
+            if ($selected && ! in_array($selected, $availableModels, true)) {
+                array_unshift($availableModels, $selected);
+            }
+        }
+
         return $this->success([
             'base_url' => Setting::get('avalai_base_url') ?: config('services.avalai.base_url'),
-            'vision_model' => Setting::get('avalai_vision_model') ?: config('services.avalai.vision_model', 'gpt-4o'),
+            'vision_model' => $visionModel,
+            'result_vision_model' => $resultVisionModel,
             'timeout' => Setting::getAvalAiTimeout(),
             'is_active' => Setting::isAvalAiActive(),
             'has_api_key' => filled(Setting::getAvalAiApiKey()),
             'api_key_source' => Setting::avalAiApiKeySource(),
-            'suggested_models' => [
-                'gpt-4o',
-                'gpt-4o-mini',
-                'gpt-4.1',
-                'gpt-4.1-mini',
-                'claude-sonnet-4-20250514',
-            ],
+            'available_models' => array_values(array_unique($availableModels)),
+            'suggested_models' => $fallbackModels,
         ]);
+    }
+
+    public function aiModels(AvalAIService $avalai): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        if (! $avalai->isConfigured()) {
+            return $this->error('کلید API یا سرویس هوش مصنوعی فعال نیست.');
+        }
+
+        try {
+            return $this->success([
+                'models' => $avalai->listModels(),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->error('دریافت لیست مدل‌ها ناموفق: ' . $e->getMessage());
+        }
     }
 
     public function updateAiSettings(Request $request): JsonResponse
@@ -289,6 +331,7 @@ class SettingsAdminController extends BaseApiController
         $request->validate([
             'base_url' => 'nullable|string|max:255',
             'vision_model' => 'required|string|max:100',
+            'result_vision_model' => 'nullable|string|max:100',
             'timeout' => 'nullable|integer|min:30|max:300',
             'api_key' => 'nullable|string|max:500',
             'is_active' => 'nullable|boolean',
@@ -301,6 +344,11 @@ class SettingsAdminController extends BaseApiController
         }
 
         Setting::set('avalai_vision_model', trim($request->vision_model));
+
+        if ($request->filled('result_vision_model')) {
+            Setting::set('result_ai_vision_model', trim((string) $request->result_vision_model));
+        }
+
         Setting::set('avalai_active', $request->boolean('is_active', true));
 
         if ($request->filled('timeout')) {

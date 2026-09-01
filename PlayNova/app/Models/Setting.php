@@ -407,7 +407,7 @@ Mode: {seat_mode_label} ({players_per_team} players per team)
 Prize amounts (from tournament description / prize ranks). For duo/squad these are TEAM totals split equally between teammates. Lower placements may also have prizes — include every rank listed:
 {prize_table}
 
-Registered participants (TEAM N = lobby team / seat group). Match by UID, then exact name, then TEAM number:
+Registered participants (TEAM N = lobby team / seat group). Match detected players ONLY by their registered COD ID (not site username). Compare in-game names and numeric UIDs against COD ID:
 {participants}
 
 Read the RANK result screen from this media.

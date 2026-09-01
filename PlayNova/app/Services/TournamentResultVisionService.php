@@ -221,9 +221,9 @@ class TournamentResultVisionService
             ->map(function (array $p) {
                 $team = $p['team_number'] ? 'TEAM ' . $p['team_number'] : 'TEAM ?';
                 $seat = $p['seat_number'] ? 'seat ' . $p['seat_number'] : 'seat ?';
-                $uid = $p['cod_id'] ?: 'unknown';
+                $codId = $p['cod_id'] ?: 'unknown';
 
-                return "{$team} | {$p['username']} | UID: {$uid} | {$seat}";
+                return "{$team} | COD ID: {$codId} | {$seat}";
             })
             ->implode("\n");
 
@@ -550,6 +550,7 @@ class TournamentResultVisionService
             $participants,
             $usedUserIds,
             $minScore,
+            allowUsernameMatch: false,
         );
     }
 

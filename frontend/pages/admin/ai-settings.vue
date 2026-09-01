@@ -9,6 +9,7 @@ const { data, refresh } = await useAsyncData('admin-ai', () => api.admin.aiSetti
 const form = reactive({
   base_url: '',
   vision_model: 'gpt-4o',
+  result_vision_model: 'gpt-4o',
   timeout: 120,
   api_key: '',
   is_active: true,
@@ -16,16 +17,20 @@ const form = reactive({
 })
 
 const testing = ref(false)
+const refreshingModels = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
+const modelOptions = ref<string[]>([])
 
 watch(data, (d) => {
   if (!d) return
   form.base_url = String(d.base_url || '')
   form.vision_model = String(d.vision_model || 'gpt-4o')
+  form.result_vision_model = String(d.result_vision_model || d.vision_model || 'gpt-4o')
   form.timeout = Number(d.timeout || 120)
   form.is_active = !!d.is_active
   form.api_key = ''
   form.clear_api_key = false
+  modelOptions.value = d.available_models?.length ? [...d.available_models] : [...(d.suggested_models || [])]
 }, { immediate: true })
 
 const apiKeySourceLabel = computed(() => {
@@ -35,10 +40,34 @@ const apiKeySourceLabel = computed(() => {
   return 'تنظیم نشده'
 })
 
+function ensureModelInOptions(model: string) {
+  if (model && !modelOptions.value.includes(model)) {
+    modelOptions.value = [model, ...modelOptions.value]
+  }
+}
+
+async function refreshModels() {
+  refreshingModels.value = true
+  try {
+    const res = await api.admin.aiModels()
+    if (res.models?.length) {
+      modelOptions.value = res.models
+      ensureModelInOptions(form.vision_model)
+      ensureModelInOptions(form.result_vision_model)
+    }
+  } catch (e: unknown) {
+    const err = e as { data?: { message?: string }; message?: string }
+    flash.value = { error: err.data?.message || err.message || 'دریافت لیست مدل‌ها ناموفق بود.' }
+  } finally {
+    refreshingModels.value = false
+  }
+}
+
 async function save() {
   const payload: Record<string, unknown> = {
     base_url: form.base_url,
     vision_model: form.vision_model,
+    result_vision_model: form.result_vision_model,
     timeout: form.timeout,
     is_active: form.is_active,
     clear_api_key: form.clear_api_key,
@@ -96,16 +125,34 @@ async function testConnection() {
       </div>
 
       <div>
-        <label class="block text-sm text-gray-400 mb-1">مدل Vision</label>
-        <input
+        <div class="flex items-center justify-between mb-1">
+          <label class="block text-sm text-gray-400">مدل Vision (تست اتصال)</label>
+          <button
+            type="button"
+            class="text-xs text-secondary disabled:opacity-50"
+            :disabled="refreshingModels || !data?.has_api_key"
+            @click="refreshModels"
+          >
+            {{ refreshingModels ? 'در حال دریافت…' : 'بروزرسانی لیست مدل‌ها' }}
+          </button>
+        </div>
+        <select
           v-model="form.vision_model"
-          list="ai-models"
-          placeholder="gpt-4o"
           class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
         >
-        <datalist id="ai-models">
-          <option v-for="m in data?.suggested_models || []" :key="m" :value="m" />
-        </datalist>
+          <option v-for="m in modelOptions" :key="'v-' + m" :value="m">{{ m }}</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">مدل تحلیل نتیجه مسابقه</label>
+        <select
+          v-model="form.result_vision_model"
+          class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
+        >
+          <option v-for="m in modelOptions" :key="'r-' + m" :value="m">{{ m }}</option>
+        </select>
+        <p class="text-xs text-gray-500 mt-1">برای تحلیل اسکرین‌شات RANK در صفحه ثبت نتیجه مسابقه استفاده می‌شود.</p>
       </div>
 
       <div>

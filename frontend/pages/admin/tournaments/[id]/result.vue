@@ -363,22 +363,28 @@ function formatToman(amount: number): string {
 
 function matchMethodLabel(method?: string | null) {
   switch (method) {
+    case 'cod_id_uid':
     case 'uid':
-      return 'تطبیق UID'
+      return 'تطبیق UID با آیدی کالاف'
+    case 'cod_id_uid_suffix':
     case 'uid_suffix':
       return 'تطبیق بخشی UID'
-    case 'username':
-      return 'تطبیق دقیق نام'
-    case 'username_skeleton':
-      return 'تطبیق نام (بدون نماد)'
-    case 'name_fuzzy_high':
-      return 'تطبیق نزدیک نام'
-    case 'name_fuzzy':
-      return 'تطبیق تقریبی نام'
+    case 'cod_id_exact':
+      return 'تطبیق دقیق آیدی کالاف'
+    case 'cod_id_name':
+      return 'تطبیق نام در بازی با آیدی کالاف'
+    case 'cod_id_skeleton':
+    case 'cod_id_uid_skeleton':
+      return 'تطبیق آیدی کالاف (بدون نماد)'
+    case 'cod_id_uid_name':
+      return 'تطبیق UID/نام با آیدی کالاف'
+    case 'cod_id_fuzzy_high':
+    case 'cod_id_fuzzy':
+      return 'تطبیق تقریبی آیدی کالاف'
+    case 'cod_id_partial':
+      return 'تطبیق جزئی آیدی کالاف'
     case 'team_number':
       return 'تطبیق شماره TEAM'
-    case 'username_partial':
-      return 'تطبیق جزئی نام'
     default:
       return method || ''
   }
@@ -591,16 +597,17 @@ onBeforeUnmount(() => {
           </span>
           <span class="text-gray-500 text-lg shrink-0">⠿</span>
           <div class="flex-1 min-w-[180px]">
-            <p class="text-white font-bold">{{ row.username || '—' }}</p>
+            <p class="text-white font-bold" dir="ltr">{{ row.cod_id || '—' }}</p>
+            <p v-if="row.username" class="text-xs text-gray-500">{{ row.username }}</p>
             <p v-if="row.detected_name" class="text-xs text-gray-400">
-              تشخیص: {{ row.detected_name }}
+              تشخیص AI: {{ row.detected_name }}
               <span v-if="row.match_method" class="text-gray-500">
                 — {{ matchMethodLabel(row.match_method) }}
                 <span v-if="row.match_score"> ({{ Math.round(row.match_score * 100) }}%)</span>
               </span>
             </p>
           </div>
-          <span class="text-xs text-gray-500" dir="ltr">{{ row.cod_id || '—' }}</span>
+          <span v-if="row.detected_uid" class="text-xs text-gray-500 shrink-0" dir="ltr">UID: {{ row.detected_uid }}</span>
           <span
             v-if="prizeAmountForRow(index, row) > 0"
             class="text-xs font-bold text-green-300 shrink-0"
@@ -631,13 +638,13 @@ onBeforeUnmount(() => {
           class="text-xs bg-dark-600 hover:bg-dark-500 text-white rounded px-2 py-1"
           @click="addParticipant(p)"
         >
-          + {{ p.username }}
+          + {{ p.cod_id || p.username }}
         </button>
       </div>
 
       <div class="flex flex-wrap gap-3 items-center border-t border-dark-600 pt-4">
         <div v-if="winnerPreview" class="text-sm text-green-300">
-          برنده: <span class="font-bold">{{ winnerPreview.username }}</span> (رتبه ۱)
+          برنده: <span class="font-bold" dir="ltr">{{ winnerPreview.cod_id || winnerPreview.username }}</span> (رتبه ۱)
         </div>
         <button
           type="button"

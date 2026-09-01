@@ -266,86 +266,78 @@ async function removeUser(user: User) {
 
         <div class="user-card__info">
           <div class="user-card__info-item">
-            <span class="user-card__label">موبایل</span>
-            <span dir="ltr">{{ u.mobile || '—' }}</span>
+            <span class="user-card__label">موبایل:</span>
+            <span class="user-card__value" dir="ltr">{{ u.mobile || '—' }}</span>
           </div>
           <div class="user-card__info-item">
-            <span class="user-card__label">ایمیل</span>
-            <span dir="ltr">{{ u.email || '—' }}</span>
+            <span class="user-card__label">ایمیل:</span>
+            <span class="user-card__value" dir="ltr">{{ u.email || '—' }}</span>
           </div>
           <div class="user-card__info-item">
-            <span class="user-card__label">عضویت</span>
-            <span>{{ u.created_at_display || '—' }}</span>
+            <span class="user-card__label">عضویت:</span>
+            <span class="user-card__value">{{ u.created_at_display || '—' }}</span>
           </div>
           <div class="user-card__info-item">
-            <span class="user-card__label">کد معرف</span>
-            <span dir="ltr">{{ u.referral_code || '—' }}</span>
+            <span class="user-card__label">کد معرف:</span>
+            <span class="user-card__value" dir="ltr">{{ u.referral_code || '—' }}</span>
           </div>
           <div class="user-card__info-item">
-            <span class="user-card__label">معرف</span>
-            <span>{{ u.referrer_username || '—' }}</span>
+            <span class="user-card__label">معرف:</span>
+            <span class="user-card__value">{{ u.referrer_username || '—' }}</span>
           </div>
           <div class="user-card__info-item">
-            <span class="user-card__label">ثبت‌نام‌ها</span>
-            <span>{{ (u.registrations_count ?? 0).toLocaleString('fa-IR') }}</span>
+            <span class="user-card__label">ثبت‌نام‌ها:</span>
+            <span class="user-card__value">{{ (u.registrations_count ?? 0).toLocaleString('fa-IR') }}</span>
           </div>
           <div class="user-card__info-item">
-            <span class="user-card__label">کیل / برد / باخت</span>
-            <span>{{ (u.kills ?? 0).toLocaleString('fa-IR') }} / {{ (u.wins ?? 0).toLocaleString('fa-IR') }} / {{ (u.losses ?? 0).toLocaleString('fa-IR') }}</span>
+            <span class="user-card__label">کیل / برد / باخت:</span>
+            <span class="user-card__value">{{ (u.kills ?? 0).toLocaleString('fa-IR') }} / {{ (u.wins ?? 0).toLocaleString('fa-IR') }} / {{ (u.losses ?? 0).toLocaleString('fa-IR') }}</span>
           </div>
           <div class="user-card__info-item user-card__info-item--wide">
-            <span class="user-card__label">جایگاه فعال</span>
-            <span>{{ activeSeatLabel(u) }}</span>
+            <span class="user-card__label">جایگاه فعال:</span>
+            <span class="user-card__value">{{ activeSeatLabel(u) }}</span>
           </div>
         </div>
 
         <div class="user-card__actions">
-          <div class="user-card__action-block">
-            <p class="user-card__action-title">کیل</p>
-            <form
-              class="user-card__inline-form"
-              @submit.prevent="saveKills(u, Number(($event.target as HTMLFormElement).kills.value))"
-            >
-              <input name="kills" type="number" :value="u.kills ?? 0" min="0" class="user-card__input user-card__input--sm">
-              <button type="submit" class="user-card__mini-btn">ذخیره</button>
-            </form>
-          </div>
+          <form
+            class="user-card__action-row"
+            @submit.prevent="saveKills(u, Number(($event.target as HTMLFormElement).kills.value))"
+          >
+            <span class="user-card__action-label">کیل:</span>
+            <input name="kills" type="number" :value="u.kills ?? 0" min="0" class="user-card__input user-card__input--sm">
+            <button type="submit" class="user-card__mini-btn">ذخیره</button>
+          </form>
 
-          <div class="user-card__action-block user-card__action-block--grow">
-            <p class="user-card__action-title">آیدی کالاف</p>
-            <form
-              class="user-card__inline-form"
-              @submit.prevent="saveCodId(u, String(($event.target as HTMLFormElement).cod_id.value))"
-            >
-              <input name="cod_id" type="text" :value="u.cod_id || ''" dir="ltr" required class="user-card__input">
-              <button type="submit" class="user-card__mini-btn">ذخیره</button>
-            </form>
-          </div>
+          <form
+            class="user-card__action-row user-card__action-row--grow"
+            @submit.prevent="saveCodId(u, String(($event.target as HTMLFormElement).cod_id.value))"
+          >
+            <span class="user-card__action-label">آیدی کالاف:</span>
+            <input name="cod_id" type="text" :value="u.cod_id || ''" dir="ltr" required class="user-card__input">
+            <button type="submit" class="user-card__mini-btn">ذخیره</button>
+          </form>
 
-          <div class="user-card__action-block user-card__action-block--wide">
-            <p class="user-card__action-title">تنظیم کیف پول</p>
-            <form
-              class="user-card__wallet-form"
-              @submit.prevent="adjustWallet(u, ($event.target as HTMLFormElement).action.value as 'add' | 'subtract' | 'set', Number(($event.target as HTMLFormElement).amount.value), ($event.target as HTMLFormElement).description.value, ($event.target as HTMLFormElement).allow_negative?.checked)"
-            >
-              <div class="user-card__wallet-row">
-                <select name="action" class="user-card__select">
-                  <option value="add">+ افزایش</option>
-                  <option value="subtract">− کاهش</option>
-                  <option value="set">= تنظیم</option>
-                </select>
-                <input name="amount" type="number" min="0" placeholder="مبلغ" required class="user-card__input user-card__input--amount">
-                <input name="description" type="text" placeholder="توضیح" class="user-card__input user-card__input--desc">
-              </div>
-              <div class="user-card__wallet-row">
-                <label class="user-card__checkbox">
-                  <input name="allow_negative" type="checkbox" class="accent-primary">
-                  اجازه منفی
-                </label>
-                <button type="submit" class="user-card__mini-btn user-card__mini-btn--success">اعمال</button>
-              </div>
-            </form>
-          </div>
+          <form
+            class="user-card__action-row user-card__action-row--wide user-card__wallet-form"
+            @submit.prevent="adjustWallet(u, ($event.target as HTMLFormElement).action.value as 'add' | 'subtract' | 'set', Number(($event.target as HTMLFormElement).amount.value), ($event.target as HTMLFormElement).description.value, ($event.target as HTMLFormElement).allow_negative?.checked)"
+          >
+            <span class="user-card__action-label">تنظیم کیف پول:</span>
+            <select name="action" class="user-card__select user-card__select--action">
+              <option value="add">+ افزایش</option>
+              <option value="subtract">− کاهش</option>
+              <option value="set">= تنظیم</option>
+            </select>
+            <span class="user-card__action-label user-card__action-label--sub">مبلغ:</span>
+            <input name="amount" type="number" min="0" placeholder="مبلغ" required class="user-card__input user-card__input--amount">
+            <span class="user-card__action-label user-card__action-label--sub">توضیح:</span>
+            <input name="description" type="text" placeholder="توضیح" class="user-card__input user-card__input--desc">
+            <label class="user-card__checkbox">
+              <input name="allow_negative" type="checkbox" class="accent-primary">
+              اجازه منفی
+            </label>
+            <button type="submit" class="user-card__mini-btn user-card__mini-btn--success">اعمال</button>
+          </form>
         </div>
 
         <div class="user-card__footer">
@@ -430,10 +422,22 @@ async function removeUser(user: User) {
 
 .admin-users-page__field {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.72rem;
   color: #9ca3af;
+}
+
+.admin-users-page__field span {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.admin-users-page__field .admin-users-page__select {
+  flex: 1 1 8rem;
+  min-width: 0;
 }
 
 .admin-users-page__select,
@@ -575,25 +579,37 @@ async function removeUser(user: User) {
 }
 
 .user-card__info {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
   padding: 0.9rem 1rem;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 768px) {
   .user-card__info {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 1.25rem;
+    row-gap: 0.45rem;
+  }
+}
+
+@media (min-width: 1100px) {
+  .user-card__info {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 .user-card__info-item {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 0.35rem;
   font-size: 0.8rem;
   color: #e5e7eb;
-  word-break: break-word;
+  min-width: 0;
 }
 
 .user-card__info-item--wide {
@@ -601,58 +617,62 @@ async function removeUser(user: User) {
 }
 
 .user-card__label {
-  font-size: 0.68rem;
-  color: #9ca3af;
-}
-
-.user-card__actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
-  border-top: 1px solid rgba(55, 65, 81, 0.55);
-  background: rgba(15, 23, 42, 0.35);
-}
-
-@media (min-width: 900px) {
-  .user-card__actions {
-    grid-template-columns: 9rem 1fr 1.4fr;
-  }
-}
-
-.user-card__action-block--grow {
-  min-width: 0;
-}
-
-.user-card__action-block--wide {
-  min-width: 0;
-}
-
-.user-card__action-title {
-  margin: 0 0 0.35rem;
+  flex-shrink: 0;
   font-size: 0.72rem;
   color: #9ca3af;
   font-weight: 700;
 }
 
-.user-card__inline-form,
-.user-card__wallet-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
+.user-card__value {
+  min-width: 0;
+  word-break: break-word;
 }
 
-.user-card__wallet-form {
+.user-card__actions {
+  display: flex;
   flex-direction: column;
-  align-items: stretch;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid rgba(55, 65, 81, 0.55);
+  background: rgba(15, 23, 42, 0.35);
 }
 
-.user-card__wallet-row {
+.user-card__action-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
   align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.user-card__action-row--grow {
+  flex: 1 1 auto;
+}
+
+.user-card__action-row--wide {
+  width: 100%;
+}
+
+.user-card__action-label {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.user-card__action-label--sub {
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.user-card__wallet-form {
+  row-gap: 0.45rem;
+}
+
+.user-card__select--action {
+  width: auto;
+  min-width: 6.5rem;
 }
 
 .user-card__input {

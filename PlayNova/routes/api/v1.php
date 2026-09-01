@@ -165,6 +165,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('settings/sms', [SettingsAdminController::class, 'smsSettings']);
         Route::put('settings/sms', [SettingsAdminController::class, 'updateSmsSettings']);
         Route::get('settings/ai', [SettingsAdminController::class, 'aiSettings']);
+        Route::get('settings/ai/models', [SettingsAdminController::class, 'aiModels']);
         Route::put('settings/ai', [SettingsAdminController::class, 'updateAiSettings']);
         Route::post('settings/ai/test', [SettingsAdminController::class, 'testAiSettings']);
         Route::get('settings/referral', [SettingsAdminController::class, 'referralSettings']);
