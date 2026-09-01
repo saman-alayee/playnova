@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 FILES = [
     ("frontend/components/RegisterTournamentModal.vue", "/var/www/playnova/frontend/components/RegisterTournamentModal.vue"),
+    ("frontend/composables/useModals.ts", "/var/www/playnova/frontend/composables/useModals.ts"),
+    ("frontend/components/TournamentCard.vue", "/var/www/playnova/frontend/components/TournamentCard.vue"),
+    ("frontend/components/TournamentActions.vue", "/var/www/playnova/frontend/components/TournamentActions.vue"),
 ]
 
 client = paramiko.SSHClient()

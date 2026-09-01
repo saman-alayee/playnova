@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Modules\Content\Services\ContentCacheService;
+use App\Services\AvalAiModelCatalog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 
@@ -319,16 +320,7 @@ class Setting extends Model
     /** @return list<string> */
     public static function avalAiPremiumVisionModels(): array
     {
-        return [
-            'gpt-5.5',
-            'claude-opus-4-7',
-            'claude-opus-4-6',
-            'claude-sonnet-4-6',
-            'gemini-3.1-pro-preview',
-            'gpt-4o',
-            'gpt-4.1',
-            'claude-sonnet-4-20250514',
-        ];
+        return AvalAiModelCatalog::premiumModelIds();
     }
 
     public static function getResultAiVisionModel(): string

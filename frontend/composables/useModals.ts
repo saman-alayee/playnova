@@ -15,6 +15,9 @@ const registerOpen = ref(false)
 const registerTournament = ref<Tournament | null>(null)
 /** Blocks ghost clicks on card buttons right after register modal closes. */
 const suppressDescriptionUntil = ref(0)
+/** Blocks reopening the register modal right after submit/navigation. */
+const suppressRegisterUntil = ref(0)
+const registrationNavigating = ref(false)
 
 export function useModals() {
   const api = useApi()
@@ -23,8 +26,12 @@ export function useModals() {
     suppressDescriptionUntil.value = Date.now() + ms
   }
 
+  function armRegisterSuppression(ms = 2000) {
+    suppressRegisterUntil.value = Date.now() + ms
+  }
+
   function openDescriptionModal(title: string, content: string) {
-    if (registerOpen.value || Date.now() < suppressDescriptionUntil.value) {
+    if (registerOpen.value || registrationNavigating.value || Date.now() < suppressDescriptionUntil.value) {
       return
     }
     descriptionTitle.value = title
@@ -76,16 +83,32 @@ export function useModals() {
       void navigateTo('/login')
       return
     }
+    if (registrationNavigating.value || Date.now() < suppressRegisterUntil.value) {
+      return
+    }
+    if (tournament.pending_seat) {
+      void navigateTo(`/tournaments/${tournament.id}/select-seat`)
+      return
+    }
     closeDescriptionModal()
     armDescriptionSuppression(1200)
     registerTournament.value = tournament
     registerOpen.value = true
   }
 
+  function clearRegisterBodyLock() {
+    registrationNavigating.value = false
+    if (import.meta.client) {
+      document.body.classList.remove('register-modal-active')
+    }
+  }
+
   function closeRegisterModal() {
     registerOpen.value = false
     registerTournament.value = null
+    clearRegisterBodyLock()
     armDescriptionSuppression(1200)
+    armRegisterSuppression(2000)
   }
 
   return {
@@ -99,6 +122,7 @@ export function useModals() {
     descriptionContent,
     registerOpen,
     registerTournament,
+    registrationNavigating,
     openDescriptionModal,
     closeDescriptionModal,
     openGameLoginModal,
@@ -107,5 +131,7 @@ export function useModals() {
     openRegisterModal,
     closeRegisterModal,
     armDescriptionSuppression,
+    armRegisterSuppression,
+    clearRegisterBodyLock,
   }
 }

@@ -46,11 +46,6 @@ body {
   overflow-x: hidden;
 }
 
-body.register-modal-active .page-main,
-body.register-modal-active .page-shell {
-  pointer-events: none;
-}
-
 body.register-modal-active .modal-overlay {
   pointer-events: auto;
 }

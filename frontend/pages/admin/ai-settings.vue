@@ -2,6 +2,20 @@
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 useHead({ title: 'تنظیمات هوش مصنوعی | PlayNova' })
 
+interface AiModelOption {
+  id: string
+  label_fa: string
+  note_fa: string
+  recommended_for: string[]
+}
+
+interface AiModelCategory {
+  id: string
+  label: string
+  description: string
+  models: AiModelOption[]
+}
+
 const api = useApi()
 const flash = useState('flash')
 const { data, refresh } = await useAsyncData('admin-ai', () => api.admin.aiSettings())
@@ -19,8 +33,7 @@ const form = reactive({
 const testing = ref(false)
 const refreshingModels = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
-const modelOptions = ref<string[]>([])
-const premiumModels = ref<string[]>([])
+const modelCategories = ref<AiModelCategory[]>([])
 
 watch(data, (d) => {
   if (!d) return
@@ -31,30 +44,63 @@ watch(data, (d) => {
   form.is_active = !!d.is_active
   form.api_key = ''
   form.clear_api_key = false
-  modelOptions.value = d.available_models?.length ? [...d.available_models] : [...(d.suggested_models || [])]
-  premiumModels.value = d.premium_models?.length ? [...d.premium_models] : []
+  modelCategories.value = d.model_categories?.length
+    ? [...d.model_categories]
+    : buildCategoriesFromFlat(d.available_models || d.suggested_models || [])
 }, { immediate: true })
 
-const premiumModelOptions = computed(() => {
-  const premiumSet = new Set(premiumModels.value)
-  const fromList = modelOptions.value.filter((m) => premiumSet.has(m))
-  for (const m of premiumModels.value) {
-    if (!fromList.includes(m)) fromList.push(m)
-  }
-  return fromList
-})
+function buildCategoriesFromFlat(models: string[]): AiModelCategory[] {
+  if (!models.length) return []
+  return [{
+    id: 'other',
+    label: 'همه مدل‌ها',
+    description: 'لیست دریافت‌شده از API',
+    models: models.map((id) => ({
+      id,
+      label_fa: id,
+      note_fa: '',
+      recommended_for: [],
+    })),
+  }]
+}
 
-const otherModelOptions = computed(() =>
-  modelOptions.value.filter((m) => !premiumModelOptions.value.includes(m)),
-)
-
-function modelOptionLabel(model: string, forResult = false) {
-  if (!premiumModels.value.includes(model)) return model
-  const recommended = data.value?.recommended_result_model
-  if (forResult && model === recommended) {
-    return `⭐ ${model} — پیشنهاد برای تحلیل نتیجه`
+function ensureModelInCategories(model: string) {
+  if (!model) return
+  const exists = modelCategories.value.some((cat) => cat.models.some((m) => m.id === model))
+  if (!exists) {
+    const other = modelCategories.value.find((c) => c.id === 'other')
+    if (other) {
+      other.models.unshift({ id: model, label_fa: model, note_fa: 'مدل انتخاب‌شده', recommended_for: [] })
+    } else {
+      modelCategories.value.push({
+        id: 'other',
+        label: 'سایر مدل‌ها',
+        description: '',
+        models: [{ id: model, label_fa: model, note_fa: '', recommended_for: [] }],
+      })
+    }
   }
-  return `⭐ ${model} — بهترین کیفیت`
+}
+
+function modelOptionLabel(model: AiModelOption, forResult = false) {
+  const parts = [model.label_fa !== model.id ? `${model.label_fa} (${model.id})` : model.id]
+  if (model.note_fa) parts.push(`— ${model.note_fa}`)
+  if (forResult && model.recommended_for.includes('result')) {
+    parts.push('★ پیشنهاد تحلیل نتیجه')
+  } else if (model.recommended_for.includes('vision') && !forResult) {
+    parts.push('✓ مناسب تست')
+  }
+  return parts.join(' ')
+}
+
+function tierBadgeClass(tierId: string) {
+  const map: Record<string, string> = {
+    economy: 'ai-tier--economy',
+    balanced: 'ai-tier--balanced',
+    premium: 'ai-tier--premium',
+    other: 'ai-tier--other',
+  }
+  return map[tierId] || 'ai-tier--other'
 }
 
 const apiKeySourceLabel = computed(() => {
@@ -64,21 +110,17 @@ const apiKeySourceLabel = computed(() => {
   return 'تنظیم نشده'
 })
 
-function ensureModelInOptions(model: string) {
-  if (model && !modelOptions.value.includes(model)) {
-    modelOptions.value = [model, ...modelOptions.value]
-  }
-}
-
 async function refreshModels() {
   refreshingModels.value = true
   try {
     const res = await api.admin.aiModels()
-    if (res.models?.length) {
-      modelOptions.value = res.models
-      ensureModelInOptions(form.vision_model)
-      ensureModelInOptions(form.result_vision_model)
+    if (res.model_categories?.length) {
+      modelCategories.value = res.model_categories
+    } else if (res.models?.length) {
+      modelCategories.value = buildCategoriesFromFlat(res.models)
     }
+    ensureModelInCategories(form.vision_model)
+    ensureModelInCategories(form.result_vision_model)
   } catch (e: unknown) {
     const err = e as { data?: { message?: string }; message?: string }
     flash.value = { error: err.data?.message || err.message || 'دریافت لیست مدل‌ها ناموفق بود.' }
@@ -127,11 +169,27 @@ async function testConnection() {
 </script>
 
 <template>
-  <div class="max-w-xl">
+  <div class="max-w-2xl">
     <h1 class="text-2xl font-bold mb-2 text-white">تنظیمات هوش مصنوعی (AvalAI)</h1>
-    <p class="text-sm text-gray-400 mb-6">
+    <p class="text-sm text-gray-400 mb-4">
       برای تشخیص خودکار نتیجه مسابقه از اسکرین‌شات. مقادیر پنل بر .env اولویت دارند.
     </p>
+
+    <div v-if="modelCategories.length" class="ai-tier-guide mb-6">
+      <h2 class="ai-tier-guide__title">راهنمای دسته‌بندی مدل‌ها</h2>
+      <div class="ai-tier-guide__grid">
+        <div
+          v-for="cat in modelCategories"
+          :key="cat.id"
+          class="ai-tier-card"
+          :class="tierBadgeClass(cat.id)"
+        >
+          <h3 class="ai-tier-card__label">{{ cat.label }}</h3>
+          <p class="ai-tier-card__desc">{{ cat.description }}</p>
+          <p class="ai-tier-card__count">{{ cat.models.length.toLocaleString('fa-IR') }} مدل</p>
+        </div>
+      </div>
+    </div>
 
     <form class="bg-dark-800 border border-dark-600 rounded-xl p-6 space-y-4" @submit.prevent="save">
       <label class="flex items-center gap-2 text-sm text-gray-300">
@@ -162,36 +220,47 @@ async function testConnection() {
         </div>
         <select
           v-model="form.vision_model"
-          class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
+          class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white text-sm"
         >
-          <optgroup v-if="premiumModelOptions.length" label="⭐ بهترین کیفیت">
-            <option v-for="m in premiumModelOptions" :key="'vp-' + m" :value="m">
+          <optgroup
+            v-for="cat in modelCategories"
+            :key="'v-' + cat.id"
+            :label="cat.label"
+          >
+            <option
+              v-for="m in cat.models"
+              :key="'v-' + m.id"
+              :value="m.id"
+            >
               {{ modelOptionLabel(m) }}
             </option>
           </optgroup>
-          <optgroup v-if="otherModelOptions.length" label="سایر مدل‌ها">
-            <option v-for="m in otherModelOptions" :key="'vo-' + m" :value="m">{{ m }}</option>
-          </optgroup>
         </select>
+        <p class="text-xs text-gray-500 mt-1">برای تست اتصال، مدل‌های «ارزان» یا «متعادل» کافی است.</p>
       </div>
 
       <div>
         <label class="block text-sm text-gray-400 mb-1">مدل تحلیل نتیجه مسابقه</label>
         <select
           v-model="form.result_vision_model"
-          class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
+          class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white text-sm"
         >
-          <optgroup v-if="premiumModelOptions.length" label="⭐ بهترین کیفیت — برای خواندن همه رتبه‌های جایزه">
-            <option v-for="m in premiumModelOptions" :key="'rp-' + m" :value="m">
+          <optgroup
+            v-for="cat in modelCategories"
+            :key="'r-' + cat.id"
+            :label="cat.label"
+          >
+            <option
+              v-for="m in cat.models"
+              :key="'r-' + m.id"
+              :value="m.id"
+            >
               {{ modelOptionLabel(m, true) }}
             </option>
           </optgroup>
-          <optgroup v-if="otherModelOptions.length" label="سایر مدل‌ها">
-            <option v-for="m in otherModelOptions" :key="'ro-' + m" :value="m">{{ m }}</option>
-          </optgroup>
         </select>
         <p class="text-xs text-gray-500 mt-1">
-          برای تحلیل اسکرین‌شات RANK استفاده می‌شود. مدل‌های ⭐ برای خواندن همه رتبه‌ها تا آخرین رتبه جایزه توصیه می‌شوند.
+          برای خواندن همه رتبه‌های جایزه از اسکرین‌شات، مدل «پریمیوم» توصیه می‌شود (مثلاً {{ data?.recommended_result_model || 'gpt-5.5' }}).
         </p>
       </div>
 
@@ -247,3 +316,76 @@ async function testConnection() {
     </form>
   </div>
 </template>
+
+<style scoped>
+.ai-tier-guide__title {
+  margin: 0 0 0.65rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #e5e7eb;
+}
+
+.ai-tier-guide__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem;
+}
+
+.ai-tier-card {
+  border-radius: 0.65rem;
+  border: 1px solid rgba(75, 85, 99, 0.55);
+  padding: 0.65rem 0.75rem;
+  background: rgba(17, 24, 39, 0.55);
+}
+
+.ai-tier-card__label {
+  margin: 0 0 0.25rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ai-tier-card__desc {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.55;
+  color: #9ca3af;
+}
+
+.ai-tier-card__count {
+  margin: 0.35rem 0 0;
+  font-size: 0.65rem;
+  color: #6b7280;
+}
+
+.ai-tier--economy {
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.ai-tier--economy .ai-tier-card__label {
+  color: #86efac;
+}
+
+.ai-tier--balanced {
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.ai-tier--balanced .ai-tier-card__label {
+  color: #93c5fd;
+}
+
+.ai-tier--premium {
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+.ai-tier--premium .ai-tier-card__label {
+  color: #fcd34d;
+}
+
+.ai-tier--other {
+  border-color: rgba(107, 114, 128, 0.45);
+}
+
+.ai-tier--other .ai-tier-card__label {
+  color: #d1d5db;
+}
+</style>

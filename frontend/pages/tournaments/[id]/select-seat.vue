@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import type { OccupiedSeatInfo } from '~/types/api'
+import type { OccupiedSeatInfo, SeatSelectionData } from '~/types/api'
 
-definePageMeta({ middleware: 'auth' })
+definePageMeta({ middleware: 'auth', ssr: false })
 
 const route = useRoute()
 const api = useApi()
 const auth = useAuthStore()
 const flash = useState('flash')
+const { clearRegisterBodyLock } = useModals()
 
 const id = computed(() => route.params.id as string)
 const loading = ref(false)
@@ -18,26 +19,42 @@ const pendingTeam = ref<number | null>(null)
 const pendingLabel = ref('')
 const teammateCodIds = ref<string[]>([])
 
-const { data, pending, error, refresh } = await useAsyncData(
-  () => `select-seat-${id.value}`,
-  () => api.tournaments.selectSeat(id.value),
-)
+const data = ref<SeatSelectionData | null>(null)
+const pending = ref(true)
+const loadErrorMessage = ref<string | null>(null)
 
-const loadError = computed(() => {
-  if (pending.value) return null
-  if (error.value) {
-    const err = error.value as { message?: string; data?: { message?: string } }
-    return err.data?.message || err.message || 'امکان انتخاب جایگاه وجود ندارد.'
+async function refresh() {
+  pending.value = true
+  loadErrorMessage.value = null
+  try {
+    if (!auth.initialized) {
+      await auth.init()
+    }
+    data.value = await api.tournaments.selectSeat(id.value)
+  } catch (e: unknown) {
+    data.value = null
+    const err = e as { message?: string; data?: { message?: string } }
+    loadErrorMessage.value = err.data?.message || err.message || 'امکان انتخاب جایگاه وجود ندارد.'
+  } finally {
+    pending.value = false
   }
-  if (!data.value) return 'امکان انتخاب جایگاه وجود ندارد.'
-  return null
+}
+
+watch(() => route.params.id, () => {
+  void refresh()
 })
 
 onMounted(() => {
+  clearRegisterBodyLock()
   void refresh()
 })
 
 useHead(() => ({ title: `جایگاه‌ها | ${data.value?.tournament?.title || 'مسابقه'}` }))
+
+const loadError = computed(() => {
+  if (pending.value) return null
+  return loadErrorMessage.value
+})
 
 const alreadySelected = computed(() => !!data.value?.seat_label && !data.value?.teams_grid)
 const teamsGrid = computed(() => data.value?.teams_grid || [])
@@ -147,17 +164,18 @@ async function cancelRegistration() {
 
     <div v-else-if="loadError" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center space-y-3">
       <p class="text-red-300">{{ loadError }}</p>
+      <button type="button" class="text-secondary text-sm font-bold underline" @click="refresh">تلاش مجدد</button>
       <NuxtLink to="/wallet" class="inline-block text-secondary text-sm font-bold underline">شارژ کیف پول</NuxtLink>
       <NuxtLink :to="`/tournaments/${id}`" class="block text-sm text-gray-400">بازگشت به مسابقه</NuxtLink>
     </div>
 
-    <div v-else-if="alreadySelected" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center">
+    <div v-else-if="alreadySelected && data" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center">
       <p class="text-gray-400">جایگاه شما قبلاً ثبت شده است:</p>
       <p class="seat-page__selected-value" dir="ltr">{{ data.seat_label }}</p>
       <NuxtLink :to="`/tournaments/${id}`" class="text-secondary">بازگشت به مسابقه</NuxtLink>
     </div>
 
-    <template v-else>
+    <template v-else-if="data">
       <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h1 class="text-2xl font-bold text-white">جایگاه‌ها</h1>

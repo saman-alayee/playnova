@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BaseApiController;
 use App\Http\Controllers\Api\V1\Admin\Concerns\AuthorizesAdmin;
 use App\Models\Setting;
 use App\Services\AvalAIService;
+use App\Services\AvalAiModelCatalog;
 use App\Services\FaviconService;
 use App\Services\ZibalGatewayService;
 use Illuminate\Http\JsonResponse;
@@ -303,7 +304,8 @@ class SettingsAdminController extends BaseApiController
             'has_api_key' => filled(Setting::getAvalAiApiKey()),
             'api_key_source' => Setting::avalAiApiKeySource(),
             'available_models' => array_values(array_unique($availableModels)),
-            'premium_models' => Setting::avalAiPremiumVisionModels(),
+            'premium_models' => AvalAiModelCatalog::premiumModelIds(),
+            'model_categories' => AvalAiModelCatalog::categorize($availableModels),
             'recommended_result_model' => 'gpt-5.5',
             'suggested_models' => $fallbackModels,
         ]);
@@ -318,8 +320,11 @@ class SettingsAdminController extends BaseApiController
         }
 
         try {
+            $models = $avalai->listModels();
+
             return $this->success([
-                'models' => $avalai->listModels(),
+                'models' => $models,
+                'model_categories' => AvalAiModelCatalog::categorize($models),
             ]);
         } catch (\Throwable $e) {
             return $this->error('دریافت لیست مدل‌ها ناموفق: ' . $e->getMessage());

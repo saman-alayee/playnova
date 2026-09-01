@@ -19,10 +19,15 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
+    'allowed_origins' => array_values(array_filter([
         'http://localhost:3000',
         'http://127.0.0.1:3000',
-    ],
+        env('FRONTEND_URL'),
+        env('APP_URL'),
+        'http://193.105.234.54',
+        'https://playnova.ir',
+        'http://playnova.ir',
+    ])),
 
     'allowed_origins_patterns' => [],
 

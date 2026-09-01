@@ -65,12 +65,14 @@ const saving = ref(false)
 async function submit() {
   saving.value = true
   try {
-    await api.admin.updateTournament(id.value, {
+    const payload: Record<string, unknown> = {
       ...form,
       prize_ranks: form.prize_ranks
         .filter((row) => Number(row.amount) > 0)
         .map((row) => ({ rank: row.rank, amount: Number(row.amount) })),
-    })
+    }
+    if (!payload.end_date) delete payload.end_date
+    await api.admin.updateTournament(id.value, payload)
     flash.value = { success: 'مسابقه به‌روزرسانی شد.' }
     router.push('/admin/tournaments')
   } catch (e: unknown) {

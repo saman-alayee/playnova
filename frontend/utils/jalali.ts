@@ -71,7 +71,7 @@ export function jalaliToGregorian(jy: number, jm: number, jd: number): [number, 
     gm++
   }
 
-  return [gy, gm, days + 1]
+  return [gy, gm + 1, days + 1]
 }
 
 function tehranGregorianParts(iso: string): { gy: number; gm: number; gd: number; hour: number; minute: number } | null {
@@ -117,8 +117,20 @@ export function isoToJalaliParts(iso?: string | null): JalaliDateTimeParts | nul
   }
 }
 
+export function isValidJalaliParts(parts: JalaliDateTimeParts): boolean {
+  return [parts.jy, parts.jm, parts.jd, parts.hour, parts.minute].every(
+    (value) => Number.isFinite(value) && value > 0,
+  )
+    && parts.jm <= 12
+    && parts.jd <= 31
+    && parts.hour <= 23
+    && parts.minute <= 59
+}
+
 export function jalaliPartsToApiDateTime(parts: JalaliDateTimeParts): string {
+  if (!isValidJalaliParts(parts)) return ''
   const [gy, gm, gd] = jalaliToGregorian(parts.jy, parts.jm, parts.jd)
+  if (gm < 1 || gm > 12 || gd < 1 || gd > 31) return ''
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${gy}-${pad(gm)}-${pad(gd)} ${pad(parts.hour)}:${pad(parts.minute)}:00`
 }

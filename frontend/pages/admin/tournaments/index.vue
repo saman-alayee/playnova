@@ -94,6 +94,10 @@ async function createTournament() {
     flash.value = { error: 'تاریخ و ساعت شروع مسابقه را وارد کنید.' }
     return
   }
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(createForm.start_date)) {
+    flash.value = { error: 'تاریخ نامعتبر است. سال، ماه، روز، ساعت و دقیقه را کامل وارد کنید.' }
+    return
+  }
   creating.value = true
   try {
     const prizeRanks = createForm.prize_ranks
@@ -115,7 +119,9 @@ async function createTournament() {
     })
     await refresh()
   } catch (e: unknown) {
-    flash.value = { error: (e as Error).message }
+    const err = e as { message?: string; data?: { errors?: Record<string, string[]> } }
+    const startDateError = err.data?.errors?.start_date?.[0]
+    flash.value = { error: startDateError ? `تاریخ شروع: ${startDateError}` : (err.message || 'ایجاد مسابقه ناموفق بود.') }
   } finally {
     creating.value = false
   }

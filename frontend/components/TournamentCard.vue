@@ -162,6 +162,7 @@ function formatTime(date?: string | null) {
         v-if="hasDescription"
         type="button"
         class="tournament-actions__desc-link"
+        @mousedown.stop.prevent
         @click.stop.prevent="openDescriptionModal(tournament.title, tournament.description!)"
       >
         📝 مشاهده توضیحات مسابقه

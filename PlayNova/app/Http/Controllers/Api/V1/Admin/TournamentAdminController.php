@@ -89,7 +89,7 @@ class TournamentAdminController extends BaseApiController
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'] ?? null,
             'game_login_info' => $validated['game_login_info'] ?? null,
-            'status' => 'upcoming',
+            'status' => 'active',
             'registered_count' => 0,
             'prize_ranks' => $this->prizeRanksFromRequest($request, (float) $validated['prize_pool']),
         ]);

@@ -5,7 +5,9 @@ const {
   registerOpen,
   registerTournament,
   closeRegisterModal,
+  clearRegisterBodyLock,
   armDescriptionSuppression,
+  armRegisterSuppression,
 } = useModals()
 
 const api = useApi()
@@ -47,6 +49,8 @@ watch(registerOpen, async (open) => {
     } catch {
       rules.value = []
     }
+  } else if (import.meta.client) {
+    document.body.classList.remove('register-modal-active')
   }
 })
 
@@ -72,21 +76,29 @@ async function continueFromRules() {
 
 async function startRegistration(reservationType: 'solo' | 'team') {
   const t = registerTournament.value
-  if (!t) return
+  if (!t || loading.value) return
   if (!hasEnoughWallet.value) {
     errorMessage.value = walletError()
     return
   }
+
   loading.value = true
   errorMessage.value = ''
-  armDescriptionSuppression(1500)
+  armDescriptionSuppression(2500)
+  armRegisterSuppression(2500)
+
   try {
     await auth.fetchUser()
-    await api.tournaments.register(t.id, { reservation_type: reservationType })
+    await api.tournaments.register(t.id, {
+      reservation_type: reservationType,
+      accept_rules: '1',
+    })
     await auth.fetchUser()
     await refreshNuxtData('home')
+
+    const target = `/tournaments/${t.id}/select-seat`
     closeRegisterModal()
-    await navigateTo(`/tournaments/${t.id}/select-seat`, { replace: true })
+    await navigateTo(target)
   } catch (e: unknown) {
     const err = e as { message?: string }
     const message = err.message || 'ثبت‌نام ناموفق بود.'
@@ -96,13 +108,12 @@ async function startRegistration(reservationType: 'solo' | 'team') {
     }
   } finally {
     loading.value = false
+    clearRegisterBodyLock()
   }
 }
 
 onUnmounted(() => {
-  if (import.meta.client) {
-    document.body.classList.remove('register-modal-active')
-  }
+  clearRegisterBodyLock()
 })
 </script>
 
@@ -154,7 +165,7 @@ onUnmounted(() => {
               :disabled="!acceptRules || loading || !hasEnoughWallet"
               @click.stop.prevent="continueFromRules"
             >
-              {{ loading ? '...' : (supportsTeam ? 'ادامه — انتخاب نوع ثبت‌نام' : 'ادامه و انتخاب جایگاه') }}
+              {{ loading ? 'در حال ثبت‌نام...' : (supportsTeam ? 'ادامه — انتخاب نوع ثبت‌نام' : 'ادامه و انتخاب جایگاه') }}
             </button>
             <button type="button" class="bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-bold" @click="close">
               انصراف
@@ -164,6 +175,9 @@ onUnmounted(() => {
 
         <div v-else>
           <h3 class="font-bold text-primary mb-3">نوع ثبت‌نام</h3>
+          <p v-if="loading" class="text-sm text-amber-300 mb-3 text-center">
+            در حال انتقال به صفحه انتخاب جایگاه...
+          </p>
           <p class="text-sm text-gray-400 mb-4">
             این مسابقه {{ registerTournament.seat_mode_label || 'تیمی' }} است. نحوه رزرو جایگاه را انتخاب کنید.
           </p>

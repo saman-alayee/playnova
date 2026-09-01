@@ -26,9 +26,9 @@ export function useApi() {
   }
 
   async function ensureCsrfCookie() {
-    const backendUrl = config.public.backendUrl as string
+    const backendUrl = (config.public.backendUrl as string) || ''
     await $fetch('/sanctum/csrf-cookie', {
-      baseURL: backendUrl,
+      baseURL: backendUrl || undefined,
       credentials: 'include',
     })
   }
@@ -580,11 +580,36 @@ export function useApi() {
           api_key_source: 'database' | 'env' | 'none'
           available_models: string[]
           premium_models: string[]
+          model_categories: Array<{
+            id: string
+            label: string
+            description: string
+            models: Array<{
+              id: string
+              label_fa: string
+              note_fa: string
+              recommended_for: string[]
+            }>
+          }>
           recommended_result_model: string
           suggested_models: string[]
         }>('/admin/settings/ai'),
 
-      aiModels: () => api.get<{ models: string[] }>('/admin/settings/ai/models'),
+      aiModels: () =>
+        api.get<{
+          models: string[]
+          model_categories: Array<{
+            id: string
+            label: string
+            description: string
+            models: Array<{
+              id: string
+              label_fa: string
+              note_fa: string
+              recommended_for: string[]
+            }>
+          }>
+        }>('/admin/settings/ai/models'),
 
       updateAiSettings: (data: Record<string, unknown>) => api.put<void>('/admin/settings/ai', data),
 

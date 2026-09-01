@@ -15,13 +15,12 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
-const parts = reactive<JalaliDateTimeParts>({
-  jy: 1404,
-  jm: 1,
-  jd: 1,
-  hour: 12,
-  minute: 0,
-})
+function defaultParts(): JalaliDateTimeParts {
+  const today = isoToJalaliParts(new Date().toISOString())
+  return today ?? { jy: 1404, jm: 1, jd: 1, hour: 12, minute: 0 }
+}
+
+const parts = reactive<JalaliDateTimeParts>(defaultParts())
 
 function syncFromModel(value?: string) {
   const parsed = isoToJalaliParts(value)
