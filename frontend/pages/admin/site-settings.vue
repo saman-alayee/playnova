@@ -5,7 +5,7 @@ useHead({ title: 'تنظیمات سایت | PlayNova' })
 const api = useApi()
 const flash = useState('flash')
 
-const { data, pending, error, refresh } = await useAsyncData('admin-site-settings', () =>
+const { data, pending, error, refresh } = usePageData('admin-site-settings', () =>
   api.admin.siteSettings(),
 )
 

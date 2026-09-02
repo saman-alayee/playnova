@@ -7,7 +7,7 @@ const auth = useAuthStore()
 const flash = useState('flash')
 const { formatToman } = useFormatToman()
 
-const { data, pending, refresh } = await useAsyncData('kyc', () => api.kyc.show())
+const { data, pending, refresh } = usePageData('kyc', () => api.kyc.show())
 
 const documentFile = ref<File | null>(null)
 const loading = ref(false)
@@ -62,7 +62,7 @@ async function submit() {
     <h1 class="text-2xl font-bold mb-2 text-white">احراز هویت (KYC)</h1>
     <p class="text-xs text-gray-400 mb-4">تصویر با AES-256 رمزنگاری و در مسیر امن ذخیره می‌شود.</p>
 
-    <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <template v-else>
       <div
         v-if="isVerified"

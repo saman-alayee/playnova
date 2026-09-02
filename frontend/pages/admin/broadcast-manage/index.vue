@@ -20,7 +20,7 @@ const saving = ref(false)
 const selectedBroadcasts = ref<string[]>([])
 const selectedPersonal = ref<number[]>([])
 
-const { data: broadcastData, pending: broadcastPending, refresh: refreshBroadcasts } = await useAsyncData(
+const { data: broadcastData, pending: broadcastPending, refresh: refreshBroadcasts } = usePageData(
   'admin-broadcast-campaigns',
   () => api.admin.broadcasts({
     page: broadcastPage.value,
@@ -29,7 +29,7 @@ const { data: broadcastData, pending: broadcastPending, refresh: refreshBroadcas
   { watch: [broadcastPage] },
 )
 
-const { data: personalData, pending: personalPending, refresh: refreshPersonal } = await useAsyncData(
+const { data: personalData, pending: personalPending, refresh: refreshPersonal } = usePageData(
   'admin-personal-notifications',
   () => api.admin.personalNotifications({
     page: personalPage.value,

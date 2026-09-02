@@ -7,7 +7,7 @@ useHead({ title: 'پنل مدیریت | PlayNova' })
 const api = useApi()
 const { formatToman } = useFormatToman()
 
-const { data, pending } = await useAsyncData('admin-dashboard', () => api.admin.dashboard(), {
+const { data, pending } = usePageData('admin-dashboard', () => api.admin.dashboard(), {
   default: () => ({}) as AdminDashboard,
 })
 
@@ -21,7 +21,7 @@ function formatCount(value?: number) {
   <div>
     <h1 class="text-2xl font-bold mb-6 text-white">داشبورد مدیریت</h1>
 
-    <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <template v-else>
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <div class="bg-dark-800 border border-dark-600 rounded-xl p-5">

@@ -18,7 +18,7 @@ const saving = ref(false)
 const testing = ref(false)
 const errors = ref<string[]>([])
 
-const { data, pending, refresh } = await useAsyncData('admin-payment', () => api.admin.paymentGateway())
+const { data, pending, refresh } = usePageData('admin-payment', () => api.admin.paymentGateway())
 
 const form = reactive({
   merchant_id: '',

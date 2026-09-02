@@ -5,7 +5,7 @@ useHead({ title: 'جدول رتبه‌بندی | PlayNova' })
 definePageMeta({ keepalive: true })
 
 const api = useApi()
-const { data, pending, error } = await useAsyncData('leaderboard', () => api.leaderboard(), {
+const { data, pending, error } = usePageData('leaderboard', () => api.leaderboard(), {
   default: () => [] as LeaderboardEntry[],
 })
 </script>
@@ -15,7 +15,7 @@ const { data, pending, error } = await useAsyncData('leaderboard', () => api.lea
     <h1 class="text-2xl font-bold mb-2 text-center text-white">🏆 رتبه‌بندی لیگ حرفه‌ای</h1>
     <p class="text-center text-sm text-gray-400 mb-6">بر اساس تعداد کیل بازیکنان لیگ حرفه‌ای</p>
 
-    <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <div v-else-if="error" class="bg-dark-800 border border-dark-600 rounded-xl p-6 text-center text-gray-400">
       بارگذاری رتبه‌بندی ممکن نشد.
     </div>

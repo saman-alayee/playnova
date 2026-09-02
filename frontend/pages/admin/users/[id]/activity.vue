@@ -48,7 +48,7 @@ interface ActivityLog {
   created_at?: string
 }
 
-const { data, pending, refresh } = await useAsyncData(
+const { data, pending, refresh } = usePageData(
   `admin-user-activity-${userId}`,
   () => api.admin.userActivity(userId, queryParams()),
   { watch: [page] },

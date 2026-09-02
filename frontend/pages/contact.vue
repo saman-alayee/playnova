@@ -2,7 +2,7 @@
 useHead({ title: 'ارتباط با ما | PlayNova' })
 
 const api = useApi()
-const { data, pending, error } = await useAsyncData('contact', () => api.pages.contact())
+const { data, pending, error } = usePageData('contact', () => api.pages.contact())
 
 const email = computed(() => data.value?.email?.trim() || '')
 const phone = computed(() => data.value?.phone?.trim() || '')
@@ -11,7 +11,7 @@ const phoneHref = computed(() => phone.value.replace(/\s+/g, ''))
 
 <template>
   <div class="max-w-2xl mx-auto">
-    <div v-if="pending" class="text-center text-gray-500 py-10">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <div v-else-if="error" class="bg-dark-800 border border-dark-600 rounded-xl p-6 text-center text-gray-400">
       بارگذاری اطلاعات تماس ممکن نشد.
     </div>

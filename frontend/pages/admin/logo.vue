@@ -13,7 +13,7 @@ const fileLabel = ref('No file chosen')
 const saving = ref(false)
 const deleting = ref(false)
 
-const { data, pending, refresh } = await useAsyncData('admin-logo', () => api.admin.logo())
+const { data, pending, refresh } = usePageData('admin-logo', () => api.admin.logo())
 
 const previewUrl = computed(() => {
   const url = data.value?.logo_url

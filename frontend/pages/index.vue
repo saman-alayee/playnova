@@ -25,7 +25,7 @@ const activeSlide = ref(0)
 const failedSlides = ref<Record<number, boolean>>({})
 let slideTimer: ReturnType<typeof setInterval> | null = null
 
-const { data, error, pending, refresh } = await useAsyncData('home', () => api.home(), {
+const { data, error, pending, refresh } = usePageData('home', () => api.home(), {
   default: () =>
     ({
       active_tournaments: [],
@@ -133,7 +133,9 @@ watch(() => auth.isAuthenticated, (loggedIn) => {
 
     <section id="special" class="mb-8 scroll-mt-24">
       <h2 class="text-lg font-bold mb-4 text-white">مسابقات ویژه</h2>
-      <div v-if="pending && !activeTournaments.length" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+    <div v-if="pending && !activeTournaments.length">
+      <PageLoading />
+    </div>
       <div v-else-if="error && !activeTournaments.length" class="text-center py-10 bg-dark-800/50 rounded-2xl border border-dark-600">
         <p class="text-gray-500">بارگذاری مسابقات ممکن نشد.</p>
       </div>

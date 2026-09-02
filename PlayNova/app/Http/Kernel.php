@@ -49,5 +49,6 @@ class Kernel extends HttpKernel
         'seat_admin' => \App\Http\Middleware\SeatAdminMiddleware::class,
         'admin.cache.invalidate' => \App\Http\Middleware\InvalidateCachesAfterAdminMutation::class,
         'api.cache.public' => \App\Http\Middleware\CachePublicGetResponse::class,
+        'auth.sanctum.optional' => \App\Http\Middleware\OptionalSanctumAuthenticate::class,
     ];
 }

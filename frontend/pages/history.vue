@@ -7,6 +7,7 @@ definePageMeta({ keepalive: true })
 const api = useApi()
 const auth = useAuthStore()
 const { publicAssetUrl } = useMediaUrl()
+const loadingIndicator = useLoadingIndicator()
 
 const tournaments = ref<Tournament[]>([])
 const meta = ref<PaginationMeta | null>(null)
@@ -15,8 +16,12 @@ const loadingMore = ref(false)
 const error = ref(false)
 
 async function loadPage(page = 1) {
-  if (page === 1) pending.value = true
-  else loadingMore.value = true
+  if (page === 1) {
+    pending.value = true
+    loadingIndicator.start()
+  } else {
+    loadingMore.value = true
+  }
   error.value = false
   try {
     const result = await api.history(page)
@@ -31,10 +36,13 @@ async function loadPage(page = 1) {
   } finally {
     pending.value = false
     loadingMore.value = false
+    if (page === 1) loadingIndicator.finish()
   }
 }
 
-await loadPage(1)
+onMounted(() => {
+  void loadPage(1)
+})
 
 const hasMore = computed(() => {
   if (!meta.value) return false
@@ -83,7 +91,7 @@ function formatNumber(value?: number | null) {
       </div>
     </div>
 
-    <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <div v-else-if="error" class="bg-dark-800 border border-dark-600 rounded-xl p-6 text-center text-gray-400">
       بارگذاری تاریخچه ممکن نشد.
     </div>

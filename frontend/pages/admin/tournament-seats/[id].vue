@@ -5,7 +5,7 @@ const route = useRoute()
 const api = useApi()
 const id = computed(() => String(route.params.id))
 
-const { data, pending, error } = await useAsyncData(
+const { data, pending, error } = usePageData(
   () => `admin-seat-map-${id.value}`,
   () => api.admin.tournamentSeatMap(id.value),
 )

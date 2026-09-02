@@ -8,7 +8,7 @@ const flash = useState('flash')
 const { formatDateTime } = usePersianDateTime()
 const { formatToman } = useFormatToman()
 
-const { data, pending, refresh } = await useAsyncData('wallet', () => api.wallet.show())
+const { data, pending, refresh } = usePageData('wallet', () => api.wallet.show())
 
 const depositAmount = ref<number | null>(null)
 const withdrawForm = reactive({
@@ -77,7 +77,7 @@ async function withdraw() {
   <div>
     <h1 class="text-2xl font-bold mb-6 text-white">کیف پول</h1>
 
-    <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <template v-else-if="data">
       <div v-if="errors.length" class="bg-danger/20 border border-danger/50 text-danger px-4 py-3 rounded-xl text-sm mb-4">
         <ul class="list-disc list-inside space-y-1">

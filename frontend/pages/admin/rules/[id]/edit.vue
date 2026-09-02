@@ -8,7 +8,7 @@ const flash = useState('flash')
 const id = Number(route.params.id)
 const saving = ref(false)
 
-const { data: rules, pending } = await useAsyncData('admin-rules-edit', () => api.admin.rules())
+const { data: rules, pending } = usePageData('admin-rules-edit', () => api.admin.rules())
 const rule = computed(() => rules.value?.find((r) => r.id === id))
 const content = ref(rule.value?.content || '')
 

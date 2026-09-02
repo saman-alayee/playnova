@@ -56,7 +56,7 @@ function resetFilters() {
   refresh()
 }
 
-const { data, refresh } = await useAsyncData(
+const { data, refresh } = usePageData(
   'admin-discounts',
   () => api.admin.discounts(queryParams()),
   { watch: [page] },

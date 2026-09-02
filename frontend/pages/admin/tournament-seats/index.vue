@@ -5,7 +5,7 @@ definePageMeta({ middleware: 'admin', layout: 'admin' })
 useHead({ title: 'جایگاه‌های مسابقات | PlayNova' })
 
 const api = useApi()
-const { data, pending } = await useAsyncData('admin-tournament-seats-list', () => api.admin.tournamentSeats())
+const { data, pending } = usePageData('admin-tournament-seats-list', () => api.admin.tournamentSeats())
 const tournaments = computed(() => (data.value ?? []) as Tournament[])
 
 function formatCount(n?: number | null) {

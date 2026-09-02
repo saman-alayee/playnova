@@ -8,12 +8,12 @@ const { formatDateTime } = usePersianDateTime()
 
 const tournamentId = computed(() => String(route.params.id))
 
-const { data: tournament } = await useAsyncData(
+const { data: tournament } = usePageData(
   () => `admin-tournament-prizes-meta-${tournamentId.value}`,
   () => api.admin.tournament(tournamentId.value),
 )
 
-const { data: batch, pending, refresh } = await useAsyncData(
+const { data: batch, pending, refresh } = usePageData(
   () => `admin-tournament-prizes-${tournamentId.value}`,
   () => api.admin.tournamentPrizes(tournamentId.value),
 )

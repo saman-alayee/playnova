@@ -75,16 +75,18 @@ class NotificationAdminController extends BaseApiController
             });
         }
 
+        $groupExpression = 'COALESCE(broadcast_group_id, CAST(id AS CHAR))';
+
         $rows = $baseQuery
             ->select([
                 DB::raw('MIN(id) as id'),
-                DB::raw('COALESCE(broadcast_group_id, CAST(MIN(id) AS CHAR)) as group_id'),
+                DB::raw("MIN({$groupExpression}) as group_id"),
                 'title',
                 'message',
                 DB::raw('MIN(created_at) as created_at'),
                 DB::raw('COUNT(*) as recipient_count'),
             ])
-            ->groupBy(DB::raw('COALESCE(broadcast_group_id, CAST(id AS CHAR))'), 'title', 'message')
+            ->groupBy(DB::raw($groupExpression), 'title', 'message')
             ->orderByDesc(DB::raw('MIN(created_at)'))
             ->paginate(25);
 

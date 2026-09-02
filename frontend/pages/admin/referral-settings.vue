@@ -4,7 +4,7 @@ useHead({ title: 'تنظیمات دعوت | PlayNova' })
 
 const api = useApi()
 const flash = useState('flash')
-const { data, refresh } = await useAsyncData('admin-referral', () => api.admin.referralSettings())
+const { data, refresh } = usePageData('admin-referral', () => api.admin.referralSettings())
 const bonus = ref(5)
 watch(data, (d) => { if (d) bonus.value = d.bonus_percent }, { immediate: true })
 

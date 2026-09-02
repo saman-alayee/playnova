@@ -6,7 +6,7 @@ const api = useApi()
 const auth = useAuthStore()
 const { formatDateTime } = usePersianDateTime()
 
-const { data, pending, refresh } = await useAsyncData('notifications', () => api.notifications.list(), {
+const { data, pending, refresh } = usePageData('notifications', () => api.notifications.list(), {
   default: () => ({ notifications: [], news: [], unread_count: 0 }),
 })
 
@@ -62,7 +62,7 @@ async function remove(id: number) {
 
     <h2 class="text-lg font-bold text-white mb-4">اعلان‌های شخصی</h2>
 
-    <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <div v-else-if="!notifications.length" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
       اعلانی وجود ندارد.
     </div>

@@ -1,4 +1,5 @@
 <template>
+  <NuxtLoadingIndicator color="#8B5CF6" :height="3" :duration="2000" :throttle="0" />
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
@@ -8,9 +9,9 @@
 const auth = useAuthStore()
 const api = useApi()
 
-const { data: settings } = await useAsyncData('site-settings', () => api.settings(), {
+const { data: settings } = useAsyncData('site-settings', () => api.settings(), {
   server: true,
-  lazy: false,
+  lazy: true,
 })
 
 if (settings.value) {

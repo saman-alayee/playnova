@@ -18,7 +18,7 @@ interface AiModelCategory {
 
 const api = useApi()
 const flash = useState('flash')
-const { data, refresh } = await useAsyncData('admin-ai', () => api.admin.aiSettings())
+const { data, refresh } = usePageData('admin-ai', () => api.admin.aiSettings())
 
 const form = reactive({
   base_url: '',

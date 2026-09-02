@@ -28,7 +28,7 @@ const flash = useState('flash')
 const saving = ref(false)
 const errors = ref<string[]>([])
 
-const { data, pending, refresh } = await useAsyncData('admin-sms', () => api.admin.smsSettings())
+const { data, pending, refresh } = usePageData('admin-sms', () => api.admin.smsSettings())
 
 const form = reactive({
   sms_provider: 'test' as 'test' | 'melipayamak',

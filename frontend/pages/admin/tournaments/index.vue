@@ -52,7 +52,7 @@ function resetFilters() {
   refresh()
 }
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = usePageData(
   'admin-tournaments',
   () => api.admin.tournaments(queryParams()),
   { watch: [page] },

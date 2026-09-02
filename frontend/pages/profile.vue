@@ -7,7 +7,7 @@ const auth = useAuthStore()
 const flash = useState('flash')
 const { formatToman } = useFormatToman()
 
-const { data, pending, error, refresh } = await useAsyncData('profile', () => api.profile.show())
+const { data, pending, error, refresh } = usePageData('profile', () => api.profile.show())
 
 const user = computed(() => data.value?.user ?? null)
 const activeSeats = computed(() => data.value?.active_seats ?? user.value?.active_seats ?? [])
@@ -110,7 +110,7 @@ function copyReferralLink() {
 </script>
 
 <template>
-  <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+  <PageLoading v-if="pending" />
   <div v-else-if="error" class="bg-danger/20 border border-danger/50 text-danger px-4 py-6 rounded-xl text-center">
     {{ (error as Error).message || 'بارگذاری پروفایل ناموفق بود.' }}
     <button type="button" class="block mx-auto mt-3 text-sm underline" @click="refresh()">تلاش مجدد</button>

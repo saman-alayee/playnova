@@ -8,6 +8,7 @@ const api = useApi()
 const auth = useAuthStore()
 const flash = useState('flash')
 const { clearRegisterBodyLock } = useModals()
+const loadingIndicator = useLoadingIndicator()
 
 const id = computed(() => route.params.id as string)
 const loading = ref(false)
@@ -26,6 +27,7 @@ const loadErrorMessage = ref<string | null>(null)
 async function refresh() {
   pending.value = true
   loadErrorMessage.value = null
+  loadingIndicator.start()
   try {
     if (!auth.initialized) {
       await auth.init()
@@ -37,6 +39,7 @@ async function refresh() {
     loadErrorMessage.value = err.data?.message || err.message || 'امکان انتخاب جایگاه وجود ندارد.'
   } finally {
     pending.value = false
+    loadingIndicator.finish()
   }
 }
 
@@ -49,7 +52,7 @@ onMounted(() => {
   void refresh()
 })
 
-useHead(() => ({ title: `جایگاه‌ها | ${data.value?.tournament?.title || 'مسابقه'}` }))
+useHead(() => ({ title: `انتخاب جایگاه | ${data.value?.tournament?.title || 'مسابقه'}` }))
 
 const loadError = computed(() => {
   if (pending.value) return null
@@ -160,7 +163,31 @@ async function cancelRegistration() {
 
 <template>
   <div class="seat-page">
-    <div v-if="pending" class="text-gray-500 py-10 text-center">در حال بارگذاری...</div>
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <NuxtLink to="/" class="text-sm text-secondary">← بازگشت</NuxtLink>
+      <button
+        v-if="data && !alreadySelected && !loadError"
+        type="button"
+        class="text-sm text-red-400 hover:text-red-300 disabled:opacity-50"
+        :disabled="cancelling"
+        @click="cancelRegistration"
+      >
+        {{ cancelling ? '...' : 'انصراف از ثبت‌نام' }}
+      </button>
+    </div>
+
+    <h1 class="text-2xl font-bold text-center text-primary mb-2">انتخاب جایگاه</h1>
+    <p v-if="data?.tournament" class="text-center text-sm text-gray-400">
+      {{ data.tournament.title }} — {{ data.tournament.seat_mode_label || 'انفرادی' }}
+    </p>
+    <p class="text-center text-xs text-amber-400/90 mt-2 mb-4">
+      روی جایگاه خالی (مثلاً 2.1 یا 20.2) کلیک کنید و تأیید نمایید.
+    </p>
+    <p v-if="data && !alreadySelected && !loadError" class="seat-page__banner">
+      برای تکمیل ثبت‌نام، جایگاه خود را انتخاب و تأیید کنید.
+    </p>
+
+    <PageLoading v-if="pending" />
 
     <div v-else-if="loadError" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center space-y-3">
       <p class="text-red-300">{{ loadError }}</p>
@@ -176,30 +203,6 @@ async function cancelRegistration() {
     </div>
 
     <template v-else-if="data">
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div>
-          <h1 class="text-2xl font-bold text-white">جایگاه‌ها</h1>
-          <p v-if="data.tournament?.title" class="text-sm text-gray-400 mt-1">{{ data.tournament.title }}</p>
-          <p v-if="isTeamReservation" class="text-xs text-amber-300/90 mt-1">
-            رزرو تیمی — یک تیم خالی انتخاب کنید. تا تأیید نهایی هم‌تیمی‌ها، مبلغی کسر نمی‌شود و جایگاه اشغال نمی‌شود.
-          </p>
-          <p v-else class="text-xs text-gray-500 mt-1">
-            تا قبل از تأیید نهایی، مبلغی از کیف پول کسر نمی‌شود.
-          </p>
-        </div>
-        <div class="flex items-center gap-3">
-          <NuxtLink :to="`/tournaments/${id}`" class="text-sm text-secondary">← بازگشت</NuxtLink>
-          <button
-            type="button"
-            class="text-sm text-red-400"
-            :disabled="cancelling"
-            @click="cancelRegistration"
-          >
-            {{ cancelling ? '...' : 'انصراف از ثبت‌نام' }}
-          </button>
-        </div>
-      </div>
-
       <div v-if="errors.length" class="seat-page__errors">
         <p v-for="(err, i) in errors" :key="i">{{ err }}</p>
       </div>
@@ -219,16 +222,16 @@ async function cancelRegistration() {
     </template>
 
     <Teleport to="body">
-      <div v-if="showModal" class="seat-modal" @click.self="closeConfirm">
-        <div class="seat-modal__panel" :class="{ 'seat-modal__panel--wide': isTeamReservation }">
-          <h2 class="seat-modal__title">تأیید {{ isTeamReservation ? 'تیم' : 'جایگاه' }}</h2>
-          <p class="seat-modal__text">
+      <div v-if="showModal" class="modal-overlay" @click.self="closeConfirm">
+        <div class="modal-panel seat-modal-panel" :class="{ 'seat-modal-panel--wide': isTeamReservation }" @click.stop>
+          <h2 class="modal-panel__title">تأیید {{ isTeamReservation ? 'تیم' : 'جایگاه' }}</h2>
+          <p class="text-sm text-gray-300 text-center">
             {{ isTeamReservation ? 'تیم انتخاب‌شده:' : 'آیا این جایگاه را انتخاب می‌کنید؟' }}
           </p>
-          <p class="seat-modal__value" dir="ltr">{{ pendingLabel || '—' }}</p>
+          <p class="seat-page__selected-value" dir="ltr">{{ pendingLabel || '—' }}</p>
 
-          <div v-if="isTeamReservation" class="seat-modal__team-form">
-            <p class="seat-modal__hint">
+          <div v-if="isTeamReservation" class="seat-modal-form">
+            <p class="text-sm text-gray-400 mb-2">
               {{ requiredInvites === 1
                 ? 'آیدی کالاف ۱ هم‌تیمی را وارد کنید:'
                 : `آیدی کالاف ${requiredInvites} هم‌تیمی را وارد کنید:` }}
@@ -239,25 +242,30 @@ async function cancelRegistration() {
               v-model="teammateCodIds[index]"
               type="text"
               :placeholder="`آیدی کالاف هم‌تیمی ${index + 1}`"
-              class="seat-modal__input"
+              class="seat-modal-form__input"
               dir="ltr"
             >
-            <p class="seat-modal__note">
+            <p class="text-xs text-amber-300 mt-2">
               پس از ارسال، هم‌تیمی‌ها ۱۵ ثانیه فرصت تأیید دارند. تا آن زمان مبلغی کسر نمی‌شود.
             </p>
           </div>
 
-          <div class="seat-modal__buttons">
-            <button type="button" class="seat-modal__btn seat-modal__btn--ghost" :disabled="loading" @click="closeConfirm">
-              انصراف
-            </button>
+          <div class="flex gap-3 mt-4">
             <button
               type="button"
-              class="seat-modal__btn seat-modal__btn--confirm"
+              class="btn-glow-success flex-1 rounded-lg py-2 text-sm font-bold disabled:opacity-50"
               :disabled="loading || !teamFormValid"
               @click="confirmSeat"
             >
               {{ loading ? 'در حال ثبت...' : (isTeamReservation ? 'ارسال درخواست تیمی' : 'تأیید و پرداخت') }}
+            </button>
+            <button
+              type="button"
+              class="bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-bold"
+              :disabled="loading"
+              @click="closeConfirm"
+            >
+              انصراف
             </button>
           </div>
         </div>
@@ -267,17 +275,25 @@ async function cancelRegistration() {
 </template>
 
 <style scoped>
-.seat-page {
-  min-width: 0;
-  max-width: 100%;
+.seat-page__banner {
+  margin: 0 auto 1rem;
+  max-width: 42rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(139, 92, 246, 0.08);
+  color: #c4b5fd;
+  font-size: 0.8rem;
+  text-align: center;
 }
 
 .seat-page__selected-value {
-  margin: 0.75rem 0;
-  font-size: 2rem;
+  margin: 0.75rem 0 1rem;
+  font-size: 1.75rem;
   font-weight: 900;
   color: #d4af37;
   font-family: ui-monospace, monospace;
+  text-align: center;
 }
 
 .seat-page__errors {
@@ -292,72 +308,23 @@ async function cancelRegistration() {
 
 .seat-page__body {
   min-width: 0;
-  max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid rgba(197, 160, 89, 0.28);
-  border-radius: 0.75rem;
-  background: #050505;
-  padding: 0.65rem;
 }
 
-.seat-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(0, 0, 0, 0.9);
-}
-
-.seat-modal__panel {
-  width: 100%;
+.seat-modal-panel {
   max-width: 22rem;
-  padding: 1.25rem;
   text-align: center;
-  border: 1px solid #c5a059;
-  background: #000;
 }
 
-.seat-modal__panel--wide {
+.seat-modal-panel--wide {
   max-width: 26rem;
 }
 
-.seat-modal__title {
-  margin: 0 0 0.35rem;
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: #d4af37;
-}
-
-.seat-modal__text {
-  margin: 0;
-  color: #d1d5db;
-  font-size: 0.85rem;
-}
-
-.seat-modal__value {
-  margin: 0.85rem 0 1rem;
-  font-size: 1.35rem;
-  font-weight: 900;
-  color: #d4af37;
-  font-family: ui-monospace, monospace;
-  line-height: 1.35;
-}
-
-.seat-modal__team-form {
+.seat-modal-form {
   text-align: right;
-  margin-bottom: 1rem;
+  margin-top: 0.5rem;
 }
 
-.seat-modal__hint {
-  margin: 0 0 0.5rem;
-  color: #9ca3af;
-  font-size: 0.8rem;
-}
-
-.seat-modal__input {
+.seat-modal-form__input {
   width: 100%;
   margin-bottom: 0.45rem;
   border: 1px solid #4b5563;
@@ -366,41 +333,5 @@ async function cancelRegistration() {
   color: #fff;
   padding: 0.55rem 0.65rem;
   font-size: 0.85rem;
-}
-
-.seat-modal__note {
-  margin: 0.35rem 0 0;
-  color: #fbbf24;
-  font-size: 0.72rem;
-  line-height: 1.5;
-}
-
-.seat-modal__buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.seat-modal__btn {
-  flex: 1;
-  border: none;
-  border-radius: 0.35rem;
-  padding: 0.65rem;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.seat-modal__btn--ghost {
-  background: #4b5563;
-  color: #fff;
-}
-
-.seat-modal__btn--confirm {
-  background: #16a34a;
-  color: #fff;
-}
-
-.seat-modal__btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 </style>

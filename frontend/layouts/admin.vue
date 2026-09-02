@@ -29,7 +29,6 @@ provide('sidebar', { open: sidebarOpen, close: closeSidebar, openSidebar })
 </template>
 
 <style scoped>
-/* در RTL، بلوک‌های با max-width بدون margin به راست می‌چسبند؛ وسط‌چین می‌کنیم */
 .admin-page-content :deep(> *) {
   width: 100%;
   margin-inline: auto;

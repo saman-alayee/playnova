@@ -6,7 +6,7 @@ const api = useApi()
 
 const activeCat = computed(() => (route.query.cat as string) || undefined)
 
-const { data, pending } = await useAsyncData(
+const { data, pending } = usePageData(
   'faq',
   () => api.faq(activeCat.value),
   { watch: [activeCat] },
@@ -48,7 +48,7 @@ onMounted(() => {
       <p class="text-sm text-gray-400">یکی از دسته‌ها را انتخاب کنید تا پاسخ سوالات را ببینید.</p>
     </div>
 
-    <div v-if="pending" class="text-center text-gray-500 py-10">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <template v-else>
       <div id="faq-categories" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8 scroll-mt-24">
         <NuxtLink

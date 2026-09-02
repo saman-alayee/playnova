@@ -51,11 +51,11 @@ Route::prefix('auth')->middleware('throttle:auth')->group(function () {
 
 Route::get('settings', [SettingsController::class, 'index'])->middleware('api.cache.public');
 
-Route::get('home', [TournamentController::class, 'home'])->middleware('api.cache.public');
+Route::get('home', [TournamentController::class, 'home'])->middleware(['auth.sanctum.optional', 'api.cache.public']);
 Route::get('leaderboard', [TournamentController::class, 'leaderboard'])->middleware('api.cache.public');
 Route::get('rules', [TournamentController::class, 'rules'])->middleware('api.cache.public');
 Route::get('history', [HistoryController::class, 'index'])->middleware('api.cache.public');
-Route::get('tournaments/{tournament}', [TournamentController::class, 'show']);
+Route::get('tournaments/{tournament}', [TournamentController::class, 'show'])->middleware('auth.sanctum.optional');
 
 Route::prefix('pages')->middleware('api.cache.public')->group(function () {
     Route::get('privacy', [PageController::class, 'privacy']);

@@ -10,7 +10,7 @@ const flash = useState<{ success?: string; error?: string } | null>('flash')
 
 const id = computed(() => String(route.params.id))
 
-const { data: tournament, pending, error } = await useAsyncData(
+const { data: tournament, pending, error } = usePageData(
   () => `admin-tournament-edit-${id.value}`,
   () => api.admin.tournament(id.value),
 )

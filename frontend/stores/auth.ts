@@ -138,6 +138,12 @@ export const useAuthStore = defineStore('auth', {
 
       this.hydrateFromStorage()
 
+      if (this.user && this.token) {
+        this.initialized = true
+        void this.fetchUser()
+        return
+      }
+
       initPromise = this.fetchUser().then(() => undefined)
       try {
         await initPromise

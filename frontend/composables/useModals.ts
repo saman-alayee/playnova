@@ -31,7 +31,11 @@ export function useModals() {
   }
 
   function openDescriptionModal(title: string, content: string) {
-    if (registerOpen.value || registrationNavigating.value || Date.now() < suppressDescriptionUntil.value) {
+    if (
+      registerOpen.value
+      || registrationNavigating.value
+      || Date.now() < suppressDescriptionUntil.value
+    ) {
       return
     }
     descriptionTitle.value = title
@@ -91,7 +95,7 @@ export function useModals() {
       return
     }
     closeDescriptionModal()
-    armDescriptionSuppression(1200)
+    armDescriptionSuppression(1500)
     registerTournament.value = tournament
     registerOpen.value = true
   }
@@ -100,14 +104,32 @@ export function useModals() {
     registrationNavigating.value = false
     if (import.meta.client) {
       document.body.classList.remove('register-modal-active')
+      document.body.classList.remove('registration-navigating')
     }
   }
 
-  function closeRegisterModal() {
+  function beginRegistrationNavigation() {
+    registrationNavigating.value = true
+    armDescriptionSuppression(5000)
+    if (import.meta.client) {
+      document.body.classList.remove('register-modal-active')
+      document.body.classList.add('registration-navigating')
+    }
+  }
+
+  function closeRegisterModal(options?: { keepNavigating?: boolean }) {
     registerOpen.value = false
     registerTournament.value = null
-    clearRegisterBodyLock()
-    armDescriptionSuppression(1200)
+    if (options?.keepNavigating) {
+      armDescriptionSuppression(5000)
+      if (import.meta.client) {
+        document.body.classList.remove('register-modal-active')
+        document.body.classList.add('registration-navigating')
+      }
+    } else {
+      clearRegisterBodyLock()
+    }
+    armDescriptionSuppression(options?.keepNavigating ? 5000 : 2000)
     armRegisterSuppression(2000)
   }
 
@@ -130,6 +152,7 @@ export function useModals() {
     openGameLoginModalById,
     openRegisterModal,
     closeRegisterModal,
+    beginRegistrationNavigation,
     armDescriptionSuppression,
     armRegisterSuppression,
     clearRegisterBodyLock,

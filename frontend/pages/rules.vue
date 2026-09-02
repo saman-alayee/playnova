@@ -3,7 +3,7 @@ useHead({ title: 'قوانین و مقررات | PlayNova' })
 definePageMeta({ keepalive: true })
 
 const api = useApi()
-const { data: sections, pending, error } = await useAsyncData('rules', () => api.rules(), {
+const { data: sections, pending, error } = usePageData('rules', () => api.rules(), {
   default: () => [],
 })
 </script>
@@ -12,7 +12,7 @@ const { data: sections, pending, error } = await useAsyncData('rules', () => api
   <div>
     <h1 class="text-2xl font-bold mb-6 text-center text-primary">📜 قوانین و مقررات PlayNova</h1>
 
-    <div v-if="pending" class="text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <div v-else-if="error" class="bg-dark-800 border border-dark-600 rounded-xl p-6 text-gray-400">
       بارگذاری قوانین ممکن نشد.
     </div>

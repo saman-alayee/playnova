@@ -72,6 +72,7 @@ export default defineNuxtConfig({
     '/wallet/**': { ssr: false, headers: { 'Referrer-Policy': 'origin' } },
     '/kyc': { ssr: false },
     '/kyc/**': { ssr: false },
+    '/tournaments/*/select-seat': { ssr: false },
     '/notifications': { ssr: false },
     '/notifications/**': { ssr: false },
     '/faq': { redirect: { to: '/tickets', statusCode: 301 } },

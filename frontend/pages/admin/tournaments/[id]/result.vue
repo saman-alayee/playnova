@@ -9,12 +9,12 @@ const api = useApi()
 
 const tournamentId = computed(() => String(route.params.id))
 
-const { data: tournament } = await useAsyncData(
+const { data: tournament } = usePageData(
   () => `admin-tournament-result-${tournamentId.value}`,
   () => api.admin.tournament(tournamentId.value),
 )
 
-const { data: promptConfig, refresh: refreshPromptConfig } = await useAsyncData(
+const { data: promptConfig, refresh: refreshPromptConfig } = usePageData(
   () => `admin-tournament-result-prompt-${tournamentId.value}`,
   () => api.admin.tournamentResultAiConfig(tournamentId.value),
 )

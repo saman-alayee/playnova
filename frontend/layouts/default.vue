@@ -8,8 +8,6 @@ const {
   closeRegisterModal,
 } = useModals()
 
-await useAsyncData('site-settings', () => auth.fetchSettings())
-
 function closeSidebar() {
   sidebarOpen.value = false
 }
@@ -37,11 +35,13 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
 })
 
-watch(() => route.path, () => {
+watch(() => route.path, (path) => {
   closeSidebar()
   closeDescriptionModal()
   closeGameLoginModal()
-  closeRegisterModal()
+  if (!path.includes('/select-seat')) {
+    closeRegisterModal()
+  }
 })
 </script>
 

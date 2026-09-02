@@ -11,7 +11,7 @@ const props = withDefaults(defineProps<{
 })
 
 const auth = useAuthStore()
-const { openDescriptionModal, openGameLoginModalById, openRegisterModal } = useModals()
+const { closeDescriptionModal, openDescriptionModal, openGameLoginModalById, openRegisterModal, armDescriptionSuppression } = useModals()
 
 const regCount = computed(() => {
   if (props.regCount !== undefined) return props.regCount
@@ -25,6 +25,12 @@ const capacity = computed(() => {
 })
 
 const hasDescription = computed(() => !!props.tournament.description?.trim())
+
+function onRegisterClick() {
+  closeDescriptionModal()
+  armDescriptionSuppression(800)
+  openRegisterModal(props.tournament)
+}
 </script>
 
 <template>
@@ -62,7 +68,7 @@ const hasDescription = computed(() => !!props.tournament.description?.trim())
         type="button"
         class="tournament-actions__btn tournament-actions__btn--primary tournament-actions__btn--success tournament-actions__btn--register"
         @mousedown.stop.prevent
-        @click.stop.prevent="openRegisterModal(tournament)"
+        @click.stop.prevent="onRegisterClick"
       >
         {{ compact ? 'ثبت‌نام' : 'ثبت‌نام' }}
       </button>
@@ -91,11 +97,11 @@ const hasDescription = computed(() => !!props.tournament.description?.trim())
     <button
       v-if="hasDescription"
       type="button"
-      class="tournament-actions__desc-link"
+      class="tournament-actions__btn tournament-actions__btn--outline"
       @mousedown.stop.prevent
       @click.stop.prevent="openDescriptionModal(tournament.title, tournament.description!)"
     >
-      📝 مشاهده توضیحات مسابقه
+      توضیحات
     </button>
   </div>
 </template>

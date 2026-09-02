@@ -9,7 +9,7 @@ const props = withDefaults(defineProps<{
 })
 
 const auth = useAuthStore()
-const { openDescriptionModal, openGameLoginModalById, openRegisterModal } = useModals()
+const { closeDescriptionModal, openDescriptionModal, openGameLoginModalById, openRegisterModal, armDescriptionSuppression } = useModals()
 const { formatDate: formatIranDate, formatTime: formatIranTime } = usePersianDateTime()
 
 const regCount = computed(() => {
@@ -42,6 +42,12 @@ function formatDate(date?: string | null) {
 
 function formatTime(date?: string | null) {
   return formatIranTime(date, props.tournament.start_date_display)
+}
+
+function onRegisterClick() {
+  closeDescriptionModal()
+  armDescriptionSuppression(800)
+  openRegisterModal(props.tournament)
 }
 </script>
 
@@ -132,7 +138,7 @@ function formatTime(date?: string | null) {
           type="button"
           class="tournament-actions__btn tournament-actions__btn--primary tournament-actions__btn--success tournament-actions__btn--register"
           @mousedown.stop.prevent
-          @click.stop.prevent="openRegisterModal(tournament)"
+          @click.stop.prevent="onRegisterClick"
         >
           {{ compact ? 'ثبت‌نام' : 'ثبت‌نام' }}
         </button>
@@ -161,11 +167,11 @@ function formatTime(date?: string | null) {
       <button
         v-if="hasDescription"
         type="button"
-        class="tournament-actions__desc-link"
+        class="tournament-actions__btn tournament-actions__btn--outline"
         @mousedown.stop.prevent
         @click.stop.prevent="openDescriptionModal(tournament.title, tournament.description!)"
       >
-        📝 مشاهده توضیحات مسابقه
+        توضیحات
       </button>
     </div>
   </div>

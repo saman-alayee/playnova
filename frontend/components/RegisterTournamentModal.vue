@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import type { RuleSection, Tournament } from '~/types/api'
+import type { RuleSection } from '~/types/api'
 
 const {
   registerOpen,
   registerTournament,
   closeRegisterModal,
+  closeDescriptionModal,
+  beginRegistrationNavigation,
   clearRegisterBodyLock,
   armDescriptionSuppression,
   armRegisterSuppression,
@@ -43,6 +45,7 @@ watch(registerOpen, async (open) => {
     step.value = 'rules'
     acceptRules.value = false
     errorMessage.value = ''
+    closeDescriptionModal()
     try {
       await auth.fetchUser()
       rules.value = await api.rules()
@@ -63,15 +66,21 @@ function walletError() {
 }
 
 async function continueFromRules() {
+  if (!acceptRules.value || loading.value) return
   if (!hasEnoughWallet.value) {
     errorMessage.value = walletError()
     return
   }
-  if (!supportsTeam.value) {
-    await startRegistration('solo')
+  errorMessage.value = ''
+  if (supportsTeam.value) {
+    step.value = 'type'
     return
   }
-  step.value = 'type'
+  await startRegistration('solo')
+}
+
+async function goToSeats(reservationType: 'solo' | 'team') {
+  await startRegistration(reservationType)
 }
 
 async function startRegistration(reservationType: 'solo' | 'team') {
@@ -84,22 +93,27 @@ async function startRegistration(reservationType: 'solo' | 'team') {
 
   loading.value = true
   errorMessage.value = ''
-  armDescriptionSuppression(2500)
-  armRegisterSuppression(2500)
+  closeDescriptionModal()
+  armDescriptionSuppression(8000)
+  armRegisterSuppression(4000)
+
+  const target = `/tournaments/${t.id}/select-seat`
 
   try {
-    await auth.fetchUser()
     await api.tournaments.register(t.id, {
       reservation_type: reservationType,
       accept_rules: '1',
     })
-    await auth.fetchUser()
-    await refreshNuxtData('home')
 
-    const target = `/tournaments/${t.id}/select-seat`
-    closeRegisterModal()
-    await navigateTo(target)
+    beginRegistrationNavigation()
+    closeRegisterModal({ keepNavigating: true })
+
+    const nav = await navigateTo(target, { replace: true, external: false })
+    if (nav === false && import.meta.client) {
+      window.location.assign(target)
+    }
   } catch (e: unknown) {
+    clearRegisterBodyLock()
     const err = e as { message?: string }
     const message = err.message || 'ثبت‌نام ناموفق بود.'
     errorMessage.value = message
@@ -108,7 +122,6 @@ async function startRegistration(reservationType: 'solo' | 'team') {
     }
   } finally {
     loading.value = false
-    clearRegisterBodyLock()
   }
 }
 
@@ -134,22 +147,10 @@ onUnmounted(() => {
           </NuxtLink>
         </p>
 
-        <p class="register-tournament-modal__wallet text-xs text-gray-500 mb-3">
-          موجودی کیف پول:
-          <strong>{{ auth.walletBalance.toLocaleString('fa-IR') }} تومان</strong>
-          —
-          هزینه ورودی:
-          <strong>{{ entryFee.toLocaleString('fa-IR') }} تومان</strong>
-        </p>
-        <p v-if="!hasEnoughWallet" class="register-tournament-modal__wallet-warn text-xs text-amber-300 mb-3">
-          برای ادامه ثبت‌نام، ابتدا کیف پول را شارژ کنید.
-        </p>
-
         <div v-if="step === 'rules'">
-          <h3 class="font-bold text-primary mb-3">📜 تأیید خواندن قوانین</h3>
+          <h3 class="register-tournament-modal__heading">📜 تأیید خواندن قوانین</h3>
           <div class="modal-panel__body register-tournament-modal__rules">
             <div v-for="(rule, index) in rules" :key="rule.id" class="mb-3">
-              <strong class="text-secondary">بخش {{ index + 1 }}:</strong>
               <span class="text-gray-300">{{ rule.content }}</span>
             </div>
             <p v-if="!rules?.length" class="text-gray-500">هیچ قانونی ثبت نشده است.</p>
@@ -162,10 +163,10 @@ onUnmounted(() => {
             <button
               type="button"
               class="btn-glow-success flex-1 rounded-lg py-2 text-sm font-bold disabled:opacity-50"
-              :disabled="!acceptRules || loading || !hasEnoughWallet"
+              :disabled="!acceptRules || loading"
               @click.stop.prevent="continueFromRules"
             >
-              {{ loading ? 'در حال ثبت‌نام...' : (supportsTeam ? 'ادامه — انتخاب نوع ثبت‌نام' : 'ادامه و انتخاب جایگاه') }}
+              {{ loading ? 'در حال ثبت‌نام...' : 'ادامه' }}
             </button>
             <button type="button" class="bg-gray-600 text-white rounded-lg px-4 py-2 text-sm font-bold" @click="close">
               انصراف
@@ -174,41 +175,34 @@ onUnmounted(() => {
         </div>
 
         <div v-else>
-          <h3 class="font-bold text-primary mb-3">نوع ثبت‌نام</h3>
-          <p v-if="loading" class="text-sm text-amber-300 mb-3 text-center">
-            در حال انتقال به صفحه انتخاب جایگاه...
-          </p>
-          <p class="text-sm text-gray-400 mb-4">
-            این مسابقه {{ registerTournament.seat_mode_label || 'تیمی' }} است. نحوه رزرو جایگاه را انتخاب کنید.
-          </p>
-          <p class="text-xs text-gray-500 mb-4">
-            تا تأیید نهایی جایگاه، مبلغی کسر نمی‌شود؛ اما موجودی کافی در کیف پول لازم است.
+          <h3 class="register-tournament-modal__heading">نوع ثبت‌نام</h3>
+          <p class="register-tournament-modal__type-text">
+            نحوه رزرو جایگاه خود را انتخاب کنید.
           </p>
           <div class="space-y-3">
             <button
               type="button"
               class="btn-glow-success w-full rounded-lg py-3 text-sm font-bold"
-              :disabled="loading || !hasEnoughWallet"
-              @click.stop.prevent="startRegistration('solo')"
+              :disabled="loading"
+              @click.stop.prevent="goToSeats('solo')"
             >
-              🎯 ثبت‌نام تکی — انتخاب جایگاه
+              🎯 رزرو تکی — انتخاب جایگاه
             </button>
             <button
               v-if="supportsTeam"
               type="button"
               class="w-full bg-secondary hover:opacity-90 text-white rounded-lg py-3 text-sm font-bold disabled:opacity-50"
-              :disabled="loading || !hasEnoughWallet"
-              @click.stop.prevent="startRegistration('team')"
+              :disabled="loading"
+              @click.stop.prevent="goToSeats('team')"
             >
-              👥 ثبت‌نام تیمی — انتخاب تیم
-              <span v-if="requiredInvites === 1" class="block text-xs font-normal mt-1 opacity-90">
-                فقط شما درخواست می‌دهید؛ ۱ آیدی هم‌تیمی در مرحله تأیید
-              </span>
-              <span v-else class="block text-xs font-normal mt-1 opacity-90">
-                فقط شما درخواست می‌دهید؛ {{ requiredInvites }} آیدی هم‌تیمی در مرحله تأیید
-              </span>
+              👥 رزرو تیمی — دعوت هم‌تیمی
             </button>
-            <button type="button" class="w-full bg-gray-600 text-white rounded-lg py-2 text-sm font-bold" @click="step = 'rules'">
+            <button
+              type="button"
+              class="w-full bg-gray-600 text-white rounded-lg py-2 text-sm font-bold"
+              :disabled="loading"
+              @click="step = 'rules'"
+            >
               بازگشت
             </button>
           </div>
@@ -227,6 +221,18 @@ onUnmounted(() => {
   max-width: 560px;
 }
 
+.register-tournament-modal__heading {
+  font-weight: 800;
+  color: #8B5CF6;
+  margin-bottom: 0.75rem;
+}
+
+.register-tournament-modal__type-text {
+  color: #fff;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
 .register-tournament-modal__rules {
   max-height: 45vh;
   overflow-y: auto;
@@ -240,9 +246,5 @@ onUnmounted(() => {
   background: rgba(127, 29, 29, 0.35);
   color: #fca5a5;
   font-size: 0.8rem;
-}
-
-.register-tournament-modal__wallet-warn {
-  line-height: 1.6;
 }
 </style>

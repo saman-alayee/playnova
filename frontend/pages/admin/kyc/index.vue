@@ -39,7 +39,7 @@ function resetFilters() {
   refresh()
 }
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = usePageData(
   'admin-kyc',
   () => api.admin.kyc(queryParams()),
   { watch: [page] },

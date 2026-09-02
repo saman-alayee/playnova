@@ -10,7 +10,7 @@ const { formatDateTime } = usePersianDateTime()
 
 const id = computed(() => route.params.id as string)
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = usePageData(
   () => `tournament-${id.value}`,
   () => api.tournaments.show(id.value),
 )
@@ -64,7 +64,7 @@ const statusColor: Record<string, string> = {
 
 <template>
   <div>
-    <div v-if="pending" class="text-center py-10 text-gray-500">در حال بارگذاری...</div>
+    <PageLoading v-if="pending" />
     <div v-else-if="error || !tournament" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center text-gray-500">
       مسابقه یافت نشد.
     </div>

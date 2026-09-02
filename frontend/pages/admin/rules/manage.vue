@@ -9,7 +9,7 @@ const flash = useState('flash')
 const adding = ref(false)
 const deletingId = ref<number | null>(null)
 
-const { data, pending, refresh } = await useAsyncData('admin-rules', () => api.admin.rules())
+const { data, pending, refresh } = usePageData('admin-rules', () => api.admin.rules())
 const rules = computed(() => (data.value ?? []) as RuleSection[])
 const newContent = ref('')
 

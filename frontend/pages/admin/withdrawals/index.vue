@@ -31,7 +31,7 @@ const txTypeOptions = [
   { value: 'admin_debit', label: 'کسر ادمین' },
 ]
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = usePageData(
   'admin-withdrawals',
   () => api.admin.withdrawals({
     status: status.value,
@@ -46,7 +46,7 @@ const {
   pending: txPending,
   error: txError,
   refresh: refreshTransactions,
-} = await useAsyncData(
+} = usePageData(
   'admin-transactions',
   () =>
     api.admin.transactions({

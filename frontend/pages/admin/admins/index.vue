@@ -14,7 +14,7 @@ const adding = ref(false)
 const removingId = ref<number | null>(null)
 const errors = ref<string[]>([])
 
-const { data, pending, refresh } = await useAsyncData('admin-admins', () => api.admin.admins())
+const { data, pending, refresh } = usePageData('admin-admins', () => api.admin.admins())
 const admins = computed(() => (data.value ?? []) as User[])
 
 function displayName(admin: User) {

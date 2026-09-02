@@ -54,7 +54,7 @@ function queryParams() {
   return params
 }
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = usePageData(
   'admin-users',
   () => api.admin.users(queryParams()),
   { watch: [page] },

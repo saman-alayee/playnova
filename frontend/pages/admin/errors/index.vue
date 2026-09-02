@@ -14,7 +14,7 @@ const page = ref(1)
 const selected = ref<ApiErrorLog | null>(null)
 const detailPending = ref(false)
 
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = usePageData(
   'admin-api-errors',
   () => api.admin.apiErrors({
     status: status.value,
@@ -24,7 +24,7 @@ const { data, pending, error, refresh } = await useAsyncData(
   { watch: [page] },
 )
 
-const { data: stats, refresh: refreshStats } = await useAsyncData(
+const { data: stats, refresh: refreshStats } = usePageData(
   'admin-api-error-stats',
   () => api.admin.apiErrorStats(),
 )
