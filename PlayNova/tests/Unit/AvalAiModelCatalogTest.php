@@ -26,6 +26,36 @@ class AvalAiModelCatalogTest extends TestCase
         $this->assertContains('gpt-4o-mini', $economyIds);
     }
 
+    public function test_keeps_vision_chat_and_drops_non_media_models(): void
+    {
+        $this->assertTrue(AvalAiModelCatalog::isUsableForMediaAnalysis([
+            'id' => 'gpt-5.5',
+            'mode' => 'chat',
+            'supports_vision' => true,
+        ]));
+        $this->assertFalse(AvalAiModelCatalog::isUsableForMediaAnalysis([
+            'id' => 'deepseek-chat',
+            'mode' => 'chat',
+            'supports_vision' => false,
+        ]));
+        $this->assertFalse(AvalAiModelCatalog::isUsableForMediaAnalysis([
+            'id' => 'sora-2',
+            'mode' => 'video_generation',
+        ]));
+        $this->assertFalse(AvalAiModelCatalog::isUsableForMediaAnalysis('text-embedding-3-large'));
+        $this->assertFalse(AvalAiModelCatalog::isUsableForMediaAnalysis('gpt-4o-2024-11-20'));
+
+        $ids = collect(AvalAiModelCatalog::categorize([
+            'gpt-4o',
+            'text-embedding-3-large',
+            'whisper-1',
+        ]))->flatMap(fn (array $cat) => collect($cat['models'])->pluck('id'))->all();
+
+        $this->assertContains('gpt-4o', $ids);
+        $this->assertNotContains('text-embedding-3-large', $ids);
+        $this->assertNotContains('whisper-1', $ids);
+    }
+
     public function test_infers_mini_models_as_economy(): void
     {
         $this->assertSame(

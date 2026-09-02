@@ -286,6 +286,11 @@ class SettingsAdminController extends BaseApiController
             }
         }
 
+        $availableModels = array_values(array_filter(
+            $availableModels,
+            fn (string $model) => AvalAiModelCatalog::isUsableForMediaAnalysis($model),
+        ));
+
         $visionModel = Setting::get('avalai_vision_model') ?: config('services.avalai.vision_model', 'gpt-4o');
         $resultVisionModel = Setting::getResultAiVisionModel();
 

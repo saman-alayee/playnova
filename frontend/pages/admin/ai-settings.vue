@@ -200,7 +200,8 @@ async function testConnection() {
   <div class="max-w-2xl">
     <h1 class="text-2xl font-bold mb-2 text-white">تنظیمات هوش مصنوعی (AvalAI)</h1>
     <p class="text-sm text-gray-400 mb-4">
-      برای تشخیص خودکار نتیجه مسابقه از اسکرین‌شات. مقادیر پنل بر .env اولویت دارند.
+      فقط مدل‌هایی که می‌توانند اسکرین‌شات و فریم ویدیوی نتیجه مسابقه را بخوانند در لیست هستند.
+      مدل‌های متن‌خالی، صدا، embedding و تولید تصویر/ویدیو حذف شده‌اند.
     </p>
 
     <section class="ai-credit mb-6">

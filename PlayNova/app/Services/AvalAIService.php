@@ -171,9 +171,11 @@ class AvalAIService
             }
 
             $id = trim((string) ($item['id'] ?? ''));
-            if ($id !== '') {
-                $models[] = $id;
+            if ($id === '' || ! AvalAiModelCatalog::isUsableForMediaAnalysis($item)) {
+                continue;
             }
+
+            $models[] = $id;
         }
 
         $models = array_values(array_unique($models));

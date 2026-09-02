@@ -196,7 +196,7 @@ class AvalAiModelCatalog
         $seen = [];
         foreach ($models as $model) {
             $model = trim($model);
-            if ($model === '' || isset($seen[$model])) {
+            if ($model === '' || isset($seen[$model]) || ! self::isUsableForMediaAnalysis($model)) {
                 continue;
             }
             $seen[$model] = true;
@@ -225,6 +225,149 @@ class AvalAiModelCatalog
         usort($result, fn (array $a, array $b) => ($tiers[$a['id']]['sort'] ?? 99) <=> ($tiers[$b['id']]['sort'] ?? 99));
 
         return $result;
+    }
+
+    /**
+     * Keep models that can read screenshots / video frames via chat+vision.
+     * Image/video generation, audio, embeddings, and text-only chats are excluded.
+     *
+     * @param  array<string, mixed>|string  $model
+     */
+    public static function isUsableForMediaAnalysis(array|string $model): bool
+    {
+        if (is_string($model)) {
+            return self::passesVisionChatHeuristic($model);
+        }
+
+        $id = trim((string) ($model['id'] ?? ''));
+        if ($id === '') {
+            return false;
+        }
+
+        $mode = strtolower((string) ($model['mode'] ?? ''));
+        $nonChatModes = [
+            'image_generation',
+            'video_generation',
+            'embedding',
+            'audio_speech',
+            'audio_transcription',
+            'search',
+            'rerank',
+            'moderation',
+            'ocr',
+        ];
+        if (in_array($mode, $nonChatModes, true)) {
+            return false;
+        }
+
+        if (array_key_exists('supports_vision', $model)) {
+            if (! ($model['supports_vision'])) {
+                return false;
+            }
+
+            if ($mode !== '' && ! in_array($mode, ['chat', 'responses'], true)) {
+                return false;
+            }
+
+            return self::passesVisionChatHeuristic($id, true);
+        }
+
+        return self::passesVisionChatHeuristic($id);
+    }
+
+    public static function passesVisionChatHeuristic(string $model, bool $alreadyVision = false): bool
+    {
+        $id = strtolower(trim($model));
+        if ($id === '') {
+            return false;
+        }
+
+        foreach ([
+            'cf.',
+            'groq.',
+            'nvidia_nim.',
+            'anthropic.',
+            'meta.',
+            'cohere.',
+            'openai.gpt-oss',
+        ] as $prefix) {
+            if (str_starts_with($id, $prefix)) {
+                return false;
+            }
+        }
+
+        if (preg_match('/-\d{4}-\d{2}-\d{2}$/', $id)) {
+            return false;
+        }
+
+        foreach ([
+            'embedding',
+            'whisper',
+            'tts',
+            'moderation',
+            'rerank',
+            'imagen',
+            'flux',
+            'sora',
+            'veo-',
+            'seedream',
+            'eleven_',
+            'scribe',
+            'wan2',
+            'gpt-image',
+            'qwen-image',
+            'gpt-audio',
+            'sonar',
+            'tavily',
+            'firecrawl',
+            'serper',
+            'ocr',
+            'playai',
+            'codex',
+            'computer-use',
+            'deep-research',
+            'text-moderation',
+        ] as $needle) {
+            if (str_contains($id, $needle)) {
+                return false;
+            }
+        }
+
+        if ($alreadyVision) {
+            return true;
+        }
+
+        if (isset(self::knownModels()[$model]) || isset(self::knownModels()[$id])) {
+            return true;
+        }
+
+        foreach ([
+            'gpt-4o',
+            'gpt-4.1',
+            'gpt-5',
+            'claude',
+            'gemini',
+            'gemma',
+            'qwen3-vl',
+            'qwen3.5',
+            'qwen3.6',
+            'qwen3.7',
+            'qwen3.8',
+            'grok-4',
+            'llama-4',
+            'kimi-',
+            'minimax-m3',
+            'nemotron-3-ultra',
+            'o1',
+            'o3',
+            'o4-mini',
+        ] as $needle) {
+            if (str_contains($id, $needle)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return list<string> */
