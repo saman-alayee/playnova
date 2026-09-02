@@ -295,6 +295,8 @@ class SettingsAdminController extends BaseApiController
             }
         }
 
+        [$credit, $creditError] = $this->avalAiCreditPayload($avalai);
+
         return $this->success([
             'base_url' => Setting::get('avalai_base_url') ?: config('services.avalai.base_url'),
             'vision_model' => $visionModel,
@@ -308,7 +310,24 @@ class SettingsAdminController extends BaseApiController
             'model_categories' => AvalAiModelCatalog::categorize($availableModels),
             'recommended_result_model' => 'gpt-5.5',
             'suggested_models' => $fallbackModels,
+            'credit' => $credit,
+            'credit_error' => $creditError,
         ]);
+    }
+
+    public function aiCredit(AvalAIService $avalai): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        if (! filled(Setting::getAvalAiApiKey())) {
+            return $this->error('کلید API سرویس AvalAI تنظیم نشده است.');
+        }
+
+        try {
+            return $this->success($avalai->getCredit());
+        } catch (\Throwable $e) {
+            return $this->error('دریافت موجودی اعتبار ناموفق: '.$e->getMessage());
+        }
     }
 
     public function aiModels(AvalAIService $avalai): JsonResponse
@@ -393,6 +412,22 @@ class SettingsAdminController extends BaseApiController
             ], 'اتصال به AvalAI با موفقیت برقرار شد.');
         } catch (\Throwable $e) {
             return $this->error('تست اتصال ناموفق: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * @return array{0: array<string, mixed>|null, 1: string|null}
+     */
+    private function avalAiCreditPayload(AvalAIService $avalai): array
+    {
+        if (! filled(Setting::getAvalAiApiKey())) {
+            return [null, null];
+        }
+
+        try {
+            return [$avalai->getCredit(), null];
+        } catch (\Throwable $e) {
+            return [null, $e->getMessage()];
         }
     }
 }

@@ -1,4 +1,4 @@
-import type { ApiResponse, ApiError } from '~/types/api'
+import type { ApiResponse, ApiError, AvalAiCredit } from '~/types/api'
 import { captureClientError } from '~/utils/sentry'
 
 const TOKEN_KEY = 'playnova_token'
@@ -593,7 +593,11 @@ export function useApi() {
           }>
           recommended_result_model: string
           suggested_models: string[]
+          credit: AvalAiCredit | null
+          credit_error: string | null
         }>('/admin/settings/ai'),
+
+      aiCredit: () => api.get<AvalAiCredit>('/admin/settings/ai/credit'),
 
       aiModels: () =>
         api.get<{

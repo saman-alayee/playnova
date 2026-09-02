@@ -111,6 +111,8 @@ class TournamentController extends BaseApiController
                 ->first();
 
             if ($registration) {
+                $registration->setRelation('tournament', $tournament);
+
                 $hasPendingTeamInvite = TeamInvite::query()
                     ->where('inviter_id', Auth::id())
                     ->where('tournament_id', $tournament->id)

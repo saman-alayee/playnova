@@ -523,6 +523,27 @@ export interface TournamentResultAnalysis {
   raw_excerpt?: string
 }
 
+export interface AvalAiCreditSource {
+  id: string
+  name: string
+  description: string
+  amount_irt: number
+  remaining_irt: number
+  end_date?: string | null
+  template_id?: string
+}
+
+export interface AvalAiCredit {
+  limit: number
+  remaining_irt: number
+  remaining_unit: number
+  total_unit: number
+  exchange_rate: number
+  account_tier: number
+  packages: AvalAiCreditSource[]
+  grants: AvalAiCreditSource[]
+}
+
 export interface ApiError extends Error {
   status?: number
   data?: ApiResponse

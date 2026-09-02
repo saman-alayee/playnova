@@ -127,12 +127,12 @@ async function confirmSeat() {
       })
       flash.value = { success: 'درخواست رزرو تیمی ارسال شد. تا تأیید هم‌تیمی‌ها، مبلغی کسر نمی‌شود.' }
       await auth.fetchUser()
-      await navigateTo(`/tournaments/${id.value}`)
+      await navigateTo('/')
     } else {
       await api.tournaments.storeSeat(id.value, pendingSeat.value)
       flash.value = { success: 'جایگاه با موفقیت ثبت شد.' }
       await auth.fetchUser()
-      await navigateTo(`/tournaments/${id.value}`)
+      await navigateTo('/')
     }
   } catch (e: unknown) {
     const err = e as Error

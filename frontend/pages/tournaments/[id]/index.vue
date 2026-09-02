@@ -118,7 +118,9 @@ const statusColor: Record<string, string> = {
             class="bg-green-900/30 border border-green-500 text-green-300 rounded-lg p-3 text-center text-sm mb-4"
           >
             ✅ شما در این مسابقه ثبت‌نام کرده‌اید.
-            <span v-if="registration?.seat_number"> — جایگاه: <strong>{{ registration.seat_number }}</strong></span>
+            <span v-if="registration?.seat_label || registration?.seat_number">
+              — جایگاه: <strong dir="ltr">{{ registration.seat_label || registration.seat_number }}</strong>
+            </span>
           </div>
 
           <div v-else-if="pendingSeat" class="space-y-3 mb-4">

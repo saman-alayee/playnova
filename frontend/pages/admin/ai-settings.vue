@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { AvalAiCredit } from '~/types/api'
+
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 useHead({ title: 'تنظیمات هوش مصنوعی | PlayNova' })
 
@@ -18,6 +20,8 @@ interface AiModelCategory {
 
 const api = useApi()
 const flash = useState('flash')
+const { formatToman } = useFormatToman()
+const { formatDateTime } = usePersianDateTime()
 const { data, refresh } = usePageData('admin-ai', () => api.admin.aiSettings())
 
 const form = reactive({
@@ -32,8 +36,11 @@ const form = reactive({
 
 const testing = ref(false)
 const refreshingModels = ref(false)
+const refreshingCredit = ref(false)
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
 const modelCategories = ref<AiModelCategory[]>([])
+const credit = ref<AvalAiCredit | null>(null)
+const creditError = ref<string | null>(null)
 
 watch(data, (d) => {
   if (!d) return
@@ -47,6 +54,8 @@ watch(data, (d) => {
   modelCategories.value = d.model_categories?.length
     ? [...d.model_categories]
     : buildCategoriesFromFlat(d.available_models || d.suggested_models || [])
+  credit.value = d.credit || null
+  creditError.value = d.credit_error || null
 }, { immediate: true })
 
 function buildCategoriesFromFlat(models: string[]): AiModelCategory[] {
@@ -108,6 +117,25 @@ const apiKeySourceLabel = computed(() => {
   if (source === 'database') return 'ذخیره‌شده در پنل'
   if (source === 'env') return 'از فایل .env'
   return 'تنظیم نشده'
+})
+
+async function refreshCredit() {
+  if (!data.value?.has_api_key) return
+  refreshingCredit.value = true
+  try {
+    credit.value = await api.admin.aiCredit()
+    creditError.value = null
+  } catch (e: unknown) {
+    const err = e as { data?: { message?: string }; message?: string }
+    creditError.value = err.data?.message || err.message || 'دریافت موجودی ناموفق بود.'
+  } finally {
+    refreshingCredit.value = false
+  }
+}
+
+const creditLow = computed(() => {
+  const remaining = credit.value?.remaining_irt ?? 0
+  return remaining > 0 && remaining < 100000
 })
 
 async function refreshModels() {
@@ -174,6 +202,72 @@ async function testConnection() {
     <p class="text-sm text-gray-400 mb-4">
       برای تشخیص خودکار نتیجه مسابقه از اسکرین‌شات. مقادیر پنل بر .env اولویت دارند.
     </p>
+
+    <section class="ai-credit mb-6">
+      <div class="ai-credit__head">
+        <h2 class="ai-credit__title">موجودی اعتبار AvalAI</h2>
+        <button
+          type="button"
+          class="text-xs text-secondary disabled:opacity-50"
+          :disabled="refreshingCredit || !data?.has_api_key"
+          @click="refreshCredit"
+        >
+          {{ refreshingCredit ? 'در حال بروزرسانی…' : 'بروزرسانی موجودی' }}
+        </button>
+      </div>
+
+      <p v-if="!data" class="text-sm text-gray-400">در حال دریافت موجودی…</p>
+      <p v-else-if="!data.has_api_key" class="text-sm text-gray-400">
+        برای دیدن موجودی، ابتدا کلید API را ذخیره کنید.
+      </p>
+      <p v-else-if="creditError && !credit" class="text-sm text-red-300">
+        {{ creditError }}
+      </p>
+      <div v-else-if="credit" class="ai-credit__body">
+        <div class="ai-credit__stats">
+          <div>
+            <p class="ai-credit__label">باقی‌مانده</p>
+            <p class="ai-credit__value" :class="{ 'ai-credit__value--low': creditLow }">
+              {{ formatToman(credit.remaining_irt) }}
+            </p>
+          </div>
+          <div>
+            <p class="ai-credit__label">سطح حساب</p>
+            <p class="ai-credit__value">{{ credit.account_tier.toLocaleString('fa-IR') }} از ۵</p>
+          </div>
+          <div v-if="credit.remaining_unit > 0">
+            <p class="ai-credit__label">واحد (دلار)</p>
+            <p class="ai-credit__value" dir="ltr">{{ credit.remaining_unit.toFixed(4) }}</p>
+          </div>
+        </div>
+        <p v-if="creditLow" class="text-xs text-amber-300 mt-3">
+          موجودی کمتر از ۱۰۰٬۰۰۰ تومان است. برای تحلیل نتیجه مسابقه شارژ کنید.
+        </p>
+        <p v-if="creditError" class="text-xs text-red-300 mt-2">{{ creditError }}</p>
+
+        <div v-if="credit.packages.length" class="ai-credit__sources">
+          <h3>بسته‌های فعال</h3>
+          <ul>
+            <li v-for="pkg in credit.packages" :key="'p-' + pkg.id">
+              <span class="ai-credit__source-name">{{ pkg.name || 'بسته' }}</span>
+              <span>{{ formatToman(pkg.remaining_irt) }} از {{ formatToman(pkg.amount_irt) }}</span>
+              <span v-if="pkg.end_date" class="text-gray-500">تا {{ formatDateTime(pkg.end_date) }}</span>
+            </li>
+          </ul>
+        </div>
+        <div v-if="credit.grants.length" class="ai-credit__sources">
+          <h3>گرنت‌های فعال</h3>
+          <ul>
+            <li v-for="grant in credit.grants" :key="'g-' + grant.id">
+              <span class="ai-credit__source-name">{{ grant.description || grant.name || 'گرنت' }}</span>
+              <span>{{ formatToman(grant.remaining_irt) }} از {{ formatToman(grant.amount_irt) }}</span>
+              <span v-if="grant.end_date" class="text-gray-500">تا {{ formatDateTime(grant.end_date) }}</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <p v-else class="text-sm text-gray-400">در حال دریافت موجودی…</p>
+    </section>
 
     <div v-if="modelCategories.length" class="ai-tier-guide mb-6">
       <h2 class="ai-tier-guide__title">راهنمای دسته‌بندی مدل‌ها</h2>
@@ -318,6 +412,83 @@ async function testConnection() {
 </template>
 
 <style scoped>
+.ai-credit {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(75, 85, 99, 0.55);
+  border-radius: 0.75rem;
+  padding: 1rem 1.1rem;
+}
+
+.ai-credit__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.ai-credit__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #e5e7eb;
+}
+
+.ai-credit__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.ai-credit__label {
+  margin: 0 0 0.2rem;
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+.ai-credit__value {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #86efac;
+}
+
+.ai-credit__value--low {
+  color: #fcd34d;
+}
+
+.ai-credit__sources {
+  margin-top: 0.85rem;
+}
+
+.ai-credit__sources h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #d1d5db;
+}
+
+.ai-credit__sources ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ai-credit__sources li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.ai-credit__source-name {
+  color: #e5e7eb;
+  font-weight: 700;
+}
+
 .ai-tier-guide__title {
   margin: 0 0 0.65rem;
   font-size: 0.9rem;
