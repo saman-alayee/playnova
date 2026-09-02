@@ -11,6 +11,7 @@ use App\Models\Tournament;
 use App\Models\User;
 use App\Services\TeamInviteService;
 use App\Services\TeamReservationService;
+use App\Support\SeatAdvisoryLock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -166,31 +167,33 @@ class TeamInviteController extends BaseApiController
         }
 
         try {
-            $invites = DB::transaction(function () use ($service, $tournament, $userId, $inviteeIds, $teamFirstSeat) {
-                $lockedTournament = Tournament::whereKey($tournament->id)->lockForUpdate()->firstOrFail();
-                $teamSeats = $service->teamSeatsFromAnchor($lockedTournament, $teamFirstSeat);
+            $invites = SeatAdvisoryLock::run($tournament->id, $teamSeats, function () use ($service, $tournament, $userId, $inviteeIds, $teamFirstSeat) {
+                return DB::transaction(function () use ($service, $tournament, $userId, $inviteeIds, $teamFirstSeat) {
+                    $freshTournament = Tournament::whereKey($tournament->id)->firstOrFail();
+                    $teamSeats = $service->teamSeatsFromAnchor($freshTournament, $teamFirstSeat);
 
-                if ($teamSeats === [] || ! $service->validateTeamSeatsAvailable($lockedTournament, $teamSeats)) {
-                    throw new \RuntimeException('seat_taken');
-                }
+                    if ($teamSeats === [] || ! $service->validateTeamSeatsAvailable($freshTournament, $teamSeats)) {
+                        throw new \RuntimeException('seat_taken');
+                    }
 
-                $teamGroupId = (string) Str::uuid();
-                $expiresAt = now()->addSeconds(TeamInvite::INVITE_TTL_SECONDS);
-                $created = [];
+                    $teamGroupId = (string) Str::uuid();
+                    $expiresAt = now()->addSeconds(TeamInvite::INVITE_TTL_SECONDS);
+                    $created = [];
 
-                foreach ($inviteeIds as $inviteeId) {
-                    $created[] = TeamInvite::create([
-                        'tournament_id' => $lockedTournament->id,
-                        'team_group_id' => count($inviteeIds) > 1 ? $teamGroupId : null,
-                        'team_first_seat' => $teamFirstSeat,
-                        'inviter_id' => $userId,
-                        'invitee_id' => $inviteeId,
-                        'status' => TeamInvite::STATUS_PENDING,
-                        'expires_at' => $expiresAt,
-                    ]);
-                }
+                    foreach ($inviteeIds as $inviteeId) {
+                        $created[] = TeamInvite::create([
+                            'tournament_id' => $freshTournament->id,
+                            'team_group_id' => count($inviteeIds) > 1 ? $teamGroupId : null,
+                            'team_first_seat' => $teamFirstSeat,
+                            'inviter_id' => $userId,
+                            'invitee_id' => $inviteeId,
+                            'status' => TeamInvite::STATUS_PENDING,
+                            'expires_at' => $expiresAt,
+                        ]);
+                    }
 
-                return $created;
+                    return $created;
+                });
             });
 
             foreach ($invites as $invite) {

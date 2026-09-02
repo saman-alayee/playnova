@@ -92,16 +92,16 @@ Route::middleware('auth:sanctum')->group(function () {
     // Route::get('tickets/{ticket}', [TicketController::class, 'show']);
     // Route::post('tickets/{ticket}/reply', [TicketController::class, 'reply']);
 
-    Route::get('team-invites', [TeamInviteController::class, 'index']);
-    Route::post('tournaments/{tournament}/team-invite', [TeamInviteController::class, 'store']);
-    Route::post('team-invites/{invite}/accept', [TeamInviteController::class, 'accept']);
-    Route::post('team-invites/{invite}/decline', [TeamInviteController::class, 'decline']);
-    Route::post('team-invites/{invite}/cancel', [TeamInviteController::class, 'cancel']);
+    Route::get('team-invites', [TeamInviteController::class, 'index'])->middleware('throttle:invites');
+    Route::post('tournaments/{tournament}/team-invite', [TeamInviteController::class, 'store'])->middleware('throttle:register');
+    Route::post('team-invites/{invite}/accept', [TeamInviteController::class, 'accept'])->middleware('throttle:register');
+    Route::post('team-invites/{invite}/decline', [TeamInviteController::class, 'decline'])->middleware('throttle:invites');
+    Route::post('team-invites/{invite}/cancel', [TeamInviteController::class, 'cancel'])->middleware('throttle:invites');
 
-    Route::post('tournaments/{tournament}/register', [TournamentController::class, 'register']);
-    Route::post('tournaments/{tournament}/cancel-pending', [TournamentController::class, 'cancelPending']);
+    Route::post('tournaments/{tournament}/register', [TournamentController::class, 'register'])->middleware('throttle:register');
+    Route::post('tournaments/{tournament}/cancel-pending', [TournamentController::class, 'cancelPending'])->middleware('throttle:register');
     Route::get('tournaments/{tournament}/select-seat', [TournamentController::class, 'selectSeat']);
-    Route::post('tournaments/{tournament}/select-seat', [TournamentController::class, 'storeSeat']);
+    Route::post('tournaments/{tournament}/select-seat', [TournamentController::class, 'storeSeat'])->middleware('throttle:register');
     Route::get('tournaments/{tournament}/game-login', [TournamentController::class, 'gameLoginInfo']);
 
     Route::get('admin/tournament-seats', [TournamentSeatAdminController::class, 'index']);

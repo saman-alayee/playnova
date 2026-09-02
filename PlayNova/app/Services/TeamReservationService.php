@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Modules\Audit\Services\ActivityLogService;
 use App\Modules\Tournament\Services\TournamentListingService;
 use App\Modules\Tournament\Services\TournamentRegistrationService;
+use App\Support\SeatAdvisoryLock;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -148,7 +149,7 @@ class TeamReservationService
                     throw new \RuntimeException('inactive');
                 }
 
-                $tournament = Tournament::where('id', $lockedInvite->tournament_id)->lockForUpdate()->first();
+                $tournament = Tournament::where('id', $lockedInvite->tournament_id)->first();
                 if (! $tournament || ! $tournament->acceptsRegistration()) {
                     throw new \RuntimeException('closed');
                 }
@@ -158,96 +159,92 @@ class TeamReservationService
                     throw new \RuntimeException('no_team_slot');
                 }
 
-                if (! $this->validateTeamSeatsAvailable($tournament, $teamSeats)) {
-                    throw new \RuntimeException('seat_taken');
-                }
-
-                [$seatInviter, $seatInvitee] = [$teamSeats[0], $teamSeats[1]];
-
-                $inviter = User::where('id', $lockedInvite->inviter_id)->lockForUpdate()->first();
-                $invitee = User::where('id', $lockedInvite->invitee_id)->lockForUpdate()->first();
-                $fee = (float) $tournament->entry_fee;
-
-                if ($inviter->wallet < $fee) {
-                    throw new \RuntimeException('inviter_wallet');
-                }
-
-                if ($invitee->wallet < $fee) {
-                    throw new \RuntimeException('invitee_wallet');
-                }
-
-                $inviterReg = Registration::where('user_id', $inviter->id)
-                    ->where('tournament_id', $tournament->id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (! $inviterReg || $inviterReg->seat_number !== null) {
-                    throw new \RuntimeException('inviter_reg');
-                }
-
-                $inviteeExists = Registration::where('user_id', $invitee->id)
-                    ->where('tournament_id', $tournament->id)
-                    ->lockForUpdate()
-                    ->exists();
-
-                if ($inviteeExists) {
-                    throw new \RuntimeException('invitee_reg');
-                }
-
-                foreach ([$seatInviter, $seatInvitee] as $seat) {
-                    $taken = Registration::where('tournament_id', $tournament->id)
-                        ->where('seat_number', $seat)
-                        ->lockForUpdate()
-                        ->exists();
-                    if ($taken) {
+                return SeatAdvisoryLock::run($tournament->id, $teamSeats, function () use ($lockedInvite, $tournament, $teamSeats) {
+                    if (! $this->validateTeamSeatsAvailable($tournament, $teamSeats)) {
                         throw new \RuntimeException('seat_taken');
                     }
-                }
 
-                $this->chargeEntryFee($inviter, $tournament);
-                $this->chargeEntryFee($invitee, $tournament);
+                    [$seatInviter, $seatInvitee] = [$teamSeats[0], $teamSeats[1]];
 
-                $inviterReg->update([
-                    'seat_number' => $seatInviter,
-                    'status' => 'confirmed',
-                    'reservation_type' => 'team',
-                ]);
+                    $inviter = User::where('id', $lockedInvite->inviter_id)->lockForUpdate()->first();
+                    $invitee = User::where('id', $lockedInvite->invitee_id)->lockForUpdate()->first();
+                    $fee = (float) $tournament->entry_fee;
 
-                Registration::create([
-                    'user_id' => $invitee->id,
-                    'tournament_id' => $tournament->id,
-                    'seat_number' => $seatInvitee,
-                    'status' => 'confirmed',
-                    'reservation_type' => 'team',
-                ]);
+                    if ($inviter->wallet < $fee) {
+                        throw new \RuntimeException('inviter_wallet');
+                    }
 
-                $this->registrations->syncRegisteredCount($tournament);
+                    if ($invitee->wallet < $fee) {
+                        throw new \RuntimeException('invitee_wallet');
+                    }
 
-                $lockedInvite->update([
-                    'status' => TeamInvite::STATUS_ACCEPTED,
-                    'seat_number_inviter' => $seatInviter,
-                    'seat_number_invitee' => $seatInvitee,
-                    'failure_reason' => null,
-                ]);
+                    $inviterReg = Registration::where('user_id', $inviter->id)
+                        ->where('tournament_id', $tournament->id)
+                        ->lockForUpdate()
+                        ->first();
 
-                $this->logTeamJoined($inviter, $invitee, $tournament, $seatInviter, $seatInvitee);
+                    if (! $inviterReg || $inviterReg->seat_number !== null) {
+                        throw new \RuntimeException('inviter_reg');
+                    }
 
-                $labelInviter = $tournament->seatDisplayLabel($seatInviter);
-                $labelInvitee = $tournament->seatDisplayLabel($seatInvitee);
+                    $inviteeExists = Registration::where('user_id', $invitee->id)
+                        ->where('tournament_id', $tournament->id)
+                        ->lockForUpdate()
+                        ->exists();
 
-                TournamentListingService::forgetHomeCache();
+                    if ($inviteeExists) {
+                        throw new \RuntimeException('invitee_reg');
+                    }
 
-                SendUserNotificationJob::dispatch(
-                    (int) $lockedInvite->inviter_id,
-                    'تأیید دعوت تیمی',
-                    sprintf('هم‌تیمی شما در مسابقه «%s» دعوت را پذیرفت.', $tournament->title),
-                    'team_invite',
-                );
+                    foreach ([$seatInviter, $seatInvitee] as $seat) {
+                        $taken = Registration::where('tournament_id', $tournament->id)
+                            ->where('seat_number', $seat)
+                            ->lockForUpdate()
+                            ->exists();
+                        if ($taken) {
+                            throw new \RuntimeException('seat_taken');
+                        }
+                    }
 
-                return [
-                    'ok' => true,
-                    'message' => "رزرو تیمی با موفقیت انجام شد. جایگاه‌های {$labelInviter} و {$labelInvitee} رزرو شد.",
-                ];
+                    $this->chargeEntryFee($inviter, $tournament);
+                    $this->chargeEntryFee($invitee, $tournament);
+
+                    $this->registrations->markSeatConfirmed($inviterReg, $seatInviter, [
+                        'reservation_type' => 'team',
+                    ]);
+
+                    $this->registrations->createConfirmedSeat($invitee->id, $tournament->id, $seatInvitee, [
+                        'reservation_type' => 'team',
+                    ]);
+
+                    $this->registrations->syncRegisteredCount($tournament);
+
+                    $lockedInvite->update([
+                        'status' => TeamInvite::STATUS_ACCEPTED,
+                        'seat_number_inviter' => $seatInviter,
+                        'seat_number_invitee' => $seatInvitee,
+                        'failure_reason' => null,
+                    ]);
+
+                    $this->logTeamJoined($inviter, $invitee, $tournament, $seatInviter, $seatInvitee);
+
+                    $labelInviter = $tournament->seatDisplayLabel($seatInviter);
+                    $labelInvitee = $tournament->seatDisplayLabel($seatInvitee);
+
+                    TournamentListingService::forgetHomeCache();
+
+                    SendUserNotificationJob::dispatch(
+                        (int) $lockedInvite->inviter_id,
+                        'تأیید دعوت تیمی',
+                        sprintf('هم‌تیمی شما در مسابقه «%s» دعوت را پذیرفت.', $tournament->title),
+                        'team_invite',
+                    );
+
+                    return [
+                        'ok' => true,
+                        'message' => "رزرو تیمی با موفقیت انجام شد. جایگاه‌های {$labelInviter} و {$labelInvitee} رزرو شد.",
+                    ];
+                });
             });
         } catch (\RuntimeException $e) {
             return $this->failInvite($invite, $e->getMessage());
@@ -336,7 +333,7 @@ class TeamReservationService
     /** @param Collection<int, TeamInvite> $groupInvites */
     protected function confirmSquadGroup(Collection $groupInvites, Tournament $tournament): array
     {
-        $lockedTournament = Tournament::where('id', $tournament->id)->lockForUpdate()->first();
+        $lockedTournament = Tournament::where('id', $tournament->id)->first();
         if (! $lockedTournament || ! $lockedTournament->acceptsRegistration()) {
             throw new \RuntimeException('closed');
         }
@@ -347,6 +344,7 @@ class TeamReservationService
             throw new \RuntimeException('no_team_slot');
         }
 
+        return SeatAdvisoryLock::run($lockedTournament->id, $teamSeats, function () use ($groupInvites, $lockedTournament, $teamSeats) {
         if (! $this->validateTeamSeatsAvailable($lockedTournament, $teamSeats)) {
             throw new \RuntimeException('seat_taken');
         }
@@ -406,18 +404,12 @@ class TeamReservationService
             $this->chargeEntryFee($member, $lockedTournament);
         }
 
-        $inviterReg->update([
-            'seat_number' => $teamSeats[0],
-            'status' => 'confirmed',
+        $this->registrations->markSeatConfirmed($inviterReg, $teamSeats[0], [
             'reservation_type' => 'team',
         ]);
 
         foreach ($groupInvites->values() as $index => $groupInvite) {
-            Registration::create([
-                'user_id' => $groupInvite->invitee_id,
-                'tournament_id' => $lockedTournament->id,
-                'seat_number' => $teamSeats[$index + 1],
-                'status' => 'confirmed',
+            $this->registrations->createConfirmedSeat($groupInvite->invitee_id, $lockedTournament->id, $teamSeats[$index + 1], [
                 'reservation_type' => 'team',
             ]);
 
@@ -451,6 +443,7 @@ class TeamReservationService
             'ok' => true,
             'message' => "رزرو تیمی ۴ نفره با موفقیت انجام شد. جایگاه‌ها: {$labels}",
         ];
+        });
     }
 
     protected function logTeamJoined(User $inviter, User $invitee, Tournament $tournament, int $seatInviter, int $seatInvitee): void
