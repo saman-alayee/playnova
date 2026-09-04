@@ -56,7 +56,7 @@ class TournamentResultVisionService
         ?string $userPrompt = null,
         array $extraFrames = [],
     ): array {
-        $images = [$this->resolveMediaBinary($file)];
+        $images = $this->resolveMediaImages($file);
         foreach ($extraFrames as $frame) {
             if ($frame instanceof UploadedFile) {
                 $images[] = $this->resolveMediaBinary($frame);
@@ -67,6 +67,10 @@ class TournamentResultVisionService
         $prizeTable = $this->prizes->prizeTableFor($tournament);
         $system = $systemPrompt ?: $this->resolveSystemPrompt($tournament);
         $userText = $userPrompt ?: $this->resolveUserPrompt($tournament, $participants, $prizeTable);
+
+        if (count($images) > 1) {
+            $userText .= "\n\nYou receive " . count($images) . ' frames from a scrolling scoreboard recording. Merge ALL frames into one complete ranked list. Do not stop at rank 3.';
+        }
 
         $contentParts = [['type' => 'text', 'text' => $userText]];
         foreach ($images as [$mime, $binary]) {
@@ -86,7 +90,9 @@ class TournamentResultVisionService
         );
 
         $teams = $this->parseTeamsJson($raw);
+        $teams = $this->maybeRetryMissingRanks($teams, $prizeTable, $contentParts, $system, $userText);
         $matchResult = $this->matchTeams($teams, $participants, $tournament);
+        $coverage = $this->buildCoverage($teams, $prizeTable, $matchResult);
 
         return [
             'players' => $matchResult['players'],
@@ -98,7 +104,30 @@ class TournamentResultVisionService
             'prize_table_text' => $this->prizeTableParser->formatForPrompt($prizeTable, $tournament->seatMode()),
             'vision_model' => Setting::getResultAiVisionModel(),
             'raw_excerpt' => mb_substr($raw, 0, 500),
+            'coverage' => $coverage,
+            'frames_analyzed' => count($images),
         ];
+    }
+
+    public static function teamNumberFromLabel(?string $label, ?int $fallback = null): ?int
+    {
+        if ($label !== null && $label !== '') {
+            $normalized = self::normalizePersianDigits(trim($label));
+
+            if (preg_match('/(?:team|تیم)\s*#?\s*(\d+)/iu', $normalized, $matches)) {
+                return (int) $matches[1];
+            }
+
+            if (preg_match('/#(\d+)/', $normalized, $matches)) {
+                return (int) $matches[1];
+            }
+
+            if (preg_match('/(\d+)/', $normalized, $matches)) {
+                return (int) $matches[1];
+            }
+        }
+
+        return $fallback;
     }
 
     public function analyzeScreenshot(Tournament $tournament, UploadedFile $image, ?string $systemPrompt = null, ?string $userPrompt = null): array
@@ -264,6 +293,29 @@ class TournamentResultVisionService
         return $base . ' Extract every prize rank through the last configured rank — prizes are paid to all ranks, not only top 3.';
     }
 
+    /** @return list<array{0:string,1:string}> */
+    protected function resolveMediaImages(UploadedFile $file): array
+    {
+        $mime = strtolower((string) ($file->getMimeType() ?: ''));
+
+        if (str_starts_with($mime, 'image/')) {
+            return [$this->resolveMediaBinary($file)];
+        }
+
+        if (str_starts_with($mime, 'video/')) {
+            $frames = $this->extractVideoFrames($file, 10);
+            if ($frames === []) {
+                throw new RuntimeException(
+                    'استخراج فریم از ویدیو ممکن نشد. از «تحلیل ویدیو» (چند فریم) استفاده کنید یا ffmpeg را روی سرور نصب کنید.',
+                );
+            }
+
+            return array_map(static fn (string $binary) => ['image/jpeg', $binary], $frames);
+        }
+
+        throw new RuntimeException('فرمت فایل پشتیبانی نمی‌شود. تصویر (JPG/PNG/WebP) یا ویدیو (MP4/WebM) آپلود کنید.');
+    }
+
     /** @return array{0:string,1:string} */
     protected function resolveMediaBinary(UploadedFile $file): array
     {
@@ -292,6 +344,93 @@ class TournamentResultVisionService
         throw new RuntimeException('فرمت فایل پشتیبانی نمی‌شود. تصویر (JPG/PNG/WebP) یا ویدیو (MP4/WebM) آپلود کنید.');
     }
 
+    /** @return list<string> */
+    protected function extractVideoFrames(UploadedFile $file, int $maxFrames = 10): array
+    {
+        $inputPath = $file->getRealPath();
+        if (! is_string($inputPath) || ! is_readable($inputPath)) {
+            return [];
+        }
+
+        $ffmpeg = $this->findFfmpegBinary();
+        if ($ffmpeg === null) {
+            return [];
+        }
+
+        $duration = $this->probeVideoDuration($inputPath) ?? 30.0;
+        $frameCount = min($maxFrames, max(4, (int) ceil($duration / 2.5)));
+        $frames = [];
+
+        for ($index = 0; $index < $frameCount; $index++) {
+            $second = max(0.5, ($duration * ($index + 1)) / ($frameCount + 1));
+            $binary = $this->extractVideoFrameAtSecond($ffmpeg, $inputPath, $second);
+            if ($binary !== null) {
+                $frames[] = $binary;
+            }
+        }
+
+        if ($frames !== []) {
+            return $frames;
+        }
+
+        foreach ([1, 3, 5, 8, 12, 16] as $second) {
+            $binary = $this->extractVideoFrameAtSecond($ffmpeg, $inputPath, (float) $second);
+            if ($binary !== null) {
+                $frames[] = $binary;
+            }
+        }
+
+        return $frames;
+    }
+
+    protected function extractVideoFrameAtSecond(string $ffmpeg, string $inputPath, float $second): ?string
+    {
+        $outputPath = tempnam(sys_get_temp_dir(), 'pn_frame_') . '.jpg';
+        $command = sprintf(
+            '%s -hide_banner -loglevel error -ss %.2f -i %s -vframes 1 -q:v 2 %s 2>&1',
+            escapeshellarg($ffmpeg),
+            $second,
+            escapeshellarg($inputPath),
+            escapeshellarg($outputPath),
+        );
+
+        exec($command, $output, $exitCode);
+
+        if ($exitCode !== 0 || ! is_readable($outputPath) || filesize($outputPath) <= 0) {
+            @unlink($outputPath);
+
+            return null;
+        }
+
+        $binary = file_get_contents($outputPath);
+        @unlink($outputPath);
+
+        return $binary !== false && $binary !== '' ? $binary : null;
+    }
+
+    protected function probeVideoDuration(string $inputPath): ?float
+    {
+        $ffprobe = $this->findFfprobeBinary();
+        if ($ffprobe === null) {
+            return null;
+        }
+
+        $command = sprintf(
+            '%s -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 %s 2>&1',
+            escapeshellarg($ffprobe),
+            escapeshellarg($inputPath),
+        );
+
+        exec($command, $output, $exitCode);
+        if ($exitCode !== 0 || ! isset($output[0])) {
+            return null;
+        }
+
+        $duration = (float) trim((string) $output[0]);
+
+        return $duration > 0 ? $duration : null;
+    }
+
     protected function extractVideoFrame(UploadedFile $file): ?string
     {
         $inputPath = $file->getRealPath();
@@ -304,29 +443,33 @@ class TournamentResultVisionService
             return null;
         }
 
-        $outputPath = tempnam(sys_get_temp_dir(), 'pn_frame_') . '.jpg';
-        $seconds = [1, 3, 5, 8];
-
-        foreach ($seconds as $second) {
-            $command = sprintf(
-                '%s -hide_banner -loglevel error -ss %d -i %s -vframes 1 -q:v 2 %s 2>&1',
-                escapeshellarg($ffmpeg),
-                $second,
-                escapeshellarg($inputPath),
-                escapeshellarg($outputPath),
-            );
-
-            exec($command, $output, $exitCode);
-
-            if ($exitCode === 0 && is_readable($outputPath) && filesize($outputPath) > 0) {
-                $binary = file_get_contents($outputPath);
-                @unlink($outputPath);
-
-                return $binary !== false ? $binary : null;
+        foreach ([1.0, 3.0, 5.0, 8.0] as $second) {
+            $frame = $this->extractVideoFrameAtSecond($ffmpeg, $inputPath, $second);
+            if ($frame !== null) {
+                return $frame;
             }
         }
 
-        @unlink($outputPath);
+        return null;
+    }
+
+    protected function findFfprobeBinary(): ?string
+    {
+        $candidates = ['ffprobe', 'ffprobe.exe'];
+
+        foreach ($candidates as $candidate) {
+            $command = PHP_OS_FAMILY === 'Windows'
+                ? 'where ' . escapeshellarg($candidate) . ' 2>nul'
+                : 'command -v ' . escapeshellarg($candidate) . ' 2>/dev/null';
+
+            exec($command, $output, $exitCode);
+
+            if ($exitCode === 0 && isset($output[0]) && trim($output[0]) !== '') {
+                return trim($output[0]);
+            }
+
+            $output = [];
+        }
 
         return null;
     }
@@ -402,10 +545,10 @@ class TournamentResultVisionService
             }
 
             $teamNumber = isset($row['team_number']) ? (int) $row['team_number'] : null;
-            if (! $teamNumber && isset($row['team_label'])) {
-                if (preg_match('/(\d+)/', (string) $row['team_label'], $labelMatch)) {
-                    $teamNumber = (int) $labelMatch[1];
-                }
+            if (! $teamNumber) {
+                $teamNumber = self::teamNumberFromLabel(
+                    isset($row['team_label']) ? (string) $row['team_label'] : null,
+                );
             }
 
             $names = $row['player_names'] ?? null;
@@ -417,18 +560,11 @@ class TournamentResultVisionService
             $uids = $row['uids'] ?? null;
             if (! is_array($uids)) {
                 $singleUid = $this->normalizeUid($row['uid'] ?? $row['cod_id'] ?? $row['player_id'] ?? null);
-                $uids = array_fill(0, count($names), $singleUid);
+                $uids = array_fill(0, max(1, count($names)), $singleUid);
             }
 
-            $killsRaw = $row['kills'] ?? $row['score'] ?? null;
-            $kills = [];
-            if (is_array($killsRaw)) {
-                foreach ($killsRaw as $kill) {
-                    $kills[] = $kill !== null ? (int) $kill : null;
-                }
-            } elseif ($killsRaw !== null) {
-                $kills = array_fill(0, max(1, count($names)), (int) $killsRaw);
-            }
+            $killsRaw = $row['kills'] ?? $row['kill'] ?? $row['score'] ?? $row['scores'] ?? null;
+            $kills = $this->normalizeKillsArray($killsRaw, count($names));
 
             $teams[] = [
                 'rank' => $rank,
@@ -440,10 +576,201 @@ class TournamentResultVisionService
             ];
         }
 
-        return collect($teams)
+        return $this->consolidateTeams($teams);
+    }
+
+    /**
+     * @param  list<array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}>  $teams
+     * @return list<array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}>
+     */
+    protected function consolidateTeams(array $teams): array
+    {
+        if ($teams === []) {
+            return [];
+        }
+
+        $byRank = [];
+        foreach ($teams as $team) {
+            $rank = (int) $team['rank'];
+            if (! isset($byRank[$rank])) {
+                $byRank[$rank] = $team;
+                continue;
+            }
+
+            $byRank[$rank] = $this->mergeTwoTeamRows($byRank[$rank], $team);
+        }
+
+        $bestRankByTeamNumber = [];
+        foreach ($byRank as $rank => $team) {
+            $teamNumber = $team['team_number'] ?? null;
+            if ($teamNumber === null) {
+                continue;
+            }
+
+            if (! isset($bestRankByTeamNumber[$teamNumber]) || $rank < $bestRankByTeamNumber[$teamNumber]) {
+                if (isset($bestRankByTeamNumber[$teamNumber])) {
+                    unset($byRank[$bestRankByTeamNumber[$teamNumber]]);
+                }
+                $bestRankByTeamNumber[$teamNumber] = $rank;
+            } else {
+                unset($byRank[$rank]);
+            }
+        }
+
+        return collect($byRank)
             ->sortBy('rank')
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}  $left
+     * @param  array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}  $right
+     * @return array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}
+     */
+    protected function mergeTwoTeamRows(array $left, array $right): array
+    {
+        $names = array_values(array_unique(array_merge($left['player_names'], $right['player_names'])));
+        $count = max(count($names), count($left['uids']), count($right['uids']), count($left['kills']), count($right['kills']));
+
+        $uids = [];
+        $kills = [];
+        for ($index = 0; $index < $count; $index++) {
+            $uids[] = $left['uids'][$index] ?? $right['uids'][$index] ?? null;
+            $leftKill = $left['kills'][$index] ?? null;
+            $rightKill = $right['kills'][$index] ?? null;
+            $kills[] = $leftKill ?? $rightKill;
+        }
+
+        return [
+            'rank' => (int) $left['rank'],
+            'team_number' => $left['team_number'] ?? $right['team_number'],
+            'team_label' => $left['team_label'] ?: $right['team_label'],
+            'player_names' => $names,
+            'uids' => $uids,
+            'kills' => $kills,
+        ];
+    }
+
+    /** @return list<?int> */
+    protected function normalizeKillsArray(mixed $killsRaw, int $nameCount): array
+    {
+        if (is_array($killsRaw)) {
+            return array_map(
+                static fn ($kill) => $kill !== null && $kill !== '' ? (int) $kill : null,
+                $killsRaw,
+            );
+        }
+
+        if ($killsRaw !== null && $killsRaw !== '') {
+            return array_fill(0, max(1, $nameCount), (int) $killsRaw);
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  list<array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}>  $teams
+     * @param  array<int,float>|null  $prizeTable
+     * @param  array{matched:list<array<string,mixed>>,unmatched:list<array<string,mixed>>}  $matchResult
+     * @return array{
+     *   ranks_found:list<int>,
+     *   missing_ranks:list<int>,
+     *   expected_last_rank:int,
+     *   teams_detected:int,
+     *   matched_players:int,
+     *   unmatched_players:int,
+     *   players_with_kills:int,
+     *   players_detected:int,
+     *   is_complete:bool
+     * }
+     */
+    protected function buildCoverage(array $teams, ?array $prizeTable, array $matchResult): array
+    {
+        $ranksFound = array_values(array_unique(array_map(static fn (array $team) => (int) $team['rank'], $teams)));
+        sort($ranksFound);
+
+        $expectedLastRank = $prizeTable !== [] && $prizeTable !== null ? (int) max(array_keys($prizeTable)) : 0;
+        $missingRanks = $expectedLastRank > 0
+            ? array_values(array_diff(range(1, $expectedLastRank), $ranksFound))
+            : [];
+
+        $playersDetected = 0;
+        $playersWithKills = 0;
+        foreach ($teams as $team) {
+            $playerCount = max(count($team['player_names']), count($team['kills']));
+            $playersDetected += $playerCount;
+            foreach ($team['kills'] as $kill) {
+                if ($kill !== null) {
+                    $playersWithKills++;
+                }
+            }
+        }
+
+        $matchedWithKills = count(array_filter(
+            $matchResult['matched'],
+            static fn (array $row) => isset($row['kills']) && $row['kills'] !== null,
+        ));
+
+        return [
+            'ranks_found' => $ranksFound,
+            'missing_ranks' => $missingRanks,
+            'expected_last_rank' => $expectedLastRank,
+            'teams_detected' => count($teams),
+            'matched_players' => count($matchResult['matched']),
+            'unmatched_players' => count($matchResult['unmatched']),
+            'players_with_kills' => max($playersWithKills, $matchedWithKills),
+            'players_detected' => $playersDetected,
+            'is_complete' => $missingRanks === [],
+        ];
+    }
+
+    /**
+     * @param  list<array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}>  $teams
+     * @param  array<int,float>|null  $prizeTable
+     * @param  list<array<string,mixed>>  $contentParts
+     * @return list<array{rank:int,team_number:?int,team_label:?string,player_names:list<string>,uids:list<?string>,kills:list<?int>}>
+     */
+    protected function maybeRetryMissingRanks(
+        array $teams,
+        ?array $prizeTable,
+        array $contentParts,
+        string $system,
+        string $userText,
+    ): array {
+        $coverage = $this->buildCoverage($teams, $prizeTable, ['matched' => [], 'unmatched' => []]);
+        if ($coverage['is_complete'] || $coverage['missing_ranks'] === []) {
+            return $teams;
+        }
+
+        $missing = implode(', ', $coverage['missing_ranks']);
+        $retryText = $userText . "\n\nRETRY: The previous JSON missed prize ranks: {$missing}. "
+            . "Return ONLY a JSON array with one row per missing rank ({$missing}). "
+            . 'Include team_number, player_names, and kills (crosshair icon numbers).';
+
+        $retryParts = $contentParts;
+        $retryParts[0] = ['type' => 'text', 'text' => $retryText];
+
+        try {
+            $retryRaw = $this->avalai->chatWithVision(
+                $retryParts,
+                $system,
+                Setting::getResultAiVisionModel(),
+            );
+            $retryTeams = $this->parseTeamsJson($retryRaw);
+
+            return $this->consolidateTeams(array_merge($teams, $retryTeams));
+        } catch (RuntimeException) {
+            return $teams;
+        }
+    }
+
+    protected static function normalizePersianDigits(string $value): string
+    {
+        $persian = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+        $arabic = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+        return str_replace($persian, range(0, 9), str_replace($arabic, range(0, 9), $value));
     }
 
     /**
@@ -466,6 +793,12 @@ class TournamentResultVisionService
             $uids = $team['uids'];
             $kills = $team['kills'];
             $matchedThisTeam = [];
+            $teamParticipants = $teamNumber && $tournament->seatMode() > 1
+                ? array_values(array_filter(
+                    $participants,
+                    static fn (array $participant) => (int) ($participant['team_number'] ?? 0) === (int) $teamNumber,
+                ))
+                : [];
 
             foreach ($names as $index => $name) {
                 $player = [
@@ -476,7 +809,13 @@ class TournamentResultVisionService
                 ];
                 $players[] = $player;
 
-                $user = $this->findParticipant($player, $participants, $usedUserIds, $teamNumber !== null);
+                $user = $this->findParticipant(
+                    $player,
+                    $participants,
+                    $usedUserIds,
+                    $teamNumber !== null,
+                    $teamNumber,
+                );
                 if ($user) {
                     $entry = [
                         'rank' => $rank,
@@ -507,11 +846,21 @@ class TournamentResultVisionService
                 }
             }
 
-            if ($teamNumber && $tournament->seatMode() > 1) {
-                foreach ($participants as $participant) {
+            if ($teamParticipants !== []) {
+                $killCursor = 0;
+                foreach ($teamParticipants as $participant) {
                     $userId = (int) $participant['user_id'];
-                    if (isset($usedUserIds[$userId]) || (int) ($participant['team_number'] ?? 0) !== (int) $teamNumber) {
+                    if (isset($usedUserIds[$userId])) {
                         continue;
+                    }
+
+                    $inferredKill = null;
+                    while ($killCursor < count($kills) && ($kills[$killCursor] ?? null) === null) {
+                        $killCursor++;
+                    }
+                    if ($killCursor < count($kills)) {
+                        $inferredKill = $kills[$killCursor];
+                        $killCursor++;
                     }
 
                     $usedUserIds[$userId] = true;
@@ -519,7 +868,7 @@ class TournamentResultVisionService
                         'rank' => $rank,
                         'detected_name' => null,
                         'detected_uid' => $participant['cod_id'],
-                        'kills' => null,
+                        'kills' => $inferredKill,
                         'user_id' => $userId,
                         'username' => $participant['username'],
                         'cod_id' => $participant['cod_id'],
@@ -555,14 +904,30 @@ class TournamentResultVisionService
      * @param  array<int, true>  $usedUserIds
      * @return array{user_id:int,username:string,cod_id:?string,seat_number:?int,match_method:string,match_score?:float}|null
      */
-    protected function findParticipant(array $player, array $participants, array &$usedUserIds, bool $strictNameMatch = false): ?array
-    {
-        $minScore = $strictNameMatch ? 0.82 : 0.72;
+    protected function findParticipant(
+        array $player,
+        array $participants,
+        array &$usedUserIds,
+        bool $strictNameMatch = false,
+        ?int $teamNumber = null,
+    ): ?array {
+        $pool = $participants;
+        if ($teamNumber !== null) {
+            $teamPool = array_values(array_filter(
+                $participants,
+                static fn (array $participant) => (int) ($participant['team_number'] ?? 0) === $teamNumber,
+            ));
+            if ($teamPool !== []) {
+                $pool = $teamPool;
+            }
+        }
+
+        $minScore = $strictNameMatch ? 0.78 : 0.68;
 
         return PlayerNameMatcher::findBestMatch(
             is_string($player['name'] ?? null) ? $player['name'] : null,
             $player['uid'] ?? null,
-            $participants,
+            $pool,
             $usedUserIds,
             $minScore,
             allowUsernameMatch: false,

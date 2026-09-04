@@ -59,10 +59,22 @@ const loadError = computed(() => {
   return loadErrorMessage.value
 })
 
-const alreadySelected = computed(() => !!data.value?.seat_label && !data.value?.teams_grid)
+const viewOnly = computed(() => !!data.value?.registration?.seat_number)
 const teamsGrid = computed(() => data.value?.teams_grid || [])
 const seatMode = computed(() => data.value?.tournament?.seat_mode || 1)
 const occupiedSeats = computed(() => data.value?.occupied_seats || {})
+const mySeatNumber = computed(() => data.value?.registration?.seat_number ?? null)
+const myTeamOverride = computed(() => data.value?.my_team ?? null)
+const myUserId = computed(() => auth.user?.id ?? null)
+
+const { myTeamLabel, teammates, me } = useSeatTeamInfo(
+  teamsGrid,
+  occupiedSeats,
+  mySeatNumber,
+  myUserId,
+  myTeamOverride,
+)
+
 const reservationType = computed(() => data.value?.registration?.reservation_type || 'solo')
 const isTeamReservation = computed(() => reservationType.value === 'team' && seatMode.value > 1)
 const requiredInvites = computed(() => Math.max(0, seatMode.value - 1))
@@ -166,7 +178,7 @@ async function cancelRegistration() {
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
       <NuxtLink to="/" class="text-sm text-secondary">← بازگشت</NuxtLink>
       <button
-        v-if="data && !alreadySelected && !loadError"
+        v-if="data && !viewOnly && !loadError"
         type="button"
         class="text-sm text-red-400 hover:text-red-300 disabled:opacity-50"
         :disabled="cancelling"
@@ -183,7 +195,7 @@ async function cancelRegistration() {
     <p class="text-center text-xs text-amber-400/90 mt-2 mb-4">
       روی جایگاه خالی (مثلاً 2.1 یا 20.2) کلیک کنید و تأیید نمایید.
     </p>
-    <p v-if="data && !alreadySelected && !loadError" class="seat-page__banner">
+    <p v-if="data && !viewOnly && !loadError" class="seat-page__banner">
       برای تکمیل ثبت‌نام، جایگاه خود را انتخاب و تأیید کنید.
     </p>
 
@@ -196,18 +208,30 @@ async function cancelRegistration() {
       <NuxtLink :to="`/tournaments/${id}`" class="block text-sm text-gray-400">بازگشت به مسابقه</NuxtLink>
     </div>
 
-    <div v-else-if="alreadySelected && data" class="bg-dark-800 border border-dark-600 rounded-xl p-8 text-center">
-      <p class="text-gray-400">جایگاه شما قبلاً ثبت شده است:</p>
-      <p class="seat-page__selected-value" dir="ltr">{{ data.seat_label }}</p>
-      <NuxtLink :to="`/tournaments/${id}`" class="text-secondary">بازگشت به مسابقه</NuxtLink>
-    </div>
-
     <template v-else-if="data">
+      <div v-if="viewOnly && seatMode > 1 && (me || teammates.length)" class="seat-page__team-summary">
+        <p class="seat-page__team-summary-title">{{ myTeamLabel || 'تیم شما' }}</p>
+        <ul class="seat-page__team-list">
+          <li v-if="me">
+            <span class="seat-page__team-badge seat-page__team-badge--me">شما</span>
+            <span>{{ me.username }}</span>
+            <span class="seat-page__team-cod" dir="ltr">{{ me.cod_id }}</span>
+            <span class="seat-page__team-seat" dir="ltr">{{ me.seat_label }}</span>
+          </li>
+          <li v-for="member in teammates" :key="member.seat_number">
+            <span class="seat-page__team-badge">هم‌تیمی</span>
+            <span>{{ member.username }}</span>
+            <span class="seat-page__team-cod" dir="ltr">{{ member.cod_id }}</span>
+            <span class="seat-page__team-seat" dir="ltr">{{ member.seat_label }}</span>
+          </li>
+        </ul>
+      </div>
+
       <div v-if="errors.length" class="seat-page__errors">
         <p v-for="(err, i) in errors" :key="i">{{ err }}</p>
       </div>
 
-      <div class="seat-page__body">
+      <div v-if="teamsGrid.length" class="seat-page__body">
         <TournamentSeatGrid
           :teams="teamsGrid"
           :occupied-seats="occupiedSeats as Record<number, OccupiedSeatInfo>"
@@ -215,7 +239,9 @@ async function cancelRegistration() {
           :selected-seat="pendingSeat"
           :selected-team="pendingTeam"
           :team-select-mode="isTeamReservation"
-          interactive
+          :my-seat-number="mySeatNumber"
+          :my-team-number="myTeamOverride"
+          :interactive="!viewOnly"
           @select="openConfirm"
         />
       </div>
@@ -294,6 +320,64 @@ async function cancelRegistration() {
   color: #d4af37;
   font-family: ui-monospace, monospace;
   text-align: center;
+}
+
+.seat-page__team-summary {
+  margin-bottom: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(20, 83, 45, 0.25);
+}
+
+.seat-page__team-summary-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #86efac;
+}
+
+.seat-page__team-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.seat-page__team-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  font-size: 0.82rem;
+  color: #e5e7eb;
+}
+
+.seat-page__team-badge {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.seat-page__team-badge--me {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+.seat-page__team-cod {
+  color: #d4af37;
+  font-size: 0.72rem;
+}
+
+.seat-page__team-seat {
+  color: #9ca3af;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
 }
 
 .seat-page__errors {

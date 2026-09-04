@@ -20,6 +20,8 @@ const props = defineProps<{
   selectedSeat?: number | null
   selectedTeam?: number | null
   teamSelectMode?: boolean
+  mySeatNumber?: number | null
+  myTeamNumber?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +45,21 @@ function teamIsFullyEmpty(teamRow: GridTeam): boolean {
   return teamRow.slots.every((slot) => !occupant(slot.seat_number))
 }
 
+function slotIsMine(seatNumber: number): boolean {
+  return props.mySeatNumber != null && props.mySeatNumber === seatNumber
+}
+
+function slotIsTeammate(teamRow: GridTeam, seatNumber: number): boolean {
+  if (slotIsMine(seatNumber)) return false
+  if (props.myTeamNumber == null) return false
+
+  return props.myTeamNumber === teamRow.team && !!occupant(seatNumber)
+}
+
+function teamIsMine(teamRow: GridTeam): boolean {
+  return props.myTeamNumber != null && props.myTeamNumber === teamRow.team
+}
+
 function slotIsSelected(teamRow: GridTeam, seatNumber: number): boolean {
   if (props.teamSelectMode && props.selectedTeam === teamRow.team) {
     return true
@@ -53,6 +70,13 @@ function slotIsSelected(teamRow: GridTeam, seatNumber: number): boolean {
 
 function avatarLetter(username?: string | null) {
   return (username?.charAt(0) || '?').toUpperCase()
+}
+
+function takenSlotClass(teamRow: GridTeam, seatNumber: number): Record<string, boolean> {
+  return {
+    'seat-slot--mine': slotIsMine(seatNumber),
+    'seat-slot--teammate': slotIsTeammate(teamRow, seatNumber),
+  }
 }
 
 function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
@@ -76,7 +100,10 @@ function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
       v-for="teamRow in teams"
       :key="teamRow.team"
       class="team-card"
-      :class="{ 'is-selected': teamSelectMode && selectedTeam === teamRow.team }"
+      :class="{
+        'is-selected': teamSelectMode && selectedTeam === teamRow.team,
+        'team-card--mine': teamIsMine(teamRow),
+      }"
     >
       <div class="team-card__title">{{ teamTitle(teamRow.team) }}</div>
       <div
@@ -87,6 +114,7 @@ function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
           <div
             v-if="occupant(slot.seat_number)"
             class="seat-slot seat-slot--taken"
+            :class="takenSlotClass(teamRow, slot.seat_number)"
           >
             <div class="seat-slot__top">نفر {{ toPersianDigits(slot.slot) }}</div>
             <div class="seat-slot__avatar">
@@ -150,6 +178,11 @@ function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
 .team-card.is-selected {
   border-color: #d4af37;
   box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.45);
+}
+
+.team-card--mine {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35);
 }
 
 .team-card::before,
@@ -224,6 +257,16 @@ button.seat-slot:disabled {
 .seat-slot--taken {
   opacity: 0.92;
   cursor: default;
+}
+
+.seat-slot--mine {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.seat-slot--teammate {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
 }
 
 .seat-slot__top {

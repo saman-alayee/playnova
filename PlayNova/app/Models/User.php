@@ -151,6 +151,27 @@ class User extends Authenticatable
         return $value === null ? null : mb_strtolower($value);
     }
 
+    public static function normalizeUsernameKey(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : mb_strtolower($value);
+    }
+
+    public static function usernameIsTaken(?string $username, ?int $exceptUserId = null): bool
+    {
+        $normalized = self::normalizeUsernameKey($username);
+        if ($normalized === null) {
+            return false;
+        }
+
+        return self::query()
+            ->whereNotNull('username')
+            ->when($exceptUserId, fn ($query) => $query->where('id', '!=', $exceptUserId))
+            ->whereRaw('LOWER(TRIM(username)) = ?', [$normalized])
+            ->exists();
+    }
+
     public static function codIdIsTaken(?string $codId, ?int $exceptUserId = null): bool
     {
         $normalized = self::normalizeCodIdKey($codId);

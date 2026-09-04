@@ -9,57 +9,63 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasColumn('users', 'cod_id')) {
+        if (! Schema::hasColumn('users', 'username')) {
             return;
         }
 
         DB::table('users')
-            ->whereNotNull('cod_id')
-            ->update(['cod_id' => DB::raw('TRIM(cod_id)')]);
+            ->whereNotNull('username')
+            ->update(['username' => DB::raw('TRIM(username)')]);
 
         $duplicateGroups = DB::table('users')
-            ->selectRaw('LOWER(TRIM(cod_id)) AS normalized, MIN(id) AS keep_id')
-            ->whereNotNull('cod_id')
-            ->where('cod_id', '!=', '')
-            ->groupByRaw('LOWER(TRIM(cod_id))')
+            ->selectRaw('LOWER(TRIM(username)) AS normalized, MIN(id) AS keep_id')
+            ->whereNotNull('username')
+            ->where('username', '!=', '')
+            ->groupByRaw('LOWER(TRIM(username))')
             ->havingRaw('COUNT(*) > 1')
             ->get();
 
         foreach ($duplicateGroups as $group) {
-            DB::table('users')
-                ->whereRaw('LOWER(TRIM(cod_id)) = ?', [$group->normalized])
+            $duplicates = DB::table('users')
+                ->whereRaw('LOWER(TRIM(username)) = ?', [$group->normalized])
                 ->where('id', '!=', $group->keep_id)
-                ->update(['cod_id' => null]);
+                ->get(['id', 'username']);
+
+            foreach ($duplicates as $user) {
+                DB::table('users')
+                    ->where('id', $user->id)
+                    ->update(['username' => 'dup_' . $user->id . '_' . $user->username]);
+            }
         }
 
-        if ($this->indexExists('users', 'users_cod_id_index')) {
+        if ($this->indexExists('users', 'users_username_index')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->dropIndex('users_cod_id_index');
+                $table->dropIndex('users_username_index');
             });
         }
 
-        if (! $this->indexExists('users', 'users_cod_id_unique')) {
+        if (! $this->indexExists('users', 'users_username_unique')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->unique('cod_id');
+                $table->unique('username');
             });
         }
     }
 
     public function down(): void
     {
-        if (! Schema::hasColumn('users', 'cod_id')) {
+        if (! Schema::hasColumn('users', 'username')) {
             return;
         }
 
-        if ($this->indexExists('users', 'users_cod_id_unique')) {
+        if ($this->indexExists('users', 'users_username_unique')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->dropUnique(['cod_id']);
+                $table->dropUnique(['username']);
             });
         }
 
-        if (! $this->indexExists('users', 'users_cod_id_index')) {
+        if (! $this->indexExists('users', 'users_username_index')) {
             Schema::table('users', function (Blueprint $table) {
-                $table->index('cod_id', 'users_cod_id_index');
+                $table->index('username', 'users_username_index');
             });
         }
     }

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Setting;
 use App\Jobs\SendOtpSmsJob;
 use App\Modules\User\Services\AuthRegistrationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -110,16 +111,16 @@ class AuthController extends Controller
         cache()->forget('register_pending_' . $token);
         cache()->forget('register_otp_' . $token);
 
-        $user = User::create([
-            'name' => $pending['username'],
-            'username' => $pending['username'],
-            'email' => null,
-            'mobile' => $pending['mobile'] ?? null,
-            'password' => $pending['password_hash'],
-            'cod_id' => $pending['cod_id'] ?? null,
-            'referral_code' => User::generateReferralCode(),
-            'referred_by' => $pending['referred_by'] ?? null,
-        ]);
+        try {
+            $user = $this->registration->createUserFromPending($pending);
+        } catch (QueryException $e) {
+            $duplicateErrors = $this->registration->mapRegistrationDuplicateErrors($e);
+            if ($duplicateErrors) {
+                return redirect()->route('register')->withErrors($duplicateErrors);
+            }
+
+            throw $e;
+        }
 
         Auth::login($user);
 
@@ -151,7 +152,16 @@ class AuthController extends Controller
 
     protected function createUserFromRequest(Request $request)
     {
-        $user = $this->registration->createUserFromRequest($request);
+        try {
+            $user = $this->registration->createUserFromRequest($request);
+        } catch (QueryException $e) {
+            $duplicateErrors = $this->registration->mapRegistrationDuplicateErrors($e);
+            if ($duplicateErrors) {
+                return back()->withErrors($duplicateErrors)->withInput();
+            }
+
+            throw $e;
+        }
 
         Auth::login($user);
 

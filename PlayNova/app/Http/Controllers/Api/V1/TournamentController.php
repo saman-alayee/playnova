@@ -124,28 +124,25 @@ class TournamentController extends BaseApiController
             }
         }
 
-        $players = $tournament->registrations()
-            ->whereNotNull('seat_number')
-            ->with('user')
-            ->get();
+        $occupiedSeats = $this->occupiedSeatsMap($tournament);
 
-        $occupiedSeats = $players->mapWithKeys(function ($reg) use ($tournament) {
-            return [
-                $reg->seat_number => [
-                    'seat_number' => $reg->seat_number,
-                    'seat_label' => $tournament->seatDisplayLabel((int) $reg->seat_number),
-                    'user' => new UserResource($reg->user),
-                ],
-            ];
-        });
-
-        return $this->success([
+        $payload = [
             'tournament' => new TournamentResource($tournament),
             'is_registered' => $isRegistered,
             'pending_seat' => $pendingSeat,
-            'registration' => $registration ? new RegistrationResource($registration) : null,
+            'registration' => $registration ? new RegistrationResource($registration->load('tournament')) : null,
             'occupied_seats' => $occupiedSeats,
-        ]);
+        ];
+
+        if ($registration) {
+            $payload['teams_grid'] = $tournament->teamsForGrid();
+
+            if ($registration->seat_number !== null) {
+                $payload['my_team'] = $tournament->teamNumberForSeat((int) $registration->seat_number);
+            }
+        }
+
+        return $this->success($payload);
     }
 
     public function register(Request $request, Tournament $tournament, TournamentRegistrationService $registrations, TournamentRegistrationGuard $guard): JsonResponse
@@ -203,7 +200,11 @@ class TournamentController extends BaseApiController
         if ($registration->seat_number !== null) {
             return $this->success([
                 'registration' => new RegistrationResource($registration->load('tournament')),
+                'tournament' => new TournamentResource($tournament),
                 'seat_label' => $tournament->seatDisplayLabel((int) $registration->seat_number),
+                'teams_grid' => $tournament->teamsForGrid(),
+                'occupied_seats' => $this->occupiedSeatsMap($tournament),
+                'my_team' => $tournament->teamNumberForSeat((int) $registration->seat_number),
             ], 'جایگاه شما قبلاً ثبت شده است.');
         }
 
@@ -217,25 +218,11 @@ class TournamentController extends BaseApiController
             return $this->error('درخواست رزرو تیمی شما در انتظار تأیید هم‌تیمی است.', 422);
         }
 
-        $occupiedSeats = Registration::where('tournament_id', $tournament->id)
-            ->whereNotNull('seat_number')
-            ->with('user')
-            ->get()
-            ->mapWithKeys(function ($reg) use ($tournament) {
-                return [
-                    $reg->seat_number => [
-                        'seat_number' => $reg->seat_number,
-                        'seat_label' => $tournament->seatDisplayLabel((int) $reg->seat_number),
-                        'user' => new UserResource($reg->user),
-                    ],
-                ];
-            });
-
         return $this->success([
             'tournament' => new TournamentResource($tournament),
             'registration' => new RegistrationResource($registration),
             'teams_grid' => $tournament->teamsForGrid(),
-            'occupied_seats' => $occupiedSeats,
+            'occupied_seats' => $this->occupiedSeatsMap($tournament),
         ]);
     }
 
@@ -346,6 +333,24 @@ class TournamentController extends BaseApiController
         TournamentListingService::forgetHomeCache();
 
         return $this->success(null, 'ثبت‌نام ناتمام لغو شد.');
+    }
+
+    /** @return Collection<int|string, array{seat_number:int, seat_label:string, user:UserResource}> */
+    private function occupiedSeatsMap(Tournament $tournament): Collection
+    {
+        return Registration::where('tournament_id', $tournament->id)
+            ->whereNotNull('seat_number')
+            ->with('user')
+            ->get()
+            ->mapWithKeys(function ($reg) use ($tournament) {
+                return [
+                    $reg->seat_number => [
+                        'seat_number' => $reg->seat_number,
+                        'seat_label' => $tournament->seatDisplayLabel((int) $reg->seat_number),
+                        'user' => new UserResource($reg->user),
+                    ],
+                ];
+            });
     }
 
     public function leaderboard(TournamentListingService $listing): JsonResponse

@@ -152,21 +152,11 @@ class AuthController extends BaseApiController
         cache()->forget('register_otp_' . $token);
 
         try {
-            $user = User::create([
-                'name' => $pending['username'],
-                'username' => $pending['username'],
-                'email' => null,
-                'mobile' => $pending['mobile'] ?? null,
-                'password' => $pending['password_hash'],
-                'cod_id' => User::normalizeCodIdForStorage($pending['cod_id'] ?? null),
-                'referral_code' => User::generateReferralCode(),
-                'referred_by' => $pending['referred_by'] ?? null,
-            ]);
+            $user = $this->registration->createUserFromPending($pending);
         } catch (QueryException $e) {
-            if ($this->isDuplicateCodIdException($e)) {
-                return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, [
-                    'cod_id' => ['این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.'],
-                ]);
+            $duplicateErrors = $this->registration->mapRegistrationDuplicateErrors($e);
+            if ($duplicateErrors) {
+                return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, $duplicateErrors);
             }
 
             throw $e;
@@ -411,10 +401,9 @@ class AuthController extends BaseApiController
         try {
             $user = $this->registration->createUserFromRequest($request);
         } catch (QueryException $e) {
-            if ($this->isDuplicateCodIdException($e)) {
-                return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, [
-                    'cod_id' => ['این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.'],
-                ]);
+            $duplicateErrors = $this->registration->mapRegistrationDuplicateErrors($e);
+            if ($duplicateErrors) {
+                return $this->error('اطلاعات ثبت‌نام نامعتبر است.', 422, $duplicateErrors);
             }
 
             throw $e;
@@ -426,13 +415,5 @@ class AuthController extends BaseApiController
             'user' => new UserResource($user),
             'token' => $plainTextToken,
         ], 'ثبت‌نام با موفقیت انجام شد. خوش آمدید!', 201);
-    }
-
-    protected function isDuplicateCodIdException(QueryException $e): bool
-    {
-        $message = strtolower($e->getMessage());
-
-        return str_contains($message, 'users_cod_id_unique')
-            || (str_contains($message, 'duplicate') && str_contains($message, 'cod_id'));
     }
 }

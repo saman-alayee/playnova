@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import DatePicker from '@alireza-ab/vue3-persian-datepicker'
 import {
+  apiDateTimeToPickerValue,
   formatJalaliLabel,
   isoToJalaliParts,
-  jalaliPartsToApiDateTime,
-  type JalaliDateTimeParts,
+  pickerValueToApiDateTime,
 } from '~/utils/jalali'
 
 const props = defineProps<{
@@ -15,17 +16,13 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
 
-function defaultParts(): JalaliDateTimeParts {
-  const today = isoToJalaliParts(new Date().toISOString())
-  return today ?? { jy: 1404, jm: 1, jd: 1, hour: 12, minute: 0 }
-}
-
-const parts = reactive<JalaliDateTimeParts>(defaultParts())
+const pickerValue = ref('')
+const syncing = ref(false)
 
 function syncFromModel(value?: string) {
-  const parsed = isoToJalaliParts(value)
-  if (!parsed) return
-  Object.assign(parts, parsed)
+  syncing.value = true
+  pickerValue.value = apiDateTimeToPickerValue(value)
+  syncing.value = false
 }
 
 watch(
@@ -34,71 +31,142 @@ watch(
   { immediate: true },
 )
 
-function emitValue() {
-  emit('update:modelValue', jalaliPartsToApiDateTime(parts))
-}
+watch(pickerValue, (value) => {
+  if (syncing.value) return
 
-watch(parts, emitValue, { deep: true })
+  const apiValue = pickerValueToApiDateTime(value)
+  if (apiValue !== props.modelValue) {
+    emit('update:modelValue', apiValue)
+  }
+})
 
-const preview = computed(() => formatJalaliLabel(parts))
+const preview = computed(() => {
+  const parts = isoToJalaliParts(props.modelValue)
+  return parts ? formatJalaliLabel(parts) : '—'
+})
 </script>
 
 <template>
-  <div class="space-y-2">
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
-      <input
-        v-model.number="parts.jy"
-        type="number"
-        min="1300"
-        max="1500"
-        :required="required"
-        class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
-        placeholder="سال"
-        @input="emitValue"
-      >
-      <input
-        v-model.number="parts.jm"
-        type="number"
-        min="1"
-        max="12"
-        :required="required"
-        class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
-        placeholder="ماه"
-        @input="emitValue"
-      >
-      <input
-        v-model.number="parts.jd"
-        type="number"
-        min="1"
-        max="31"
-        :required="required"
-        class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
-        placeholder="روز"
-        @input="emitValue"
-      >
-      <input
-        v-model.number="parts.hour"
-        type="number"
-        min="0"
-        max="23"
-        :required="required"
-        class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
-        placeholder="ساعت"
-        @input="emitValue"
-      >
-      <input
-        v-model.number="parts.minute"
-        type="number"
-        min="0"
-        max="59"
-        :required="required"
-        class="bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
-        placeholder="دقیقه"
-        @input="emitValue"
-      >
-    </div>
-    <p class="text-xs text-gray-400">
-      تاریخ شمسی (تهران): <span class="text-secondary font-bold">{{ preview }}</span>
+  <div class="persian-datetime-field">
+    <ClientOnly>
+      <DatePicker
+        v-model="pickerValue"
+        type="datetime"
+        mode="single"
+        locale="fa"
+        format="jYYYY/jMM/jDD HH:mm"
+        input-format="jYYYY/jMM/jDD HH:mm"
+        display-format="?D ?MMMM ?YYYY — HH:mm"
+        :clearable="!required"
+        :shortcut="true"
+        icon-inside
+        modal
+        auto-submit
+        class="persian-datetime-input"
+      />
+      <template #fallback>
+        <div class="persian-datetime-field__fallback">
+          {{ preview }}
+        </div>
+      </template>
+    </ClientOnly>
+
+    <input
+      type="hidden"
+      :value="modelValue"
+      :required="required"
+    >
+
+    <p class="persian-datetime-field__hint">
+      تاریخ شمسی (تهران):
+      <span class="persian-datetime-field__preview">{{ preview }}</span>
     </p>
   </div>
 </template>
+
+<style scoped>
+.persian-datetime-field__fallback,
+.persian-datetime-field__hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.persian-datetime-field__fallback {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #4b5563;
+  border-radius: 0.5rem;
+  background: #374151;
+  color: #e5e7eb;
+}
+
+.persian-datetime-field__hint {
+  margin: 0.45rem 0 0;
+}
+
+.persian-datetime-field__preview {
+  color: #d4af37;
+  font-weight: 700;
+}
+
+:deep(.persian-datetime-input.pdp) {
+  --primary-color: #d4af37;
+  --secondary-color: rgba(197, 160, 89, 0.28);
+  --in-range-background: rgba(197, 160, 89, 0.14);
+  --text-color: #e5e7eb;
+  --hover-color: #fff;
+  --background: #111827;
+  --border-color: #4b5563;
+  --icon-background: #1f2937;
+  --main-box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --radius: 0.5rem;
+  --z-index: 10050;
+  width: 100%;
+}
+
+:deep(.persian-datetime-input .pdp-input) {
+  width: 100%;
+  color: #fff;
+  background: #374151;
+  border-color: #4b5563;
+  font-size: 0.9rem;
+}
+
+:deep(.persian-datetime-input .pdp-input::placeholder) {
+  color: #9ca3af;
+}
+
+:deep(.persian-datetime-input .pdp-input.pdp-focus) {
+  border-bottom-color: #d4af37;
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25);
+}
+
+:deep(.persian-datetime-input .pdp-icon) {
+  color: #d4af37;
+  background: #1f2937;
+  border-color: #4b5563;
+}
+
+:deep(.persian-datetime-input .pdp-picker) {
+  color: #e5e7eb;
+}
+
+:deep(.persian-datetime-input .pdp-picker .pdp-header .top button),
+:deep(.persian-datetime-input .pdp-picker .pdp-header .bottom .pdp-month),
+:deep(.persian-datetime-input .pdp-picker .pdp-header .bottom .pdp-year) {
+  color: #d4af37;
+}
+
+:deep(.persian-datetime-input .pdp-picker .pdp-day.friday) {
+  color: #fbbf24;
+}
+
+:deep(.persian-datetime-input .pdp-picker .pdp-day.start-range),
+:deep(.persian-datetime-input .pdp-picker .pdp-footer .pdp-submit),
+:deep(.persian-datetime-input .pdp-picker .pdp-footer .pdp-today) {
+  color: #111827;
+}
+
+:deep(.persian-datetime-input .pdp-picker .pdp-shortcut li.selected) {
+  color: #111827;
+}
+</style>

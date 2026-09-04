@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TournamentShowData } from '~/types/api'
+import type { OccupiedSeatInfo } from '~/types/api'
 
 const route = useRoute()
 const api = useApi()
@@ -19,6 +19,22 @@ const tournament = computed(() => data.value?.tournament)
 const isRegistered = computed(() => data.value?.is_registered ?? false)
 const pendingSeat = computed(() => data.value?.pending_seat ?? false)
 const registration = computed(() => data.value?.registration)
+const teamsGrid = computed(() => data.value?.teams_grid || [])
+const occupiedSeats = computed(() => (data.value?.occupied_seats || {}) as Record<number, OccupiedSeatInfo>)
+const showSeatMap = computed(() =>
+  (isRegistered.value || pendingSeat.value) && teamsGrid.value.length > 0,
+)
+const mySeatNumber = computed(() => registration.value?.seat_number ?? null)
+const myTeamOverride = computed(() => data.value?.my_team ?? null)
+const myUserId = computed(() => auth.user?.id ?? null)
+
+const { myTeamLabel, teammates, me } = useSeatTeamInfo(
+  teamsGrid,
+  occupiedSeats,
+  mySeatNumber,
+  myUserId,
+  myTeamOverride,
+)
 
 useHead(() => ({ title: `${tournament.value?.title || 'مسابقه'} | PlayNova` }))
 
@@ -121,6 +137,7 @@ const statusColor: Record<string, string> = {
             <span v-if="registration?.seat_label || registration?.seat_number">
               — جایگاه: <strong dir="ltr">{{ registration.seat_label || registration.seat_number }}</strong>
             </span>
+            <span v-if="myTeamLabel"> — {{ myTeamLabel }}</span>
           </div>
 
           <div v-else-if="pendingSeat" class="space-y-3 mb-4">
@@ -171,6 +188,126 @@ const statusColor: Record<string, string> = {
           ورود و ثبت‌نام
         </NuxtLink>
       </div>
+
+      <div
+        v-if="showSeatMap"
+        class="max-w-5xl mx-auto mt-6 bg-dark-800 border border-dark-600 rounded-xl p-6"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-xl font-bold text-white">نقشه جایگاه‌ها</h2>
+            <p class="text-sm text-gray-400 mt-1">
+              {{ pendingSeat ? 'وضعیت فعلی جایگاه‌ها قبل از انتخاب شما' : 'جایگاه شما و هم‌تیمی‌ها در نقشه مشخص شده‌اند' }}
+            </p>
+          </div>
+          <NuxtLink
+            v-if="isRegistered || pendingSeat"
+            :to="`/tournaments/${tournament.id}/select-seat`"
+            class="text-sm text-secondary"
+          >
+            {{ isRegistered ? 'مشاهده جزئیات' : 'انتخاب جایگاه' }} ←
+          </NuxtLink>
+        </div>
+
+        <div v-if="isRegistered && (tournament.seat_mode ?? 1) > 1 && (me || teammates.length)" class="tournament-seat-summary">
+          <p class="tournament-seat-summary__title">{{ myTeamLabel || 'تیم شما' }}</p>
+          <ul class="tournament-seat-summary__list">
+            <li v-if="me">
+              <span class="tournament-seat-summary__badge tournament-seat-summary__badge--me">شما</span>
+              <span>{{ me.username }}</span>
+              <span class="tournament-seat-summary__cod" dir="ltr">{{ me.cod_id }}</span>
+              <span class="tournament-seat-summary__seat" dir="ltr">{{ me.seat_label }}</span>
+            </li>
+            <li v-for="member in teammates" :key="member.seat_number">
+              <span class="tournament-seat-summary__badge">هم‌تیمی</span>
+              <span>{{ member.username }}</span>
+              <span class="tournament-seat-summary__cod" dir="ltr">{{ member.cod_id }}</span>
+              <span class="tournament-seat-summary__seat" dir="ltr">{{ member.seat_label }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="tournament-seat-map">
+          <TournamentSeatGrid
+            :teams="teamsGrid"
+            :occupied-seats="occupiedSeats"
+            :seat-mode="tournament.seat_mode || 1"
+            :my-seat-number="mySeatNumber"
+            :my-team-number="myTeamOverride"
+            :interactive="false"
+          />
+        </div>
+      </div>
     </template>
   </div>
 </template>
+
+<style scoped>
+.tournament-seat-summary {
+  margin-bottom: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(20, 83, 45, 0.25);
+}
+
+.tournament-seat-summary__title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #86efac;
+}
+
+.tournament-seat-summary__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.tournament-seat-summary__list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.55rem;
+  font-size: 0.82rem;
+  color: #e5e7eb;
+}
+
+.tournament-seat-summary__badge {
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.tournament-seat-summary__badge--me {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+.tournament-seat-summary__cod {
+  color: #d4af37;
+  font-size: 0.72rem;
+}
+
+.tournament-seat-summary__seat {
+  color: #9ca3af;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+}
+
+.tournament-seat-map {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(197, 160, 89, 0.28);
+  border-radius: 0.75rem;
+  background: #050505;
+  padding: 0.65rem;
+}
+</style>

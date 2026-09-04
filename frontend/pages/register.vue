@@ -19,6 +19,17 @@ const form = reactive({
 const captchaAnswer = ref('')
 const loading = ref(false)
 const errors = ref<string[]>([])
+const fieldErrors = ref<Record<string, string[]>>({})
+
+function setErrorsFromResponse(err: { message?: string; data?: { errors?: Record<string, string[]> } }) {
+  fieldErrors.value = err.data?.errors || {}
+  if (fieldErrors.value && Object.keys(fieldErrors.value).length > 0) {
+    errors.value = Object.values(fieldErrors.value).flat()
+    return
+  }
+
+  errors.value = [err.message || 'ثبت‌نام ناموفق بود.']
+}
 
 if (!auth.initialized) {
   await auth.init()
@@ -31,6 +42,7 @@ if (auth.isAuthenticated) {
 async function submit() {
   loading.value = true
   errors.value = []
+  fieldErrors.value = {}
   try {
     const captchaKey = captchaRef.value?.key
     if (!captchaKey || captchaAnswer.value === '') {
@@ -56,11 +68,7 @@ async function submit() {
     }
   } catch (e: unknown) {
     const err = e as { message?: string; data?: { errors?: Record<string, string[]> } }
-    if (err.data?.errors) {
-      errors.value = Object.values(err.data.errors).flat()
-    } else {
-      errors.value = [err.message || 'ثبت‌نام ناموفق بود.']
-    }
+    setErrorsFromResponse(err)
     await captchaRef.value?.refresh()
   } finally {
     loading.value = false
@@ -87,6 +95,7 @@ async function submit() {
       <div>
         <label class="block text-sm mb-1 text-gray-400">نام کاربری</label>
         <input v-model="form.username" type="text" required autocomplete="username">
+        <p v-if="fieldErrors.username?.[0]" class="text-xs text-danger mt-1">{{ fieldErrors.username[0] }}</p>
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">شماره موبایل</label>
@@ -103,6 +112,7 @@ async function submit() {
       <div>
         <label class="block text-sm mb-1 text-gray-400">آیدی کالاف <span class="text-gray-500">(نام شما در بازی کالاف دیوتی)</span></label>
         <input v-model="form.cod_id" type="text" required dir="ltr" class="font-mono">
+        <p v-if="fieldErrors.cod_id?.[0]" class="text-xs text-danger mt-1">{{ fieldErrors.cod_id[0] }}</p>
         <p class="text-xs text-gray-500 mt-1">هر آیدی کالاف فقط یک‌بار قابل ثبت‌نام است و تکراری پذیرفته نمی‌شود.</p>
       </div>
       <div>

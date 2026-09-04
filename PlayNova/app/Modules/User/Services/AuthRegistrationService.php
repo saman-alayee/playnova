@@ -41,7 +41,16 @@ class AuthRegistrationService
     public function registrationRules(): array
     {
         return [
-            'username' => ['required', 'string', 'max:255', 'unique:users,username'],
+            'username' => [
+                'required',
+                'string',
+                'max:255',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (User::usernameIsTaken(is_string($value) ? $value : null)) {
+                        $fail('این نام کاربری قبلاً ثبت شده است.');
+                    }
+                },
+            ],
             'mobile' => ['required', 'string', 'max:20', 'unique:users,mobile'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
             'cod_id' => [
@@ -79,7 +88,7 @@ class AuthRegistrationService
         $mobile = trim($mobile);
         $codId = User::normalizeCodIdForStorage($codId);
 
-        if ($username !== '' && User::where('username', $username)->exists()) {
+        if ($username !== '' && User::usernameIsTaken($username)) {
             return ['username' => 'این نام کاربری قبلاً ثبت شده است.'];
         }
 
@@ -111,6 +120,44 @@ class AuthRegistrationService
             'referral_code' => User::generateReferralCode(),
             'referred_by' => $referrer?->id,
         ]);
+    }
+
+    /** @param array<string, mixed> $pending */
+    public function createUserFromPending(array $pending): User
+    {
+        return User::create([
+            'name' => $pending['username'],
+            'username' => $pending['username'],
+            'email' => null,
+            'mobile' => $pending['mobile'] ?? null,
+            'password' => $pending['password_hash'],
+            'cod_id' => User::normalizeCodIdForStorage($pending['cod_id'] ?? null),
+            'referral_code' => User::generateReferralCode(),
+            'referred_by' => $pending['referred_by'] ?? null,
+        ]);
+    }
+
+    /** @return array<string, list<string>>|null */
+    public function mapRegistrationDuplicateErrors(\Illuminate\Database\QueryException $e): ?array
+    {
+        $message = strtolower($e->getMessage());
+
+        if (str_contains($message, 'users_cod_id_unique')
+            || (str_contains($message, 'duplicate') && str_contains($message, 'cod_id'))) {
+            return ['cod_id' => ['این آیدی کالاف قبلاً توسط کاربر دیگری ثبت شده است.']];
+        }
+
+        if (str_contains($message, 'users_username_unique')
+            || (str_contains($message, 'duplicate') && str_contains($message, 'username'))) {
+            return ['username' => ['این نام کاربری قبلاً ثبت شده است.']];
+        }
+
+        if (str_contains($message, 'users_mobile_unique')
+            || (str_contains($message, 'duplicate') && str_contains($message, 'mobile'))) {
+            return ['mobile' => ['این شماره موبایل قبلاً ثبت‌نام شده است.']];
+        }
+
+        return null;
     }
 
     /** @return array{ok: bool, token?: string, error?: string, field?: string} */

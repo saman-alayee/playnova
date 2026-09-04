@@ -118,13 +118,11 @@ export function isoToJalaliParts(iso?: string | null): JalaliDateTimeParts | nul
 }
 
 export function isValidJalaliParts(parts: JalaliDateTimeParts): boolean {
-  return [parts.jy, parts.jm, parts.jd, parts.hour, parts.minute].every(
-    (value) => Number.isFinite(value) && value > 0,
-  )
-    && parts.jm <= 12
-    && parts.jd <= 31
-    && parts.hour <= 23
-    && parts.minute <= 59
+  return Number.isFinite(parts.jy) && parts.jy > 0
+    && Number.isFinite(parts.jm) && parts.jm >= 1 && parts.jm <= 12
+    && Number.isFinite(parts.jd) && parts.jd >= 1 && parts.jd <= 31
+    && Number.isFinite(parts.hour) && parts.hour >= 0 && parts.hour <= 23
+    && Number.isFinite(parts.minute) && parts.minute >= 0 && parts.minute <= 59
 }
 
 export function jalaliPartsToApiDateTime(parts: JalaliDateTimeParts): string {
@@ -142,4 +140,32 @@ export function toPersianDigits(value: string | number): string {
 export function formatJalaliLabel(parts: JalaliDateTimeParts): string {
   const pad = (value: number) => String(value).padStart(2, '0')
   return toPersianDigits(`${parts.jy}/${pad(parts.jm)}/${pad(parts.jd)} ${pad(parts.hour)}:${pad(parts.minute)}`)
+}
+
+const PICKER_VALUE_RE = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?$/
+
+/** API (Gregorian) → picker value (Jalali string). */
+export function apiDateTimeToPickerValue(iso?: string | null): string {
+  const parts = isoToJalaliParts(iso)
+  if (!parts) return ''
+
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${parts.jy}/${pad(parts.jm)}/${pad(parts.jd)} ${pad(parts.hour)}:${pad(parts.minute)}`
+}
+
+/** Picker value (Jalali string) → API datetime (Gregorian, Tehran). */
+export function pickerValueToApiDateTime(value?: string | null): string {
+  if (!value?.trim()) return ''
+
+  const match = value.trim().match(PICKER_VALUE_RE)
+  if (!match) return ''
+
+  const [, jy, jm, jd, hour = '0', minute = '0'] = match
+  return jalaliPartsToApiDateTime({
+    jy: Number(jy),
+    jm: Number(jm),
+    jd: Number(jd),
+    hour: Number(hour),
+    minute: Number(minute),
+  })
 }

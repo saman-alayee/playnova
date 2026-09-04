@@ -395,6 +395,12 @@ Field rules:
 - uids: numeric CODM UID if shown; otherwise null for each player. RANK tab often has no UID — that is OK.
 - kills: per-player kill counts aligned with player_names (crosshair number). Use null if missing.
 
+KILL DETECTION (critical):
+- On each player row, read the small number next to the crosshair / scope icon — that is kills, NOT rank and NOT team number.
+- kills array length MUST match player_names length (one kill per player, in the same order).
+- If only a team total is visible, still try to read each player's individual crosshair number.
+- Use integer kills only (0 is valid). Never confuse kills with rank badge or TEAM label digits.
+
 CRITICAL — FULL RANK LIST:
 - Prizes are paid to EVERY configured rank, NOT only top 3 (gold/silver/bronze).
 - You MUST return one JSON row per TEAM for ranks 1 through the last prize rank in the prize table.
@@ -430,7 +436,9 @@ Registered participants (TEAM N = lobby team / seat group). Match detected playe
 Read the RANK result screen from this media.
 - rank = placement badge (1=winner). TEAM11 is lobby team 11, not place 11.
 - Solo: 1 name per card. Duo: 2 names. Squad: up to 4 names.
+- For EACH player, read kills from the crosshair icon number beside their name.
 - Merge all scrolling frames into one complete ranked list from rank 1 to rank {last_prize_rank} at minimum.
+- If a rank appears in any frame, include it in the final JSON exactly once.
 PROMPT;
     }
 

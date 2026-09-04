@@ -218,7 +218,9 @@ export interface TournamentShowData {
   is_registered: boolean
   pending_seat: boolean
   registration?: Registration | null
-  occupied_seats?: Record<string, unknown>
+  occupied_seats?: Record<string, OccupiedSeatInfo>
+  teams_grid?: SeatGridTeam[]
+  my_team?: number | null
 }
 
 export interface NotificationsListData {
@@ -309,12 +311,13 @@ export interface OccupiedSeatInfo {
 }
 
 export interface SeatSelectionData {
-  tournament: Tournament
+  tournament?: Tournament
   registration?: Registration
   teams_grid?: SeatGridTeam[]
   occupied_seats?: Record<string, OccupiedSeatInfo>
   taken_seats?: number[]
   seat_label?: string
+  my_team?: number | null
 }
 
 export interface GameLoginInfo {
@@ -508,6 +511,18 @@ export interface TournamentResultAiConfig {
   vision_model?: string
 }
 
+export interface TournamentResultCoverage {
+  ranks_found: number[]
+  missing_ranks: number[]
+  expected_last_rank: number
+  teams_detected: number
+  matched_players: number
+  unmatched_players: number
+  players_with_kills: number
+  players_detected: number
+  is_complete: boolean
+}
+
 export interface TournamentResultAnalysis {
   tournament_id: number
   tournament_title: string
@@ -521,6 +536,8 @@ export interface TournamentResultAnalysis {
   prize_pool?: number
   vision_model?: string
   raw_excerpt?: string
+  coverage?: TournamentResultCoverage
+  frames_analyzed?: number
 }
 
 export interface AvalAiCreditSource {

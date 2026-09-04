@@ -99,7 +99,7 @@ async function captureVideoFrame(): Promise<File | null> {
   return snapshotVideoFrame(video, 'frame.jpg')
 }
 
-async function captureVideoFrames(count = 6): Promise<File[]> {
+async function captureVideoFrames(count = 10): Promise<File[]> {
   const video = videoRef.value
   if (!video || video.videoWidth === 0 || !Number.isFinite(video.duration) || video.duration <= 0) {
     return []
@@ -209,7 +209,8 @@ async function analyze(mode: 'image' | 'video-frame' | 'video-multi' = 'image') 
     fileToSend = frame
     form.append('screenshot', frame)
   } else if (isVideo.value && mode === 'video-multi') {
-    const frames = await captureVideoFrames()
+    const frameCount = Math.min(12, Math.max(8, lastPrizeRank.value || 10))
+    const frames = await captureVideoFrames(frameCount)
     if (frames.length === 0) {
       error.value = 'استخراج فریم از ویدیو ممکن نشد.'
       analyzing.value = false
@@ -314,6 +315,13 @@ const hasPrizeTable = computed(() => Object.keys(prizeTable.value).length > 0)
 const lastPrizeRank = computed(() => {
   const ranks = Object.keys(prizeTable.value).map(Number).filter((rank) => rank > 0)
   return ranks.length ? Math.max(...ranks) : 0
+})
+
+const coverageSummary = computed(() => analysis.value?.coverage ?? null)
+
+const missingRanksLabel = computed(() => {
+  const missing = coverageSummary.value?.missing_ranks ?? []
+  return missing.length ? missing.join('، ') : ''
 })
 
 const totalPrizePreview = computed(() =>
@@ -572,6 +580,36 @@ onBeforeUnmount(() => {
       </p>
       <p v-if="analysis.vision_model" class="text-xs text-gray-500 mb-2">
         مدل تحلیل: <span dir="ltr">{{ analysis.vision_model }}</span>
+        <span v-if="analysis.frames_analyzed && analysis.frames_analyzed > 1">
+          — {{ analysis.frames_analyzed }} فریم تحلیل شد
+        </span>
+      </p>
+
+      <div
+        v-if="coverageSummary && !coverageSummary.is_complete && missingRanksLabel"
+        class="mb-4 rounded-lg border border-red-700/40 bg-red-900/10 p-3"
+      >
+        <p class="text-red-300 text-sm font-bold mb-1">رتبه‌های جاافتاده در تشخیص AI</p>
+        <p class="text-xs text-gray-400">
+          رتبه‌های {{ missingRanksLabel }} در رسانه پیدا نشد. برای ویدیوی اسکرول‌شده دوباره «تحلیل ویدیو» را بزنید یا رتبه‌ها را دستی اضافه کنید.
+        </p>
+      </div>
+
+      <div
+        v-else-if="coverageSummary?.is_complete"
+        class="mb-4 rounded-lg border border-green-700/40 bg-green-900/10 p-3 text-green-300 text-sm"
+      >
+        همه رتبه‌های جایزه (۱ تا {{ coverageSummary.expected_last_rank }}) تشخیص داده شد.
+      </div>
+
+      <p
+        v-if="coverageSummary && coverageSummary.players_detected > 0"
+        class="text-xs text-gray-500 mb-4"
+      >
+        کیل: {{ coverageSummary.players_with_kills }} از {{ coverageSummary.matched_players }} بازیکن تطبیق‌یافته
+        <span v-if="coverageSummary.unmatched_players > 0">
+          — {{ coverageSummary.unmatched_players }} تشخیص تطبیق نشد
+        </span>
       </p>
       <p v-if="hasPrizeTable" class="text-sm text-secondary mb-4">
         جوایز از توضیحات / جدول prize ranks خوانده می‌شود. در بازی تیمی هر مبلغ «جایزه کل تیم» است و بین هم‌تیمی‌ها تقسیم می‌شود.
@@ -584,8 +622,9 @@ onBeforeUnmount(() => {
       <div v-if="analysis.unmatched.length" class="mb-4 rounded-lg border border-amber-700/40 bg-amber-900/10 p-3">
         <p class="text-amber-300 text-sm font-bold mb-2">تشخیص‌های تطبیق‌نیافته AI</p>
         <ul class="text-xs text-gray-400 space-y-1">
-          <li v-for="row in analysis.unmatched" :key="'u-' + row.rank">
+          <li v-for="(row, idx) in analysis.unmatched" :key="'u-' + row.rank + '-' + idx">
             رتبه {{ row.rank }} — {{ row.detected_name || '—' }} (UID: {{ row.detected_uid || '—' }})
+            <span v-if="row.kills !== null && row.kills !== undefined"> — {{ row.kills }} کیل</span>
           </li>
         </ul>
       </div>
