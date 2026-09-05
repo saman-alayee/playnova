@@ -4,8 +4,16 @@ const {
   gameLoginTitle,
   gameLoginContent,
   gameLoginSeat,
+  gameLoginTournamentId,
+  gameLoginLoading,
   closeGameLoginModal,
 } = useModals()
+
+const seatsPath = computed(() => (
+  gameLoginTournamentId.value
+    ? `/tournaments/${gameLoginTournamentId.value}/select-seat`
+    : null
+))
 </script>
 
 <template>
@@ -21,6 +29,14 @@ const {
         <p class="text-xs text-blue-300 mb-1">جایگاه شما (غیرقابل تغییر)</p>
         <p class="text-xl font-extrabold text-blue-400 text-center font-mono" dir="ltr">{{ gameLoginSeat }}</p>
       </div>
+      <NuxtLink
+        v-if="seatsPath && !gameLoginLoading"
+        :to="seatsPath"
+        class="modal-panel__seats"
+        @click="closeGameLoginModal"
+      >
+        مشاهده جایگاه‌ها
+      </NuxtLink>
       <button type="button" class="modal-panel__close" @click="closeGameLoginModal">بستن</button>
     </div>
   </div>

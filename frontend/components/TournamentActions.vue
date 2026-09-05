@@ -25,13 +25,11 @@ const capacity = computed(() => {
 })
 
 const hasDescription = computed(() => !!props.tournament.description?.trim())
-const hideDescriptionAction = computed(() =>
+const hasGameLogin = computed(() =>
   !!props.tournament.is_registered && !!props.tournament.allows_game_login,
 )
 const actionRowClass = computed(() => {
-  if (props.tournament.is_registered && props.tournament.allows_game_login) {
-    return ''
-  }
+  if (hasGameLogin.value) return 'tournament-actions--after-reg'
   return hasDescription.value ? '' : 'tournament-actions--single'
 })
 
@@ -46,19 +44,31 @@ function onRegisterClick() {
   <div class="tournament-actions" :class="actionRowClass">
     <template v-if="auth.isAuthenticated">
       <template v-if="tournament.is_registered">
+        <button
+          v-if="tournament.allows_game_login"
+          type="button"
+          class="tournament-actions__btn tournament-actions__btn--primary tournament-actions__btn--lead"
+          @click="openGameLoginModalById(tournament.id)"
+        >
+          اطلاعات ورود
+        </button>
         <NuxtLink
           :to="`/tournaments/${tournament.id}/select-seat`"
-          class="tournament-actions__btn tournament-actions__btn--primary"
+          class="tournament-actions__btn"
+          :class="tournament.allows_game_login
+            ? 'tournament-actions__btn--outline'
+            : 'tournament-actions__btn--primary'"
         >
           مشاهده جایگاه‌ها
         </NuxtLink>
         <button
-          v-if="tournament.allows_game_login"
+          v-if="hasDescription"
           type="button"
           class="tournament-actions__btn tournament-actions__btn--outline"
-          @click="openGameLoginModalById(tournament.id)"
+          @mousedown.stop.prevent
+          @click.stop.prevent="openDescriptionModal(tournament.title, tournament.description!)"
         >
-          اطلاعات ورود
+          توضیحات
         </button>
       </template>
       <span
@@ -106,7 +116,7 @@ function onRegisterClick() {
     </NuxtLink>
 
     <button
-      v-if="hasDescription && !hideDescriptionAction"
+      v-if="hasDescription && !tournament.is_registered"
       type="button"
       class="tournament-actions__btn tournament-actions__btn--outline"
       @mousedown.stop.prevent

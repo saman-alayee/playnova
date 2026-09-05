@@ -5,6 +5,7 @@ const gameLoginOpen = ref(false)
 const gameLoginTitle = ref('')
 const gameLoginContent = ref('')
 const gameLoginSeat = ref<string | null>(null)
+const gameLoginTournamentId = ref<number | string | null>(null)
 const gameLoginLoading = ref(false)
 
 const descriptionOpen = ref(false)
@@ -56,6 +57,7 @@ export function useModals() {
 
   function closeGameLoginModal() {
     gameLoginOpen.value = false
+    gameLoginTournamentId.value = null
   }
 
   async function openGameLoginModalById(tournamentId: number | string) {
@@ -64,6 +66,7 @@ export function useModals() {
     gameLoginTitle.value = 'در حال بارگذاری...'
     gameLoginContent.value = ''
     gameLoginSeat.value = null
+    gameLoginTournamentId.value = tournamentId
 
     try {
       const data = await api.tournaments.gameLogin(tournamentId)
@@ -138,6 +141,7 @@ export function useModals() {
     gameLoginTitle,
     gameLoginContent,
     gameLoginSeat,
+    gameLoginTournamentId,
     gameLoginLoading,
     descriptionOpen,
     descriptionTitle,
