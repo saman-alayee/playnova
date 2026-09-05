@@ -69,14 +69,13 @@ class UserController extends BaseAdminController
 
         $amount = (float) $request->amount;
         $note = $request->description ?: ($request->action === 'add' ? 'افزایش توسط ادمین' : 'کسر توسط ادمین');
-        $adminName = $request->user()->username;
 
         try {
-            DB::transaction(function () use ($request, $user, $amount, $note, $adminName) {
+            DB::transaction(function () use ($request, $user, $amount, $note) {
                 if ($request->action === 'add') {
-                    $user->creditWallet($amount, 'admin_credit', $note . ' (' . $adminName . ')', 'admin_' . uniqid());
+                    $user->creditWallet($amount, 'admin_credit', $note, 'admin_' . uniqid());
                 } else {
-                    $user->debitWallet($amount, 'admin_debit', $note . ' (' . $adminName . ')', 'admin_' . uniqid());
+                    $user->debitWallet($amount, 'admin_debit', $note, 'admin_' . uniqid());
                 }
             });
         } catch (\InvalidArgumentException $e) {

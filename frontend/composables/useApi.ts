@@ -379,6 +379,15 @@ export function useApi() {
           { timeout: 240000 },
         ),
 
+      importTournamentResult: (
+        id: number | string,
+        data: { raw_output: string; system_prompt?: string; user_prompt?: string; save_prompt?: boolean },
+      ) =>
+        api.post<import('~/types/api').TournamentResultAnalysis>(
+          `/admin/tournaments/${id}/result-ai/import`,
+          data,
+        ),
+
       tournamentResultAiConfig: (id: number | string) =>
         api.get<import('~/types/api').TournamentResultAiConfig>(
           `/admin/tournaments/${id}/result-ai/config`,

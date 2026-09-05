@@ -170,6 +170,14 @@ const statusColor: Record<string, string> = {
             ثبت‌نام در مسابقه
           </button>
 
+          <NuxtLink
+            v-if="isRegistered"
+            :to="`/tournaments/${tournament.id}/select-seat`"
+            class="block w-full text-center bg-secondary hover:opacity-90 text-white rounded py-2 font-bold text-sm mb-3"
+          >
+            مشاهده جایگاه‌ها و هم‌تیمی‌ها
+          </NuxtLink>
+
           <button
             v-if="isRegistered && tournament.allows_game_login"
             type="button"
@@ -191,6 +199,7 @@ const statusColor: Record<string, string> = {
 
       <div
         v-if="showSeatMap"
+        id="seats"
         class="max-w-5xl mx-auto mt-6 bg-dark-800 border border-dark-600 rounded-xl p-6"
       >
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">

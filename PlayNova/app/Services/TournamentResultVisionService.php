@@ -109,6 +109,63 @@ class TournamentResultVisionService
         ];
     }
 
+    /**
+     * Match a ChatGPT / external JSON dump to registered players without calling a paid API.
+     *
+     * @return array{
+     *   players: list<array{rank:int,name:?string,uid:?string,kills:?int,score:?int}>,
+     *   matched: list<array<string,mixed>>,
+     *   unmatched: list<array<string,mixed>>,
+     *   suggested_winner_user_id: ?int,
+     *   participants: list<array<string,mixed>>,
+     *   prize_table: array<int,float>,
+     *   prize_table_text: string,
+     *   vision_model: string,
+     *   raw_excerpt: string,
+     *   coverage: array<string,mixed>,
+     *   frames_analyzed: int
+     * }
+     */
+    public function analyzePastedOutput(Tournament $tournament, string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            throw new RuntimeException('خروجی چت‌جی‌پی‌تی خالی است.');
+        }
+
+        $participants = $this->participants($tournament);
+        $prizeTable = $this->prizes->prizeTableFor($tournament);
+
+        try {
+            $teams = $this->parseTeamsJson($raw);
+        } catch (RuntimeException) {
+            throw new RuntimeException(
+                'خروجی چت‌جی‌پی‌تی قابل خواندن نیست. باید یک آرایه JSON داشته باشد، مثلاً [{"rank":1,"team_label":"TEAM11","player_names":["A","B"],"kills":[3,1]}].',
+            );
+        }
+
+        if ($teams === []) {
+            throw new RuntimeException('در خروجی هیچ رتبه معتبری پیدا نشد. برای هر تیم فیلد rank را چک کنید.');
+        }
+
+        $matchResult = $this->matchTeams($teams, $participants, $tournament);
+        $coverage = $this->buildCoverage($teams, $prizeTable, $matchResult);
+
+        return [
+            'players' => $matchResult['players'],
+            'matched' => $matchResult['matched'],
+            'unmatched' => $matchResult['unmatched'],
+            'suggested_winner_user_id' => $matchResult['suggested_winner_user_id'],
+            'participants' => $participants,
+            'prize_table' => $prizeTable,
+            'prize_table_text' => $this->prizeTableParser->formatForPrompt($prizeTable, $tournament->seatMode()),
+            'vision_model' => 'chatgpt-manual',
+            'raw_excerpt' => mb_substr($raw, 0, 500),
+            'coverage' => $coverage,
+            'frames_analyzed' => 0,
+        ];
+    }
+
     public static function teamNumberFromLabel(?string $label, ?int $fallback = null): ?int
     {
         if ($label !== null && $label !== '') {

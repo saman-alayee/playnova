@@ -141,11 +141,26 @@ function copyReferralLink() {
         <p class="text-xs text-gray-400 mb-2">جایگاه‌های فعال شما</p>
         <ul class="space-y-2">
           <li v-for="reg in activeSeats" :key="reg.id" class="text-sm flex items-center justify-between gap-2">
-            <span class="text-white font-bold truncate">{{ reg.tournament?.title }}</span>
-            <span class="text-secondary font-mono shrink-0" dir="ltr">{{ reg.seat_label || reg.seat_number }}</span>
+            <NuxtLink
+              v-if="reg.tournament?.id"
+              :to="`/tournaments/${reg.tournament.id}/select-seat`"
+              class="text-white font-bold truncate hover:text-secondary"
+            >
+              {{ reg.tournament.title }}
+            </NuxtLink>
+            <span v-else class="text-white font-bold truncate">{{ reg.tournament?.title }}</span>
+            <NuxtLink
+              v-if="reg.tournament?.id"
+              :to="`/tournaments/${reg.tournament.id}/select-seat`"
+              class="text-secondary font-mono shrink-0 hover:underline"
+              dir="ltr"
+            >
+              {{ reg.seat_label || reg.seat_number }}
+            </NuxtLink>
+            <span v-else class="text-secondary font-mono shrink-0" dir="ltr">{{ reg.seat_label || reg.seat_number }}</span>
           </li>
         </ul>
-        <p class="text-[10px] text-gray-500 mt-2">پس از پایان مسابقه، جایگاه از این لیست حذف می‌شود.</p>
+        <p class="text-[10px] text-gray-500 mt-2">روی مسابقه بزنید تا نقشه جایگاه‌ها و هم‌تیمی‌ها را ببینید. پس از پایان مسابقه این لیست خالی می‌شود.</p>
       </div>
     </div>
 

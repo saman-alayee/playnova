@@ -21,7 +21,7 @@ const { data: promptConfig, refresh: refreshPromptConfig } = usePageData(
 
 useHead({
   title: computed(() =>
-    tournament.value ? `ثبت نتیجه AI — ${tournament.value.title}` : 'ثبت نتیجه با AI',
+    tournament.value ? `ثبت نتیجه — ${tournament.value.title}` : 'ثبت نتیجه مسابقه',
   ),
 })
 
@@ -44,9 +44,12 @@ const selectedFile = ref<File | null>(null)
 const previewUrl = ref<string | null>(null)
 const isVideo = ref(false)
 const analyzing = ref(false)
+const importing = ref(false)
 const applying = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
+const pastedOutput = ref('')
+const copyHint = ref<string | null>(null)
 const analysis = ref<TournamentResultAnalysis | null>(null)
 const rankedRows = ref<RankRow[]>([])
 const dragIndex = ref<number | null>(null)
@@ -62,6 +65,16 @@ watch(promptConfig, (config) => {
   userPrompt.value = config.user_prompt
   savePrompt.value = config.has_saved_prompt
 }, { immediate: true })
+
+const chatgptPrompt = computed(() => {
+  const parts = [
+    systemPrompt.value.trim(),
+    userPrompt.value.trim(),
+    'Return ONLY a valid JSON array. No markdown, no code fences, no explanation.',
+  ].filter(Boolean)
+
+  return parts.join('\n\n')
+})
 
 const availableParticipants = computed(() => analysis.value?.participants ?? [])
 
@@ -185,6 +198,50 @@ function buildRankedRows(result: TournamentResultAnalysis) {
   }
 
   rankedRows.value = rows
+}
+
+async function copyChatgptPrompt() {
+  copyHint.value = null
+  try {
+    await navigator.clipboard.writeText(chatgptPrompt.value)
+    copyHint.value = 'پرامپت کپی شد. آن را همراه عکس/فیلم در ChatGPT بفرست.'
+  } catch {
+    copyHint.value = 'کپی خودکار ممکن نشد؛ متن پرامپت را دستی انتخاب و کپی کن.'
+  }
+}
+
+async function importPasted() {
+  const raw = pastedOutput.value.trim()
+  if (!raw) {
+    error.value = 'خروجی ChatGPT را در کادر بچسبان.'
+    return
+  }
+
+  importing.value = true
+  error.value = null
+  success.value = null
+
+  try {
+    const result = await api.admin.importTournamentResult(tournamentId.value, {
+      raw_output: raw,
+      system_prompt: systemPrompt.value.trim() || undefined,
+      user_prompt: userPrompt.value.trim() || undefined,
+      save_prompt: savePrompt.value,
+    })
+    analysis.value = result
+    buildRankedRows(result)
+    if (savePrompt.value) {
+      await refreshPromptConfig()
+    }
+    success.value = 'خروجی خوانده شد. رتبه‌ها را چک کن و ثبت نتیجه را بزن.'
+  } catch (e: unknown) {
+    const err = e as { message?: string }
+    error.value = err.message || 'خواندن خروجی ناموفق بود.'
+    analysis.value = null
+    rankedRows.value = []
+  } finally {
+    importing.value = false
+  }
 }
 
 async function analyze(mode: 'image' | 'video-frame' | 'video-multi' = 'image') {
@@ -452,7 +509,7 @@ onBeforeUnmount(() => {
   <div>
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-white">ثبت نتیجه با AI</h1>
+        <h1 class="text-2xl font-bold text-white">ثبت نتیجه مسابقه</h1>
         <p v-if="tournament" class="text-sm text-gray-400 mt-1">
           {{ tournament.title }}
           <span v-if="promptConfig?.seat_mode_label" class="text-secondary"> — {{ promptConfig.seat_mode_label }}</span>
@@ -502,15 +559,49 @@ onBeforeUnmount(() => {
           <p class="text-xs text-secondary font-bold mb-1">جدول جایزه (از توضیحات مسابقه)</p>
           <pre class="text-xs text-gray-300 whitespace-pre-wrap font-sans">{{ promptConfig.prize_table_text }}</pre>
         </div>
-        <label class="flex items-center gap-2 text-sm text-gray-300">
-          <input v-model="savePrompt" type="checkbox">
-          ذخیره پرامپت برای این مسابقه
-        </label>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="flex items-center gap-2 text-sm text-gray-300">
+            <input v-model="savePrompt" type="checkbox">
+            ذخیره پرامپت برای این مسابقه
+          </label>
+          <button
+            type="button"
+            class="bg-secondary hover:opacity-90 text-white rounded-lg px-3 py-1.5 text-sm font-bold"
+            @click="copyChatgptPrompt"
+          >
+            کپی پرامپت برای ChatGPT
+          </button>
+          <span v-if="copyHint" class="text-xs text-green-300">{{ copyHint }}</span>
+        </div>
       </div>
     </div>
 
+    <div class="bg-dark-800 border border-secondary/40 rounded-xl p-6 mb-6">
+      <h2 class="font-bold text-white mb-2">۲. روش رایگان — خروجی ChatGPT</h2>
+      <ol class="text-sm text-gray-300 space-y-1 mb-4 list-decimal pr-5">
+        <li>عکس یا فیلم صفحه نتیجه را در <span dir="ltr">ChatGPT</span> رایگان بفرست.</li>
+        <li>همان پرامپت بالا را هم بچسبان (دکمه کپی).</li>
+        <li>خروجی JSON را اینجا بگذار تا سایت بازیکن‌ها را با ثبت‌نام‌شده‌ها مچ کند.</li>
+      </ol>
+      <textarea
+        v-model="pastedOutput"
+        rows="10"
+        dir="ltr"
+        class="w-full bg-dark-700 border border-dark-600 rounded-lg px-3 py-2 text-white text-sm font-mono mb-3"
+        placeholder='[{"rank":1,"team_label":"TEAM11","player_names":["NameA","NameB"],"kills":[6,2]}]'
+      />
+      <button
+        type="button"
+        class="bg-success hover:opacity-90 disabled:opacity-50 text-white rounded-lg px-4 py-2 text-sm font-bold"
+        :disabled="importing || !pastedOutput.trim()"
+        @click="importPasted"
+      >
+        {{ importing ? 'در حال خواندن...' : 'تشخیص نفرات از خروجی' }}
+      </button>
+    </div>
+
     <div class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6">
-      <h2 class="font-bold text-white mb-2">۲. آپلود تصویر یا ویدیو</h2>
+      <h2 class="font-bold text-white mb-2">۳. روش پولی سایت (اختیاری)</h2>
       <p class="text-sm text-gray-400 mb-4">
         اسکرین‌شات یا ویدیوی صفحه پایان مسابقه را آپلود کنید. برای ویدیو می‌توانید فریم دلخواه را انتخاب کنید.
         <span v-if="hasPrizeTable && lastPrizeRank > 0" class="block mt-1 text-amber-300/90">
@@ -574,12 +665,13 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="analysis" class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6">
-      <h2 class="font-bold text-white mb-2">۳. مرتب‌سازی رتبه‌ها و پیش‌نمایش جوایز</h2>
+      <h2 class="font-bold text-white mb-2">۴. مرتب‌سازی رتبه‌ها و پیش‌نمایش جوایز</h2>
       <p class="text-sm text-gray-400 mb-2">
         ردیف‌ها را بکشید یا با دکمه‌ها جابه‌جا کنید. رتبه ۱ = برنده.
       </p>
       <p v-if="analysis.vision_model" class="text-xs text-gray-500 mb-2">
-        مدل تحلیل: <span dir="ltr">{{ analysis.vision_model }}</span>
+        مدل تحلیل:
+        <span dir="ltr">{{ analysis.vision_model === 'chatgpt-manual' ? 'خروجی دستی ChatGPT' : analysis.vision_model }}</span>
         <span v-if="analysis.frames_analyzed && analysis.frames_analyzed > 1">
           — {{ analysis.frames_analyzed }} فریم تحلیل شد
         </span>

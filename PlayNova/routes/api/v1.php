@@ -126,6 +126,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('tournaments/{tournament}/prize-status', [TournamentAdminController::class, 'prizeStatus']);
         Route::get('tournaments/{tournament}/participants', [TournamentAdminController::class, 'participants']);
         Route::post('tournaments/{tournament}/result-ai/analyze', [AdminTournamentResultController::class, 'analyze']);
+        Route::post('tournaments/{tournament}/result-ai/import', [AdminTournamentResultController::class, 'import']);
         Route::post('tournaments/{tournament}/result-ai/apply', [AdminTournamentResultController::class, 'apply']);
         Route::get('tournaments/{tournament}/result-ai/config', [AdminTournamentResultController::class, 'config']);
         Route::get('tournaments/{tournament}/prizes', [TournamentPrizeAdminController::class, 'show']);

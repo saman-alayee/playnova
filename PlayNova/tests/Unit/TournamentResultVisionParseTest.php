@@ -38,6 +38,27 @@ JSON;
         $this->assertSame([4], $teams[1]['kills']);
     }
 
+    public function test_parses_chatgpt_markdown_fence(): void
+    {
+        $raw = <<<'TXT'
+Sure, here is the result:
+
+```json
+[
+  {"rank":1,"team_label":"TEAM3","player_names":["Ali","Reza"],"kills":[8,1]},
+  {"rank":2,"team_number":7,"player_names":["Sara"],"kills":[2]}
+]
+```
+TXT;
+
+        $teams = $this->invoke('parseTeamsJson', $raw);
+
+        $this->assertCount(2, $teams);
+        $this->assertSame(1, $teams[0]['rank']);
+        $this->assertSame(3, $teams[0]['team_number']);
+        $this->assertSame([8, 1], $teams[0]['kills']);
+    }
+
     public function test_build_coverage_reports_missing_prize_ranks(): void
     {
         $teams = [

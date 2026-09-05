@@ -84,6 +84,37 @@ class TournamentResultController extends BaseApiController
         ]);
     }
 
+    public function import(Request $request, Tournament $tournament, TournamentResultVisionService $vision): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $validated = $request->validate([
+            'raw_output' => 'required|string|min:2|max:200000',
+            'system_prompt' => 'nullable|string|max:10000',
+            'user_prompt' => 'nullable|string|max:10000',
+            'save_prompt' => 'nullable|boolean',
+        ]);
+
+        $systemPrompt = filled($validated['system_prompt'] ?? null) ? trim((string) $validated['system_prompt']) : null;
+        $userPrompt = filled($validated['user_prompt'] ?? null) ? trim((string) $validated['user_prompt']) : null;
+
+        if ($request->boolean('save_prompt')) {
+            $vision->savePrompts($tournament, $systemPrompt, $userPrompt);
+        }
+
+        try {
+            $result = $vision->analyzePastedOutput($tournament, (string) $validated['raw_output']);
+        } catch (RuntimeException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        return $this->success([
+            'tournament_id' => $tournament->id,
+            'tournament_title' => $tournament->title,
+            ...$result,
+        ]);
+    }
+
     public function apply(Request $request, Tournament $tournament, TournamentResultVisionService $vision): JsonResponse
     {
         $this->authorizeAdmin();

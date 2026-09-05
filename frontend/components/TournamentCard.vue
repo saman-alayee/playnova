@@ -20,6 +20,15 @@ const regCount = computed(() => {
 const capacity = computed(() => Math.max(1, Number(props.tournament.capacity ?? 1)))
 const percent = computed(() => Math.min(100, Math.max(0, Math.round((regCount.value / capacity.value) * 100))))
 const hasDescription = computed(() => !!props.tournament.description?.trim())
+const hideDescriptionAction = computed(() =>
+  !!props.tournament.is_registered && !!props.tournament.allows_game_login,
+)
+const actionRowClass = computed(() => {
+  if (props.tournament.is_registered && props.tournament.allows_game_login) {
+    return ''
+  }
+  return hasDescription.value && !hideDescriptionAction.value ? '' : 'tournament-actions--single'
+})
 
 const statusClass = computed(() => {
   const map: Record<string, string> = {
@@ -103,23 +112,25 @@ function onRegisterClick() {
 
     <div
       class="tournament-actions"
-      :class="hasDescription ? '' : 'tournament-actions--single'"
+      :class="actionRowClass"
     >
       <template v-if="auth.isAuthenticated">
-        <button
-          v-if="tournament.is_registered && tournament.allows_game_login"
-          type="button"
-          class="tournament-actions__btn tournament-actions__btn--primary"
-          @click="openGameLoginModalById(tournament.id)"
-        >
-          اطلاعات ورود
-        </button>
-        <span
-          v-else-if="tournament.is_registered"
-          class="tournament-actions__btn tournament-actions__btn--muted"
-        >
-          ثبت‌نام شده
-        </span>
+        <template v-if="tournament.is_registered">
+          <NuxtLink
+            :to="`/tournaments/${tournament.id}/select-seat`"
+            class="tournament-actions__btn tournament-actions__btn--primary"
+          >
+            مشاهده جایگاه‌ها
+          </NuxtLink>
+          <button
+            v-if="tournament.allows_game_login"
+            type="button"
+            class="tournament-actions__btn tournament-actions__btn--outline"
+            @click="openGameLoginModalById(tournament.id)"
+          >
+            اطلاعات ورود
+          </button>
+        </template>
         <span
           v-else-if="tournament.pending_team"
           class="tournament-actions__btn tournament-actions__btn--muted"
@@ -165,7 +176,7 @@ function onRegisterClick() {
       </NuxtLink>
 
       <button
-        v-if="hasDescription"
+        v-if="hasDescription && !hideDescriptionAction"
         type="button"
         class="tournament-actions__btn tournament-actions__btn--outline"
         @mousedown.stop.prevent

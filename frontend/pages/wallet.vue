@@ -30,6 +30,23 @@ const typeLabels: Record<string, string> = {
   admin_debit: 'کسر ادمین',
 }
 
+const debitTypes = new Set(['withdraw', 'fee', 'entry_fee', 'admin_debit'])
+
+function isDebit(type: string) {
+  return debitTypes.has(type)
+}
+
+function publicDescription(type: string, description?: string | null) {
+  const raw = (description || '').trim()
+  if (!raw) return ''
+
+  if (type === 'admin_credit' || type === 'admin_debit') {
+    return raw.replace(/\s+\([^)]+\)\s*$/u, '').trim() || raw
+  }
+
+  return raw
+}
+
 async function deposit() {
   if (!depositAmount.value) return
   loadingDeposit.value = true
@@ -148,13 +165,19 @@ async function withdraw() {
             :key="tx.id"
             class="px-4 py-3 flex items-center justify-between gap-3 text-sm"
           >
-            <div>
+            <div class="min-w-0">
               <p class="font-bold">{{ tx.type_label || typeLabels[tx.type] || tx.type }}</p>
-              <p class="text-xs text-gray-500">{{ formatDateTime(tx.created_at_display || tx.created_at) }}</p>
+              <p
+                v-if="publicDescription(tx.type, tx.description)"
+                class="text-xs text-gray-300 mt-0.5 leading-5 break-words"
+              >
+                {{ publicDescription(tx.type, tx.description) }}
+              </p>
+              <p class="text-xs text-gray-500 mt-0.5">{{ formatDateTime(tx.created_at_display || tx.created_at) }}</p>
             </div>
-            <div class="text-left">
-              <p class="font-bold" :class="Number(tx.amount) >= 0 ? 'text-success' : 'text-danger'">
-                {{ Number(tx.amount).toLocaleString('fa-IR') }} تومان
+            <div class="text-left shrink-0">
+              <p class="font-bold" :class="isDebit(tx.type) ? 'text-danger' : 'text-success'">
+                {{ isDebit(tx.type) ? '−' : '+' }}{{ Number(tx.amount).toLocaleString('fa-IR') }} تومان
               </p>
               <p class="text-xs text-gray-400">{{ tx.status_label || tx.status }}</p>
             </div>

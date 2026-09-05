@@ -88,14 +88,14 @@ class UserAdminController extends BaseApiController
                 if ($request->action === 'set') {
                     $delta = $amount - $before;
                     if ($delta > 0) {
-                        $locked->creditWallet($delta, 'admin_credit', $note . ' (' . $admin->username . ')', 'admin_set_' . uniqid());
+                        $locked->creditWallet($delta, 'admin_credit', $note, 'admin_set_' . uniqid());
                     } elseif ($delta < 0) {
-                        $locked->debitWallet(abs($delta), 'admin_debit', $note . ' (' . $admin->username . ')', 'admin_set_' . uniqid(), (bool) $request->boolean('allow_negative', true));
+                        $locked->debitWallet(abs($delta), 'admin_debit', $note, 'admin_set_' . uniqid(), (bool) $request->boolean('allow_negative', true));
                     }
                 } elseif ($request->action === 'add') {
-                    $locked->creditWallet($amount, 'admin_credit', $note . ' (' . $admin->username . ')', 'admin_' . uniqid());
+                    $locked->creditWallet($amount, 'admin_credit', $note, 'admin_' . uniqid());
                 } else {
-                    $locked->debitWallet($amount, 'admin_debit', $note . ' (' . $admin->username . ')', 'admin_' . uniqid(), (bool) $request->boolean('allow_negative'));
+                    $locked->debitWallet($amount, 'admin_debit', $note, 'admin_' . uniqid(), (bool) $request->boolean('allow_negative'));
                 }
 
                 $activity->logWallet($locked, 'admin_adjustment', $note, [

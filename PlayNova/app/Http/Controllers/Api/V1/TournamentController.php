@@ -183,12 +183,6 @@ class TournamentController extends BaseApiController
     {
         $user = Auth::user();
 
-        try {
-            $guard->assertCanRegister($tournament);
-        } catch (\RuntimeException) {
-            return $this->error('ثبت‌نام این مسابقه بسته شده است.', 422);
-        }
-
         $registration = Registration::where('user_id', $user->id)
             ->where('tournament_id', $tournament->id)
             ->first();
@@ -206,6 +200,12 @@ class TournamentController extends BaseApiController
                 'occupied_seats' => $this->occupiedSeatsMap($tournament),
                 'my_team' => $tournament->teamNumberForSeat((int) $registration->seat_number),
             ], 'جایگاه شما قبلاً ثبت شده است.');
+        }
+
+        try {
+            $guard->assertCanRegister($tournament);
+        } catch (\RuntimeException) {
+            return $this->error('ثبت‌نام این مسابقه بسته شده است.', 422);
         }
 
         $hasPendingTeamInvite = TeamInvite::query()

@@ -121,7 +121,10 @@ function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
               {{ avatarLetter(occupant(slot.seat_number)?.username) }}
             </div>
             <div class="seat-slot__user">{{ occupant(slot.seat_number)?.username || '—' }}</div>
-            <div class="seat-slot__status seat-slot__status--taken">پر شده</div>
+            <div class="seat-slot__code">{{ slot.label }}</div>
+            <div class="seat-slot__status seat-slot__status--taken">
+              {{ slotIsMine(slot.seat_number) ? 'جایگاه شما' : (slotIsTeammate(teamRow, slot.seat_number) ? 'هم‌تیمی' : 'پر شده') }}
+            </div>
           </div>
           <button
             v-else
@@ -138,7 +141,7 @@ function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
               <path d="M14 52c2-12 10-18 18-18s16 6 18 18" fill="#475569" />
             </svg>
             <span class="seat-slot__code">{{ slot.label }}</span>
-            <div class="seat-slot__status">خالی — کلیک</div>
+            <div class="seat-slot__status">{{ interactive ? 'خالی — کلیک' : 'خالی' }}</div>
           </button>
         </template>
       </div>

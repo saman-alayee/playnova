@@ -176,7 +176,7 @@ async function cancelRegistration() {
 <template>
   <div class="seat-page">
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <NuxtLink to="/" class="text-sm text-secondary">← بازگشت</NuxtLink>
+      <NuxtLink :to="viewOnly ? `/tournaments/${id}` : '/'" class="text-sm text-secondary">← بازگشت</NuxtLink>
       <button
         v-if="data && !viewOnly && !loadError"
         type="button"
@@ -188,11 +188,16 @@ async function cancelRegistration() {
       </button>
     </div>
 
-    <h1 class="text-2xl font-bold text-center text-primary mb-2">انتخاب جایگاه</h1>
+    <h1 class="text-2xl font-bold text-center text-primary mb-2">
+      {{ viewOnly ? 'نقشه جایگاه‌ها' : 'انتخاب جایگاه' }}
+    </h1>
     <p v-if="data?.tournament" class="text-center text-sm text-gray-400">
       {{ data.tournament.title }} — {{ data.tournament.seat_mode_label || 'انفرادی' }}
     </p>
-    <p class="text-center text-xs text-amber-400/90 mt-2 mb-4">
+    <p v-if="viewOnly" class="text-center text-xs text-gray-400 mt-2 mb-4">
+      جایگاه شما و بقیه بازیکن‌ها روی نقشه مشخص است. هم‌تیمی‌ها با رنگ جدا دیده می‌شوند.
+    </p>
+    <p v-else class="text-center text-xs text-amber-400/90 mt-2 mb-4">
       روی جایگاه خالی (مثلاً 2.1 یا 20.2) کلیک کنید و تأیید نمایید.
     </p>
     <p v-if="data && !viewOnly && !loadError" class="seat-page__banner">
@@ -209,7 +214,13 @@ async function cancelRegistration() {
     </div>
 
     <template v-else-if="data">
-      <div v-if="viewOnly && seatMode > 1 && (me || teammates.length)" class="seat-page__team-summary">
+      <p v-if="viewOnly" class="seat-page__legend">
+        <span class="seat-page__legend-item seat-page__legend-item--me">جایگاه شما</span>
+        <span v-if="seatMode > 1" class="seat-page__legend-item seat-page__legend-item--team">هم‌تیمی</span>
+        <span class="seat-page__legend-item">بقیه بازیکن‌ها</span>
+      </p>
+
+      <div v-if="viewOnly && (me || teammates.length)" class="seat-page__team-summary">
         <p class="seat-page__team-summary-title">{{ myTeamLabel || 'تیم شما' }}</p>
         <ul class="seat-page__team-list">
           <li v-if="me">
@@ -301,6 +312,33 @@ async function cancelRegistration() {
 </template>
 
 <style scoped>
+.seat-page__legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0 auto 0.85rem;
+}
+
+.seat-page__legend-item {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(55, 65, 81, 0.8);
+  color: #d1d5db;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.seat-page__legend-item--me {
+  background: rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+.seat-page__legend-item--team {
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
+}
+
 .seat-page__banner {
   margin: 0 auto 1rem;
   max-width: 42rem;
