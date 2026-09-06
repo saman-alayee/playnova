@@ -3,6 +3,7 @@ definePageMeta({ middleware: 'admin', layout: 'admin' })
 useHead({ title: 'تنظیمات سایت | PlayNova' })
 
 const api = useApi()
+const auth = useAuthStore()
 const flash = useState('flash')
 
 const { data, pending, error, refresh } = usePageData('admin-site-settings', () =>
@@ -45,7 +46,7 @@ async function submit() {
   try {
     await api.admin.updateSiteSettings({ ...form })
     flash.value = { success: 'تنظیمات ذخیره شد.' }
-    await refresh()
+    await Promise.all([refresh(), auth.fetchSettings(true)])
   } catch (e: unknown) {
     flash.value = { error: (e as Error).message }
   } finally {

@@ -134,8 +134,14 @@ class AuthController extends Controller
             return redirect()->route('register')->withErrors(['mobile' => 'نشست تأیید منقضی شده.']);
         }
 
+        $wait = $this->registration->secondsUntilOtpResend('register', $token);
+        if ($wait > 0) {
+            return back()->with('error', 'برای ارسال مجدد ' . $wait . ' ثانیه صبر کنید.');
+        }
+
         $code = random_int(100000, 999999);
         cache()->put('register_otp_' . $token, (string) $code, now()->addMinutes(15));
+        $this->registration->markOtpResendCooldown('register', $token);
 
         $testMode = Setting::isSmsTestMode() || Setting::isSmsRegisterTestMode();
         if (Setting::isSmsActive() && ! $testMode) {
@@ -261,6 +267,7 @@ class AuthController extends Controller
         ], now()->addMinutes(30));
 
         $this->storeResetOtp($token, $code);
+        $this->registration->markOtpResendCooldown('reset', $token);
 
         $testMode = Setting::isSmsTestMode();
         $smsActive = Setting::isSmsActive();
@@ -345,15 +352,14 @@ class AuthController extends Controller
             return redirect()->route('password.request')->withErrors(['mobile' => 'نشست بازیابی منقضی شده.']);
         }
 
-        $existing = cache()->get('password_reset_otp_' . $token);
-        if (is_array($existing) && ($existing['expires_at'] ?? 0) > time()) {
-            $remaining = $existing['expires_at'] - time();
-
-            return back()->with('error', 'تا پایان اعتبار کد فعلی ' . $remaining . ' ثانیه صبر کنید.');
+        $wait = $this->registration->secondsUntilOtpResend('reset', $token);
+        if ($wait > 0) {
+            return back()->with('error', 'برای ارسال مجدد ' . $wait . ' ثانیه صبر کنید.');
         }
 
         $code = random_int(100000, 999999);
         $this->storeResetOtp($token, $code);
+        $this->registration->markOtpResendCooldown('reset', $token);
 
         $testMode = Setting::isSmsTestMode();
         if (Setting::isSmsActive() && ! $testMode) {

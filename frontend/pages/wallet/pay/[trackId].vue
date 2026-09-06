@@ -1,37 +1,44 @@
 <script setup lang="ts">
-definePageMeta({ middleware: 'auth' })
+definePageMeta({
+  layout: false,
+})
 
 const route = useRoute()
 
 const trackId = computed(() => String(route.params.trackId ?? '').replace(/\D+/g, ''))
 const gatewayUrl = computed(() => `https://gateway.zibal.ir/start/${trackId.value}`)
-const formRef = ref<HTMLFormElement | null>(null)
 
 useHead({
   title: 'انتقال به درگاه | PlayNova',
   meta: [{ name: 'referrer', content: 'origin' }],
 })
 
-onMounted(() => {
-  if (!trackId.value) {
-    navigateTo('/wallet')
+function leaveToGateway() {
+  if (!import.meta.client) {
     return
   }
 
-  // Form navigation to Zibal /start sends Referer from the registered site domain.
-  formRef.value?.submit()
+  if (!trackId.value) {
+    window.location.replace('/wallet')
+    return
+  }
+
+  window.location.replace(gatewayUrl.value)
+}
+
+onMounted(() => {
+  leaveToGateway()
 })
 </script>
 
 <template>
-  <div class="max-w-md mx-auto text-center py-16 px-4">
-    <p class="text-gray-300 mb-2">در حال انتقال به درگاه پرداخت زیبال...</p>
-    <p class="text-xs text-gray-500 mb-6">لطفاً صبر کنید.</p>
-
-    <form ref="formRef" method="GET" :action="gatewayUrl">
-      <button type="submit" class="text-secondary text-sm underline hover:no-underline">
+  <div class="min-h-screen bg-dark-900 flex items-center justify-center px-4">
+    <div class="max-w-md w-full text-center py-16">
+      <p class="text-gray-300 mb-2">در حال انتقال به درگاه پرداخت زیبال...</p>
+      <p class="text-xs text-gray-500 mb-6">لطفاً صبر کنید.</p>
+      <a :href="gatewayUrl" class="text-secondary text-sm underline hover:no-underline" rel="origin">
         اگر به‌صورت خودکار منتقل نشدید، اینجا کلیک کنید
-      </button>
-    </form>
+      </a>
+    </div>
   </div>
 </template>

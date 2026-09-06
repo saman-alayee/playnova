@@ -53,8 +53,9 @@ async function deposit() {
   errors.value = []
   try {
     const result = await api.wallet.deposit(depositAmount.value)
-    if (result.redirect_url) {
-      window.location.assign(result.redirect_url)
+    const payUrl = result.redirect_url || (result.track_id ? `/wallet/pay/${result.track_id}` : '')
+    if (payUrl) {
+      window.location.replace(payUrl)
       return
     }
     flash.value = { success: 'درخواست شارژ ثبت شد.' }
@@ -110,8 +111,11 @@ async function withdraw() {
           <h3 class="font-bold mb-2">شارژ کیف پول</h3>
           <p v-if="data.kyc_verified" class="text-xs text-green-400/90 mb-2">احراز هویت تأیید شده — سقف واریز برداشته شده است.</p>
           <p v-else class="text-xs text-amber-400/90 mb-2">
-            تا تأیید احراز هویت، سقف واریز محدود است.
-            <NuxtLink to="/kyc" class="text-secondary hover:underline">ارسال مدارک</NuxtLink>
+            بدون احراز هویت، جمع واریزها تا {{ formatToman(data.kyc_cap || 1000000) }} مجاز است.
+            باقی‌مانده: {{ formatToman(data.max_deposit || 0) }}.
+            برای مبالغ بیشتر
+            <NuxtLink to="/kyc" class="text-secondary hover:underline">احراز هویت</NuxtLink>
+            کنید.
           </p>
           <form class="flex gap-2" @submit.prevent="deposit">
             <input
@@ -123,8 +127,13 @@ async function withdraw() {
               placeholder="مبلغ به تومان"
               required
               class="flex-1"
+              :disabled="!data.kyc_verified && (data.max_deposit || 0) < 10000"
             >
-            <button type="submit" class="bg-success hover:opacity-90 text-white rounded px-4 py-2 font-bold whitespace-nowrap" :disabled="loadingDeposit">
+            <button
+              type="submit"
+              class="bg-success hover:opacity-90 text-white rounded px-4 py-2 font-bold whitespace-nowrap"
+              :disabled="loadingDeposit || (!data.kyc_verified && (data.max_deposit || 0) < 10000)"
+            >
               شارژ
             </button>
           </form>

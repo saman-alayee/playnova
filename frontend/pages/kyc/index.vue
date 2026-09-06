@@ -74,7 +74,7 @@ async function submit() {
         v-else
         class="mb-4 p-3 rounded-lg border border-amber-700/60 bg-amber-900/20 text-amber-200 text-sm"
       >
-        تا قبل از تأیید احراز هویت، حداکثر موجودی کیف پول {{ formatToman(walletCap) }} است.
+        تا قبل از تأیید احراز هویت، جمع واریز به کیف پول حداکثر {{ formatToman(walletCap) }} است. بیشتر از این مبلغ نیاز به احراز هویت دارد.
       </div>
 
       <div v-if="status" class="mb-4 p-3 rounded-lg border border-dark-600 bg-dark-900/50 text-sm">

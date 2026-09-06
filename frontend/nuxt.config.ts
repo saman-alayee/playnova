@@ -68,7 +68,7 @@ export default defineNuxtConfig({
     '/contact': { swr: 300 },
     '/admin/**': { ssr: false },
     '/profile': { ssr: false },
-    '/wallet': { ssr: false },
+    '/wallet': { ssr: false, headers: { 'Referrer-Policy': 'origin' } },
     '/wallet/**': { ssr: false, headers: { 'Referrer-Policy': 'origin' } },
     '/kyc': { ssr: false },
     '/kyc/**': { ssr: false },

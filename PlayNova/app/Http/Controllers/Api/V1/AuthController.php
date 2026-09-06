@@ -117,6 +117,7 @@ class AuthController extends BaseApiController
             'masked_mobile' => $this->registration->maskMobile($mobile),
             'test_mode' => $testMode,
             'test_code' => $testCode,
+            'resend_after' => $this->registration->secondsUntilOtpResend('register', $token),
         ]);
     }
 
@@ -177,8 +178,18 @@ class AuthController extends BaseApiController
             return $this->error('نشست تأیید منقضی شده.', 410);
         }
 
+        $wait = $this->registration->secondsUntilOtpResend('register', $token);
+        if ($wait > 0) {
+            return $this->error(
+                'برای ارسال مجدد ' . $wait . ' ثانیه صبر کنید.',
+                429,
+                ['retry_after' => [(string) $wait]]
+            );
+        }
+
         $code = random_int(100000, 999999);
         cache()->put('register_otp_' . $token, (string) $code, now()->addMinutes(15));
+        $this->registration->markOtpResendCooldown('register', $token);
 
         $testMode = Setting::isSmsTestMode() || Setting::isSmsRegisterTestMode();
 
@@ -188,12 +199,15 @@ class AuthController extends BaseApiController
                 return $this->error($result['message'] ?? 'ارسال مجدد ناموفق بود.', 422);
             }
 
-            return $this->success(null, 'کد جدید ارسال شد.');
+            return $this->success([
+                'resend_after' => AuthRegistrationService::OTP_RESEND_COOLDOWN_SECONDS,
+            ], 'کد جدید ارسال شد.');
         }
 
         return $this->success([
             'test_mode' => true,
             'test_code' => (string) $code,
+            'resend_after' => AuthRegistrationService::OTP_RESEND_COOLDOWN_SECONDS,
         ], 'کد جدید صادر شد (حالت تست).');
     }
 
@@ -242,6 +256,7 @@ class AuthController extends BaseApiController
         ], now()->addMinutes(30));
 
         $this->storeResetOtp($token, $code);
+        $this->registration->markOtpResendCooldown('reset', $token);
 
         $testMode = Setting::isSmsTestMode();
         if (Setting::isSmsActive() && ! $testMode) {
@@ -260,6 +275,7 @@ class AuthController extends BaseApiController
             'masked_mobile' => $this->registration->maskMobile($user->mobile),
             'test_mode' => $testMode,
             'test_code' => $testMode ? (string) $code : null,
+            'resend_after' => AuthRegistrationService::OTP_RESEND_COOLDOWN_SECONDS,
         ], 'کد بازیابی ارسال شد.');
     }
 
@@ -279,6 +295,7 @@ class AuthController extends BaseApiController
             'test_mode' => $testMode,
             'test_code' => $testMode && $otp ? $otp['code'] : null,
             'seconds_left' => max(0, ($otp['expires_at'] ?? time()) - time()),
+            'resend_after' => $this->registration->secondsUntilOtpResend('reset', $token),
         ]);
     }
 
@@ -321,13 +338,18 @@ class AuthController extends BaseApiController
             return $this->error('نشست بازیابی منقضی شده.', 410);
         }
 
-        $existing = cache()->get('password_reset_otp_' . $token);
-        if (is_array($existing) && ($existing['expires_at'] ?? 0) > time()) {
-            return $this->error('تا پایان اعتبار کد فعلی صبر کنید.', 429);
+        $wait = $this->registration->secondsUntilOtpResend('reset', $token);
+        if ($wait > 0) {
+            return $this->error(
+                'برای ارسال مجدد ' . $wait . ' ثانیه صبر کنید.',
+                429,
+                ['retry_after' => [(string) $wait]]
+            );
         }
 
         $code = random_int(100000, 999999);
         $this->storeResetOtp($token, $code);
+        $this->registration->markOtpResendCooldown('reset', $token);
 
         $testMode = Setting::isSmsTestMode();
         if (Setting::isSmsActive() && ! $testMode) {
@@ -336,12 +358,15 @@ class AuthController extends BaseApiController
                 return $this->error($result['message'] ?? 'ارسال مجدد ناموفق بود.', 422);
             }
 
-            return $this->success(null, 'کد جدید ارسال شد.');
+            return $this->success([
+                'resend_after' => AuthRegistrationService::OTP_RESEND_COOLDOWN_SECONDS,
+            ], 'کد جدید ارسال شد.');
         }
 
         return $this->success([
             'test_mode' => true,
             'test_code' => (string) $code,
+            'resend_after' => AuthRegistrationService::OTP_RESEND_COOLDOWN_SECONDS,
         ], 'کد جدید صادر شد (حالت تست).');
     }
 
@@ -393,6 +418,7 @@ class AuthController extends BaseApiController
             'masked_mobile' => $this->registration->maskMobile($request->mobile),
             'test_mode' => $testMode,
             'test_code' => $testCode,
+            'resend_after' => AuthRegistrationService::OTP_RESEND_COOLDOWN_SECONDS,
         ], 'کد تأیید ارسال شد.', 202);
     }
 

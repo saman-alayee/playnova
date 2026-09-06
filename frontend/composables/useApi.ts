@@ -197,7 +197,7 @@ export function useApi() {
           token?: string
           verification_required?: boolean
           user?: import('~/types/api').User
-        }>('/auth/register', data, { auth: false }),
+        }>('/auth/register', data, { auth: false, timeout: 35000 }),
 
       logout: () => api.post<void>('/auth/logout'),
 
@@ -210,17 +210,35 @@ export function useApi() {
           { auth: false },
         ),
 
+      showRegisterVerify: (token: string) =>
+        api.get<{ resend_after?: number }>(`/auth/register/verify/${token}`, undefined, false),
+
       resendRegisterVerify: (token: string) =>
-        api.post<void>(`/auth/register/verify/${token}/resend`, undefined, { auth: false }),
+        api.post<{ resend_after?: number }>(
+          `/auth/register/verify/${token}/resend`,
+          undefined,
+          { auth: false, timeout: 35000 },
+        ),
 
       forgotPassword: (mobile: string) =>
-        api.post<{ token?: string }>('/auth/forgot-password', { mobile }, { auth: false }),
+        api.post<{ token?: string; resend_after?: number }>(
+          '/auth/forgot-password',
+          { mobile },
+          { auth: false, timeout: 35000 },
+        ),
+
+      showResetPasswordVerify: (token: string) =>
+        api.get<{ resend_after?: number }>(`/auth/reset-password/${token}`, undefined, false),
 
       resetPassword: (token: string, data: Record<string, unknown>) =>
         api.post<void>(`/auth/reset-password/${token}`, data, { auth: false }),
 
       resendResetCode: (token: string) =>
-        api.post<void>(`/auth/reset-password/${token}/resend`, undefined, { auth: false }),
+        api.post<{ resend_after?: number }>(
+          `/auth/reset-password/${token}/resend`,
+          undefined,
+          { auth: false, timeout: 35000 },
+        ),
     },
 
     home: () => api.get<import('~/types/api').HomeData>('/home', undefined, !!getToken()),
@@ -285,6 +303,7 @@ export function useApi() {
         api.post<{ redirect_url?: string; gateway_url?: string; track_id?: string }>(
           '/wallet/deposit',
           { amount },
+          { timeout: 30000 },
         ),
       withdraw: (data: Record<string, unknown>) => api.post<void>('/wallet/withdraw', data),
       processCallback: async (query: Record<string, string>) => {

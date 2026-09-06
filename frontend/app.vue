@@ -9,9 +9,8 @@
 const auth = useAuthStore()
 const api = useApi()
 
-const { data: settings } = useAsyncData('site-settings', () => api.settings(), {
+const { data: settings } = await useAsyncData('site-settings', () => api.settings(), {
   server: true,
-  lazy: true,
 })
 
 if (settings.value) {

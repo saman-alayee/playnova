@@ -14,6 +14,18 @@ const form = reactive({
 const loading = ref(false)
 const resending = ref(false)
 const errors = ref<string[]>([])
+const { canResend, label, start, sync, applyError } = useOtpResendTimer(
+  () => `otp-resend-reset-${token.value}`,
+)
+
+onMounted(async () => {
+  try {
+    const info = await api.auth.showResetPasswordVerify(token.value)
+    sync(info.resend_after)
+  } catch {
+    // Keep the local countdown if the session info is unavailable.
+  }
+})
 
 async function submit() {
   loading.value = true
@@ -33,12 +45,19 @@ async function submit() {
 }
 
 async function resend() {
+  if (!canResend.value || resending.value) {
+    return
+  }
+
   resending.value = true
+  errors.value = []
   try {
-    await api.auth.resendResetCode(token.value)
+    const result = await api.auth.resendResetCode(token.value)
     flash.value = { success: 'کد جدید ارسال شد.' }
+    start(result.resend_after)
   } catch (e: unknown) {
-    const err = e as Error
+    const err = e as { message?: string; data?: { errors?: unknown } }
+    applyError(err)
     errors.value = [err.message || 'ارسال مجدد ناموفق بود.']
   } finally {
     resending.value = false
@@ -77,11 +96,11 @@ async function resend() {
 
     <button
       type="button"
-      class="w-full mt-3 text-sm text-secondary font-bold"
-      :disabled="resending"
+      class="otp-resend-btn"
+      :disabled="resending || !canResend"
       @click="resend"
     >
-      {{ resending ? '...' : 'ارسال مجدد کد' }}
+      {{ resending ? '...' : label }}
     </button>
     </div>
   </div>

@@ -12,6 +12,8 @@ use Illuminate\Support\Str;
 
 class AuthRegistrationService
 {
+    public const OTP_RESEND_COOLDOWN_SECONDS = 60;
+
     public function normalizeRegistrationInput(Request $request): ?array
     {
         $username = trim((string) $request->input('username', ''));
@@ -181,6 +183,7 @@ class AuthRegistrationService
         ], now()->addMinutes(30));
 
         cache()->put('register_otp_' . $token, (string) $code, now()->addMinutes(15));
+        $this->markOtpResendCooldown('register', $token);
 
         $testMode = Setting::isSmsTestMode() || Setting::isSmsRegisterTestMode();
         $smsActive = Setting::isSmsActive();
@@ -227,5 +230,29 @@ class AuthRegistrationService
         }
 
         return $digits;
+    }
+
+    public function markOtpResendCooldown(string $kind, string $token): void
+    {
+        cache()->put(
+            $this->otpResendCacheKey($kind, $token),
+            time() + self::OTP_RESEND_COOLDOWN_SECONDS,
+            now()->addSeconds(self::OTP_RESEND_COOLDOWN_SECONDS)
+        );
+    }
+
+    public function secondsUntilOtpResend(string $kind, string $token): int
+    {
+        $until = cache()->get($this->otpResendCacheKey($kind, $token));
+        if (! is_numeric($until)) {
+            return 0;
+        }
+
+        return max(0, (int) $until - time());
+    }
+
+    protected function otpResendCacheKey(string $kind, string $token): string
+    {
+        return 'otp_resend_' . $kind . '_' . $token;
     }
 }

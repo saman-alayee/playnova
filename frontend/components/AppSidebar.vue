@@ -7,6 +7,8 @@ const auth = useAuthStore()
 
 const menuReady = useAuthMenuReady()
 
+const socialReady = computed(() => !!auth.settings)
+
 const socialItems = computed(() => {
   const social = auth.settings?.social || {}
   return [
@@ -29,6 +31,10 @@ const socialItems = computed(() => {
       url: buildSocialUrl(social.telegram, 'https://t.me/'),
     },
   ]
+})
+
+onMounted(() => {
+  void auth.fetchSettings()
 })
 
 function buildSocialUrl(value: string | null | undefined, prefix: string) {
@@ -275,14 +281,14 @@ function isActive(path: string) {
         <div class="sidebar-social__grid">
           <a
             v-for="item in socialItems"
-            :key="item.key"
+            :key="`${item.key}-${item.url || 'empty'}`"
             :href="item.url || '#'"
             target="_blank"
             rel="noopener noreferrer"
             class="sidebar-social__link"
-            :class="{ 'is-disabled': !item.url }"
+            :class="{ 'is-disabled': socialReady && !item.url }"
             :title="item.title"
-            :aria-disabled="!item.url"
+            :aria-disabled="socialReady && !item.url"
           >
             <span class="sidebar-social__icon">
               <img :src="item.icon" :alt="item.title" width="36" height="36" loading="lazy">

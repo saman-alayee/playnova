@@ -77,6 +77,23 @@ class User extends Authenticatable
         return 1_000_000;
     }
 
+    public function completedDepositTotal(): int
+    {
+        return (int) $this->transactions()
+            ->where('type', 'deposit')
+            ->where('status', 'completed')
+            ->sum('amount');
+    }
+
+    public function remainingKycDepositCap(): int
+    {
+        if ($this->isKycVerified()) {
+            return 50_000_000;
+        }
+
+        return max(0, $this->kycWalletCap() - $this->completedDepositTotal());
+    }
+
     public function transactions()
     {
         return $this->hasMany(Transaction::class);

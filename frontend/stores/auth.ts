@@ -91,15 +91,15 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async fetchSettings() {
-      if (this.settings) return this.settings
+    async fetchSettings(force = false) {
+      if (this.settings && !force) return this.settings
       const api = useApi()
       try {
         const settings = await api.settings()
         this.setSettings(settings)
         return settings
       } catch {
-        return null
+        return this.settings
       }
     },
 

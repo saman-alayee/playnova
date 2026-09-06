@@ -63,7 +63,7 @@ async function submit() {
     if (result.token && result.user) {
       api.setToken(result.token)
       auth.setUser(result.user)
-      await navigateTo(auth.needsKycRedirect ? '/kyc' : '/')
+      await navigateTo('/')
       return
     }
   } catch (e: unknown) {

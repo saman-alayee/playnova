@@ -181,6 +181,8 @@ export interface WalletData {
   transactions: Transaction[]
   max_deposit?: number
   kyc_verified?: boolean
+  kyc_cap?: number
+  deposited_total?: number
 }
 
 export interface Notification {

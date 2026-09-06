@@ -296,6 +296,7 @@ class ResourceController extends BaseApiController
         }
 
         ContentCacheService::forgetAll();
+        cache()->forget('http:public:settings');
 
         return $this->success(null, 'تنظیمات سایت ذخیره شد.');
     }
