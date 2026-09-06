@@ -372,13 +372,12 @@ async function testConnection() {
 
       <div>
         <label class="block text-sm text-gray-400 mb-1">کلید API</label>
-        <input
+        <PasswordInput
           v-model="form.api_key"
-          type="password"
           autocomplete="new-password"
           placeholder="در صورت تغییر وارد کنید"
           class="w-full bg-dark-700 border border-dark-600 rounded px-3 py-2 text-white"
-        >
+        />
         <p class="text-xs text-gray-500 mt-1">
           وضعیت: {{ data?.has_api_key ? 'تنظیم شده' : 'تنظیم نشده' }}
           ({{ apiKeySourceLabel }})

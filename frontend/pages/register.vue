@@ -118,11 +118,11 @@ async function submit() {
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">رمز عبور</label>
-        <input v-model="form.password" type="password" required autocomplete="new-password">
+        <PasswordInput v-model="form.password" required autocomplete="new-password" />
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">تکرار رمز عبور</label>
-        <input v-model="form.password_confirmation" type="password" required autocomplete="new-password">
+        <PasswordInput v-model="form.password_confirmation" required autocomplete="new-password" />
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">کد معرف (اختیاری)</label>

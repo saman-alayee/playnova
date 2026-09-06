@@ -2,6 +2,8 @@
 const auth = useAuthStore()
 const year = new Date().getFullYear()
 const menuReady = useAuthMenuReady()
+
+const enamadHtml = "<a referrerpolicy='origin' target='_blank' href='https://trustseal.enamad.ir/?id=766546&Code=sORWoyVCo0DL6d7gLFAqrTrHvwchtiBu'><img referrerpolicy='origin' src='https://trustseal.enamad.ir/logo.aspx?id=766546&Code=sORWoyVCo0DL6d7gLFAqrTrHvwchtiBu' alt='' style='cursor:pointer' code='sORWoyVCo0DL6d7gLFAqrTrHvwchtiBu'></a>"
 </script>
 
 <template>
@@ -45,25 +47,7 @@ const menuReady = useAuthMenuReady()
 
         <div>
           <h3 class="site-footer__title">اعتماد و امنیت</h3>
-          <div class="site-footer__trust">
-            <a
-              referrerpolicy="origin"
-              target="_blank"
-              rel="noopener noreferrer"
-              href="https://trustseal.enamad.ir/?id=766546&Code=sORWoyVCo0DL6d7gLFAqrTrHvwchtiBu"
-            >
-              <img
-                referrerpolicy="origin"
-                src="https://trustseal.enamad.ir/logo.aspx?id=766546&Code=sORWoyVCo0DL6d7gLFAqrTrHvwchtiBu"
-                alt="نماد اعتماد"
-                width="125"
-                height="136"
-                loading="lazy"
-                decoding="async"
-                style="cursor:pointer"
-              >
-            </a>
-          </div>
+          <div class="site-footer__trust" v-html="enamadHtml" />
         </div>
       </div>
 

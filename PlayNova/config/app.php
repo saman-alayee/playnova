@@ -125,6 +125,8 @@ return [
 
     'key' => env('APP_KEY'),
 
+    'kyc_encryption_key' => env('KYC_ENCRYPTION_KEY'),
+
     'cipher' => 'AES-256-CBC',
 
     /*

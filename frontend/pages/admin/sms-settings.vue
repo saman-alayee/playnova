@@ -206,14 +206,13 @@ async function save() {
 
           <label class="sms-field">
             <span class="sms-field__label">توکن (REST / API Key) (password)</span>
-            <input
+            <PasswordInput
               v-model="form.sms_api_key"
-              type="password"
               class="sms-field__input"
               dir="ltr"
               :placeholder="hasSavedApiKey ? '******** (برای تغییر، توکن جدید وارد کنید)' : 'توکن REST پنل'"
               autocomplete="new-password"
-            >
+            />
             <p v-if="hasSavedApiKey && !form.sms_api_key" class="sms-field__ok">توکن قبلاً ذخیره شده است.</p>
           </label>
 

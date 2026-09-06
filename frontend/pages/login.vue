@@ -84,12 +84,11 @@ async function submit() {
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">رمز عبور</label>
-        <input
+        <PasswordInput
           v-model="password"
-          type="password"
           required
           autocomplete="current-password"
-        >
+        />
       </div>
       <AuthCaptcha ref="captchaRef" v-model="captchaAnswer" />
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

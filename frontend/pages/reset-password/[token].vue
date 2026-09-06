@@ -64,11 +64,11 @@ async function resend() {
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">رمز عبور جدید</label>
-        <input v-model="form.password" type="password" required autocomplete="new-password">
+        <PasswordInput v-model="form.password" required autocomplete="new-password" />
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">تکرار رمز عبور</label>
-        <input v-model="form.password_confirmation" type="password" required autocomplete="new-password">
+        <PasswordInput v-model="form.password_confirmation" required autocomplete="new-password" />
       </div>
       <button type="submit" class="w-full btn-glow-success rounded py-2 font-bold" :disabled="loading">
         {{ loading ? '...' : 'تغییر رمز عبور' }}

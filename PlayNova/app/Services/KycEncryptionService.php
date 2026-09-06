@@ -8,7 +8,7 @@ class KycEncryptionService
 {
     protected function key(): string
     {
-        $raw = env('KYC_ENCRYPTION_KEY') ?: config('app.key');
+        $raw = config('app.kyc_encryption_key') ?: config('app.key');
 
         if (! $raw) {
             throw new RuntimeException('کلید رمزنگاری KYC تنظیم نشده است.');

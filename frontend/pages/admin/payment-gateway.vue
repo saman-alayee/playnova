@@ -151,14 +151,13 @@ async function testConnection() {
 
         <label class="gateway-field">
           <span class="gateway-field__label">کلید API (اختیاری — برای IPG لازم نیست)</span>
-          <input
+          <PasswordInput
             v-model="form.zibal_api_key"
-            type="password"
             class="gateway-field__input"
             dir="ltr"
             :placeholder="meta.has_api_key ? '******** (برای تغییر، توکن جدید وارد کنید)' : 'زیبال REST توکن'"
             autocomplete="new-password"
-          >
+          />
           <p v-if="meta.has_api_key && !form.zibal_api_key" class="gateway-field__ok">توکن قبلاً ذخیره شده است.</p>
         </label>
 
