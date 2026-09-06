@@ -10,9 +10,9 @@ const api = useApi()
 const auth = useAuthStore()
 
 const heroSlides = [
-  `${config.public.backendUrl}/hero-slide-1.png`,
-  `${config.public.backendUrl}/hero-slide-2.png`,
-  `${config.public.backendUrl}/hero-slide-3.png`,
+  `${config.public.backendUrl}/hero-slide-1.webp`,
+  `${config.public.backendUrl}/hero-slide-2.webp`,
+  `${config.public.backendUrl}/hero-slide-3.webp`,
 ]
 
 const leagueMeta = {

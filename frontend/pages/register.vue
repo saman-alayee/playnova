@@ -77,7 +77,8 @@ async function submit() {
 </script>
 
 <template>
-  <div class="auth-page max-w-md mx-auto bg-dark-800 border border-dark-600 rounded-xl p-6">
+  <div class="auth-page-wrap">
+    <div class="auth-page max-w-md mx-auto bg-dark-800 border border-dark-600 rounded-xl p-6">
     <div class="flex justify-center mb-4">
       <NuxtLink to="/" class="site-header-logo">
         <SiteLogoImage />
@@ -144,5 +145,6 @@ async function submit() {
       حساب دارید؟
       <NuxtLink to="/login" class="text-secondary">ورود</NuxtLink>
     </p>
+    </div>
   </div>
 </template>

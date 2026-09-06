@@ -80,19 +80,25 @@ body,
 }
 
 .page-main {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .nuxt-loading-indicator {
   z-index: 100010 !important;
 }
 
-.auth-page {
-  margin-bottom: clamp(5rem, 14vh, 9rem);
+.auth-page-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: clamp(4.5rem, 12vh, 7rem);
 }
 
-.auth-page-wrap {
-  padding-bottom: clamp(3rem, 8vh, 5rem);
+.auth-page {
+  width: 100%;
 }
 
 /* Header */

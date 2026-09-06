@@ -26,7 +26,9 @@ return [
         env('APP_URL'),
         'http://193.105.234.54',
         'https://playnova.ir',
+        'https://www.playnova.ir',
         'http://playnova.ir',
+        'http://www.playnova.ir',
     ])),
 
     'allowed_origins_patterns' => [],
