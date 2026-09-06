@@ -1,10 +1,13 @@
 <script setup lang="ts">
 useHead({ title: 'قوانین و مقررات | PlayNova' })
-definePageMeta({ keepalive: true })
 
 const api = useApi()
-const { data: sections, pending, error } = usePageData('rules', () => api.rules(), {
+const { data: sections, pending, error, refresh } = usePageData('rules', () => api.rules(), {
   default: () => [],
+})
+
+onMounted(() => {
+  refresh()
 })
 </script>
 

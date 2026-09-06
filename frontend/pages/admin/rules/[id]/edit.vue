@@ -8,13 +8,18 @@ const flash = useState('flash')
 const id = Number(route.params.id)
 const saving = ref(false)
 
-const { data: rules, pending } = usePageData('admin-rules-edit', () => api.admin.rules())
+const { data: rules, pending, refresh } = usePageData('admin-rules', () => api.admin.rules())
 const rule = computed(() => rules.value?.find((r) => r.id === id))
-const content = ref(rule.value?.content || '')
+const content = ref('')
 
 watch(rule, (r) => {
   if (r) content.value = r.content
 }, { immediate: true })
+
+onMounted(async () => {
+  clearNuxtData(['admin-rules', 'rules'])
+  await refresh()
+})
 
 useHead({ title: () => `ویرایش بخش #${id} | قوانین` })
 
@@ -23,6 +28,7 @@ async function save() {
   saving.value = true
   try {
     await api.admin.updateRule(id, content.value)
+    clearNuxtData(['admin-rules', 'rules'])
     flash.value = { success: 'بخش ذخیره شد.' }
     await router.push('/admin/rules/manage')
   } catch (e: unknown) {

@@ -137,9 +137,9 @@ class ContentAdminController extends BaseApiController
     {
         $this->authorizeAdmin();
 
-        $request->validate(['content' => 'required|string']);
+        $validated = $request->validate(['content' => 'required|string']);
 
-        $rule = Rule::create(['content' => $request->content]);
+        $rule = Rule::create(['content' => $validated['content']]);
         ContentCacheService::forgetAll();
 
         return $this->success($rule, 'بخش قوانین اضافه شد.', 201);
@@ -149,8 +149,8 @@ class ContentAdminController extends BaseApiController
     {
         $this->authorizeAdmin();
 
-        $request->validate(['content' => 'required|string']);
-        $rule->update(['content' => $request->content]);
+        $validated = $request->validate(['content' => 'required|string']);
+        $rule->update(['content' => $validated['content']]);
         ContentCacheService::forgetAll();
 
         return $this->success($rule->fresh(), 'بخش قوانین ویرایش شد.');

@@ -60,7 +60,7 @@ export default defineNuxtConfig({
 
   routeRules: {
     '/': { swr: 30 },
-    '/rules': { swr: 300 },
+    '/rules': { swr: 60 },
     '/leaderboard': { swr: 60 },
     '/history': { swr: 60 },
     '/about': { swr: 3600 },

@@ -64,7 +64,7 @@ class ContentCacheService
 
     public static function forgetAll(): void
     {
-        foreach (['content:privacy', 'content:about', 'content:contact', 'content:rules'] as $key) {
+        foreach (['content:privacy', 'content:about', 'content:contact', 'content:rules', 'http:public:rules'] as $key) {
             Cache::forget($key);
         }
 

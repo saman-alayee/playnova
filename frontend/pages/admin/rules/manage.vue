@@ -13,6 +13,15 @@ const { data, pending, refresh } = usePageData('admin-rules', () => api.admin.ru
 const rules = computed(() => (data.value ?? []) as RuleSection[])
 const newContent = ref('')
 
+async function reloadRules() {
+  clearNuxtData(['admin-rules', 'rules'])
+  await refresh()
+}
+
+onMounted(() => {
+  reloadRules()
+})
+
 function previewText(html: string): string {
   if (!html) return ''
   const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
@@ -26,7 +35,7 @@ async function addRule() {
     await api.admin.createRule(newContent.value)
     newContent.value = ''
     flash.value = { success: 'بخش اضافه شد.' }
-    await refresh()
+    await reloadRules()
   } catch (e: unknown) {
     flash.value = { error: (e as Error).message }
   } finally {
@@ -40,7 +49,7 @@ async function remove(rule: RuleSection) {
   try {
     await api.admin.deleteRule(rule.id)
     flash.value = { success: 'بخش حذف شد.' }
-    await refresh()
+    await reloadRules()
   } catch (e: unknown) {
     flash.value = { error: (e as Error).message }
   } finally {

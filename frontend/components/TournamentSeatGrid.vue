@@ -68,8 +68,13 @@ function slotIsSelected(teamRow: GridTeam, seatNumber: number): boolean {
   return props.selectedSeat === seatNumber
 }
 
-function avatarLetter(username?: string | null) {
-  return (username?.charAt(0) || '?').toUpperCase()
+function avatarLetter(value?: string | null) {
+  return (value?.charAt(0) || '?').toUpperCase()
+}
+
+function displayCodId(occ: Occupant | null): string {
+  if (!occ) return '—'
+  return occ.cod_id?.trim() || occ.username?.trim() || '—'
 }
 
 function takenSlotClass(teamRow: GridTeam, seatNumber: number): Record<string, boolean> {
@@ -118,9 +123,9 @@ function onPick(teamRow: GridTeam, seatNumber: number, label: string) {
           >
             <div class="seat-slot__top">نفر {{ toPersianDigits(slot.slot) }}</div>
             <div class="seat-slot__avatar">
-              {{ avatarLetter(occupant(slot.seat_number)?.username) }}
+              {{ avatarLetter(displayCodId(occupant(slot.seat_number))) }}
             </div>
-            <div class="seat-slot__user">{{ occupant(slot.seat_number)?.username || '—' }}</div>
+            <div class="seat-slot__user" dir="ltr">{{ displayCodId(occupant(slot.seat_number)) }}</div>
             <div class="seat-slot__code">{{ slot.label }}</div>
             <div class="seat-slot__status seat-slot__status--taken">
               {{ slotIsMine(slot.seat_number) ? 'جایگاه شما' : (slotIsTeammate(teamRow, slot.seat_number) ? 'هم‌تیمی' : 'پر شده') }}

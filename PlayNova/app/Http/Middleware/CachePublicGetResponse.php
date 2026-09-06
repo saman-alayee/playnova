@@ -17,9 +17,11 @@ class CachePublicGetResponse
             return $next($request);
         }
 
-        $key = $request->is('api/v1/settings')
-            ? 'http:public:settings'
-            : 'http:public:' . sha1($request->fullUrl());
+        $key = match (true) {
+            $request->is('api/v1/settings') => 'http:public:settings',
+            $request->is('api/v1/rules') => 'http:public:rules',
+            default => 'http:public:' . sha1($request->fullUrl()),
+        };
 
         if ($cached = Cache::get($key)) {
             return response($cached['body'], $cached['status'], $cached['headers'])
