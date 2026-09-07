@@ -33,17 +33,25 @@ watch(batch, (value) => {
   }))
 }, { immediate: true })
 
-const totalAmount = computed(() =>
-  editableEntries.value.reduce((sum, entry) => sum + Number(entry.prize_amount || 0), 0),
+const payableTotal = computed(() =>
+  (batch.value?.entries ?? []).reduce((sum, entry) => {
+    if (entry.confirmation_status === 'unconfirmed') return sum
+    const editable = editableEntries.value.find((item) => item.id === entry.id)
+    return sum + Number(editable?.prize_amount ?? entry.prize_amount ?? 0)
+  }, 0),
 )
 
 const prizeBudget = computed(() =>
   Number(batch.value?.prize_pool ?? tournament.value?.prize_pool ?? 0),
 )
 
-const prizeBudgetDiff = computed(() => prizeBudget.value - totalAmount.value)
+const leftover = computed(() => prizeBudget.value - payableTotal.value)
 
-const budgetMatches = computed(() => Math.abs(prizeBudgetDiff.value) < 1)
+const budgetOverflows = computed(() => payableTotal.value - prizeBudget.value > 0.5)
+
+const canApprove = computed(() =>
+  batch.value?.status === 'pending_approval' && payableTotal.value > 0 && !budgetOverflows.value,
+)
 
 async function saveAmounts() {
   try {
@@ -56,11 +64,11 @@ async function saveAmounts() {
 }
 
 async function approvePrizes() {
-  if (!budgetMatches.value) {
-    flash.value = { error: `مجموع جوایز باید برابر بودجه مسابقه (${prizeBudget.value.toLocaleString('fa-IR')} تومان) باشد.` }
+  if (budgetOverflows.value) {
+    flash.value = { error: `مجموع قابل واریز بیشتر از بودجه مسابقه (${prizeBudget.value.toLocaleString('fa-IR')} تومان) است.` }
     return
   }
-  if (!confirm('جوایز تأیید و یکجا به کیف پول برندگان واریز شوند؟')) return
+  if (!confirm('پیش‌نمایش زیر تأیید شود و فقط مبالغ تأییدشده به کیف پول واریز شود؟ بازیکنان عدم تأیید واریز نمی‌شوند.')) return
   try {
     await api.admin.approveTournamentPrizes(tournamentId.value)
     flash.value = { success: 'جوایز با موفقیت واریز شدند.' }
@@ -98,10 +106,14 @@ async function approvePrizes() {
           <span class="text-white font-bold mr-2">{{ prizeBudget.toLocaleString('fa-IR') }} تومان</span>
         </div>
         <div>
-          <span class="text-gray-400">مجموع جوایز:</span>
-          <span class="font-bold mr-2" :class="budgetMatches ? 'text-secondary' : 'text-amber-300'">
-            {{ totalAmount.toLocaleString('fa-IR') }} تومان
+          <span class="text-gray-400">مجموع قابل واریز:</span>
+          <span class="font-bold mr-2" :class="budgetOverflows ? 'text-red-300' : 'text-secondary'">
+            {{ payableTotal.toLocaleString('fa-IR') }} تومان
           </span>
+        </div>
+        <div v-if="leftover > 0.5">
+          <span class="text-gray-400">باقیمانده (واریز نمی‌شود):</span>
+          <span class="text-amber-300 font-bold mr-2">{{ leftover.toLocaleString('fa-IR') }} تومان</span>
         </div>
         <div v-if="batch.winner">
           <span class="text-gray-400">برنده:</span>
@@ -125,6 +137,7 @@ async function approvePrizes() {
               <th class="py-2 px-3 text-right">بازیکن</th>
               <th class="py-2 px-3 text-right">تیم/جایگاه</th>
               <th class="py-2 px-3 text-right">کیل</th>
+              <th class="py-2 px-3 text-right">وضعیت</th>
               <th class="py-2 px-3 text-right">مبلغ جایزه (تومان)</th>
             </tr>
           </thead>
@@ -137,9 +150,12 @@ async function approvePrizes() {
               </td>
               <td class="py-2 px-3">{{ entry.team_label ?? '—' }}</td>
               <td class="py-2 px-3">{{ entry.kills ?? '—' }}</td>
+              <td class="py-2 px-3" :class="entry.confirmation_status === 'unconfirmed' ? 'text-amber-300' : 'text-green-300'">
+                {{ entry.confirmation_label || (entry.confirmation_status === 'unconfirmed' ? 'عدم تأیید' : 'تأیید شده') }}
+              </td>
               <td class="py-2 px-3">
                 <input
-                  v-if="batch.status === 'pending_approval'"
+                  v-if="batch.status === 'pending_approval' && entry.confirmation_status !== 'unconfirmed'"
                   v-model.number="editableEntries.find(e => e.id === entry.id)!.prize_amount"
                   type="number"
                   min="0"
@@ -152,9 +168,12 @@ async function approvePrizes() {
         </table>
       </div>
 
-      <p v-if="batch.status === 'pending_approval' && !budgetMatches" class="text-sm text-amber-300">
-        قبل از واریز، مجموع جوایز را برابر بودجه کنید. اختلاف فعلی:
-        {{ prizeBudgetDiff.toLocaleString('fa-IR') }} تومان
+      <p v-if="batch.status === 'pending_approval'" class="text-sm text-gray-400">
+        این صفحه فقط پیش‌نمایش است. تا زدن تأیید نهایی هیچ واریزی انجام نمی‌شود.
+        بازیکنان «عدم تأیید» مبلغ ۰ دارند و برایشان تراکنش ساخته نمی‌شود.
+      </p>
+      <p v-if="batch.status === 'pending_approval' && budgetOverflows" class="text-sm text-red-300">
+        مجموع قابل واریز از بودجه بیشتر است. مبالغ را کم کنید.
       </p>
 
       <div v-if="batch.status === 'pending_approval'" class="flex gap-3">
@@ -164,10 +183,10 @@ async function approvePrizes() {
         <button
           type="button"
           class="bg-success text-white px-4 py-2 rounded font-bold disabled:opacity-50"
-          :disabled="!budgetMatches"
+          :disabled="!canApprove"
           @click="approvePrizes"
         >
-          تأیید نهایی و واریز یکجا
+          تأیید نهایی و واریز مبالغ تأییدشده
         </button>
       </div>
     </div>

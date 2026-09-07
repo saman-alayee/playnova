@@ -179,6 +179,14 @@ class TournamentPrizeTableParser
         return $shares;
     }
 
+    public function sharePerRosterSlot(float $total, int $seatMode): float
+    {
+        $slots = max(1, $seatMode);
+        $total = (int) max(0, round($total, 0));
+
+        return (float) intdiv($total, $slots);
+    }
+
     /**
      * @return array{0:int,1:float}|null
      */

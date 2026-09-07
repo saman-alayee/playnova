@@ -46,4 +46,11 @@ class TournamentPrizeTableParserTest extends TestCase
         $this->assertSame(20000.0, $table[2]);
         $this->assertSame(10000.0, $table[3]);
     }
+
+    public function test_share_per_roster_slot_keeps_absent_teammate_unpaid(): void
+    {
+        $this->assertSame(250000.0, $this->parser->sharePerRosterSlot(500000, 2));
+        $this->assertSame(250000.0, $this->parser->sharePerRosterSlot(1_000_000, 4));
+        $this->assertSame(500000.0, $this->parser->sharePerRosterSlot(500000, 1));
+    }
 }

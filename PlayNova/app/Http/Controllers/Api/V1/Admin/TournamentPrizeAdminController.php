@@ -118,6 +118,13 @@ class TournamentPrizeAdminController extends BaseApiController
                 'seat_number' => $entry->seat_number,
                 'kills' => $entry->kills,
                 'prize_amount' => (float) $entry->prize_amount,
+                'on_leaderboard' => (bool) (is_array($entry->metadata) ? ($entry->metadata['on_leaderboard'] ?? true) : true),
+                'confirmation_status' => is_array($entry->metadata)
+                    ? ($entry->metadata['confirmation_status'] ?? 'confirmed')
+                    : 'confirmed',
+                'confirmation_label' => (is_array($entry->metadata) && ($entry->metadata['confirmation_status'] ?? '') === 'unconfirmed')
+                    ? 'عدم تأیید'
+                    : 'تأیید شده',
             ])->values(),
         ];
     }

@@ -97,6 +97,9 @@ class TournamentPrizeService
                 'kills' => null,
                 'team_label' => $winnerReg ? $tournament->seatDisplayLabel((int) $winnerReg->seat_number) : null,
                 'seat_number' => $winnerReg?->seat_number,
+                'on_leaderboard' => true,
+                'confirmation_status' => 'confirmed',
+                'confirmation_reason' => 'leaderboard',
             ]];
         } else {
             $rows = collect($rankedEntries)
@@ -114,6 +117,9 @@ class TournamentPrizeService
                         'kills' => isset($row['kills']) ? (int) $row['kills'] : null,
                         'team_label' => $row['team_label'] ?? ($seatNumber ? $tournament->seatDisplayLabel($seatNumber) : null),
                         'seat_number' => $seatNumber,
+                        'on_leaderboard' => true,
+                        'confirmation_status' => 'confirmed',
+                        'confirmation_reason' => 'leaderboard',
                     ];
                 })
                 ->unique('user_id')
@@ -121,8 +127,9 @@ class TournamentPrizeService
                 ->all();
         }
 
-        $rows = PlacementRankCompactor::compact($rows);
-        $rows = $this->expandTeammates($tournament, $rows, $registrations);
+        $rows = PlacementRankCompactor::compact($rows, $tournament->seatMode());
+        $rows = $this->markRegistrationStatus($tournament, $rows, $registrations);
+        $rows = $this->appendAbsentTeammates($tournament, $rows, $registrations);
 
         return $this->assignPrizeAmounts($tournament, $rows, $prizeTable);
     }
@@ -142,90 +149,124 @@ class TournamentPrizeService
     }
 
     /**
-     * @param  list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int}>  $rows
+     * @param  list<array<string, mixed>>  $rows
      * @param  \Illuminate\Support\Collection<int, Registration>  $registrations
-     * @return list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int}>
+     * @return list<array<string, mixed>>
      */
-    protected function expandTeammates(Tournament $tournament, array $rows, $registrations): array
+    protected function markRegistrationStatus(Tournament $tournament, array $rows, $registrations): array
+    {
+        foreach ($rows as $index => $row) {
+            $userId = (int) ($row['user_id'] ?? 0);
+            $reg = $registrations->get($userId);
+            $seat = isset($row['seat_number']) ? (int) $row['seat_number'] : ($reg?->seat_number ? (int) $reg->seat_number : 0);
+
+            if (! $reg || $seat < 1) {
+                $rows[$index]['confirmation_status'] = 'unconfirmed';
+                $rows[$index]['confirmation_reason'] = 'seat_mismatch';
+                $rows[$index]['on_leaderboard'] = (bool) ($row['on_leaderboard'] ?? false);
+                continue;
+            }
+
+            $rows[$index]['seat_number'] = $seat;
+            $rows[$index]['team_label'] = $row['team_label'] ?? $tournament->seatDisplayLabel($seat);
+            $rows[$index]['on_leaderboard'] = (bool) ($row['on_leaderboard'] ?? true);
+            $rows[$index]['confirmation_status'] = $rows[$index]['on_leaderboard'] ? 'confirmed' : 'unconfirmed';
+            $rows[$index]['confirmation_reason'] = $rows[$index]['on_leaderboard'] ? 'leaderboard' : 'not_on_leaderboard';
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  \Illuminate\Support\Collection<int, Registration>  $registrations
+     * @return list<array<string, mixed>>
+     */
+    protected function appendAbsentTeammates(Tournament $tournament, array $rows, $registrations): array
     {
         if ($tournament->seatMode() <= 1) {
             return $rows;
         }
 
-        $byUser = [];
+        $presentIds = [];
+        $rankTeams = [];
         foreach ($rows as $row) {
-            $byUser[(int) $row['user_id']] = $row;
-        }
-
-        $teamRank = [];
-        foreach ($byUser as $row) {
-            $seat = isset($row['seat_number']) ? (int) $row['seat_number'] : null;
-            if (! $seat) {
-                $reg = $registrations->get((int) $row['user_id']);
-                $seat = $reg?->seat_number ? (int) $reg->seat_number : null;
-            }
-
-            $team = $tournament->teamNumberForSeat($seat);
-            $rank = isset($row['rank']) ? (int) $row['rank'] : 0;
-            if (! $team || $rank < 1) {
+            $userId = (int) ($row['user_id'] ?? 0);
+            $rank = (int) ($row['rank'] ?? 0);
+            $presentIds[$userId] = true;
+            if ($rank < 1 || (($row['confirmation_status'] ?? '') === 'unconfirmed')) {
                 continue;
             }
 
-            $teamRank[$team] = isset($teamRank[$team]) ? min($teamRank[$team], $rank) : $rank;
+            $seat = isset($row['seat_number']) ? (int) $row['seat_number'] : 0;
+            $team = $tournament->teamNumberForSeat($seat);
+            if ($team) {
+                $rankTeams[$rank][$team] = true;
+            }
         }
 
-        foreach ($byUser as $userId => $row) {
-            $seat = isset($row['seat_number']) ? (int) $row['seat_number'] : null;
-            if (! $seat) {
-                $reg = $registrations->get($userId);
-                $seat = $reg?->seat_number ? (int) $reg->seat_number : null;
-            }
-
-            $team = $tournament->teamNumberForSeat($seat);
-            if (! $team || ! isset($teamRank[$team])) {
+        foreach ($registrations as $reg) {
+            $userId = (int) $reg->user_id;
+            if (isset($presentIds[$userId])) {
                 continue;
             }
 
-            $byUser[$userId]['rank'] = $teamRank[$team];
-            if ($seat && empty($byUser[$userId]['seat_number'])) {
-                $byUser[$userId]['seat_number'] = $seat;
-                $byUser[$userId]['team_label'] = $byUser[$userId]['team_label'] ?: $tournament->seatDisplayLabel($seat);
+            $seat = (int) $reg->seat_number;
+            $team = $tournament->teamNumberForSeat($seat);
+            if (! $team) {
+                continue;
+            }
+
+            foreach ($rankTeams as $rank => $teams) {
+                if (! isset($teams[$team])) {
+                    continue;
+                }
+
+                $rows[] = [
+                    'user_id' => $userId,
+                    'rank' => $rank,
+                    'kills' => null,
+                    'team_label' => $tournament->seatDisplayLabel($seat),
+                    'seat_number' => $seat,
+                    'on_leaderboard' => false,
+                    'confirmation_status' => 'unconfirmed',
+                    'confirmation_reason' => 'not_on_leaderboard',
+                ];
+                $presentIds[$userId] = true;
+                break;
             }
         }
 
-        return array_values($byUser);
+        return $rows;
     }
 
     /**
-     * @param  list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int}>  $rows
+     * @param  list<array<string, mixed>>  $rows
      * @param  array<int, float>  $prizeTable
      * @return list<array{user_id:int,rank:?int,kills:?int,team_label:?string,seat_number:?int,prize_amount:float,metadata:?array}>
      */
     protected function assignPrizeAmounts(Tournament $tournament, array $rows, array $prizeTable): array
     {
-        $groups = [];
+        $seatMode = max(1, $tournament->seatMode());
+        $amounts = array_fill(0, count($rows), 0.0);
+
         foreach ($rows as $index => $row) {
             $rank = (int) ($row['rank'] ?? 0);
-            $groups[$rank][] = $index;
-        }
-
-        $amounts = array_fill(0, count($rows), 0.0);
-        foreach ($groups as $rank => $indexes) {
-            if ($rank < 1) {
+            $confirmed = ($row['confirmation_status'] ?? 'confirmed') !== 'unconfirmed';
+            if ($rank < 1 || ! $confirmed) {
                 continue;
             }
 
             $teamTotal = $this->prizeTableParser->amountForRank($prizeTable, $rank, 0);
-            $shares = $this->prizeTableParser->splitAmongPlayers($teamTotal, count($indexes));
-            foreach ($indexes as $shareIndex => $rowIndex) {
-                $amounts[$rowIndex] = $shares[$shareIndex];
-            }
+            $amounts[$index] = $this->prizeTableParser->sharePerRosterSlot($teamTotal, $seatMode);
         }
 
         $result = [];
         foreach ($rows as $index => $row) {
             $rank = isset($row['rank']) ? (int) $row['rank'] : null;
             $teamTotal = $rank ? $this->prizeTableParser->amountForRank($prizeTable, $rank, 0) : 0.0;
+            $status = ($row['confirmation_status'] ?? 'confirmed') === 'unconfirmed' ? 'unconfirmed' : 'confirmed';
+            $onLeaderboard = (bool) ($row['on_leaderboard'] ?? ($status === 'confirmed'));
 
             $result[] = [
                 'user_id' => (int) $row['user_id'],
@@ -234,12 +275,15 @@ class TournamentPrizeService
                 'team_label' => $row['team_label'] ?? null,
                 'seat_number' => isset($row['seat_number']) ? (int) $row['seat_number'] : null,
                 'prize_amount' => $amounts[$index],
-                'metadata' => $rank ? [
-                    'prize_rank' => $rank,
+                'metadata' => [
+                    'prize_rank' => $rank && $rank > 0 ? $rank : null,
                     'team_prize' => $teamTotal,
                     'player_share' => $amounts[$index],
-                    'seat_mode' => $tournament->seatMode(),
-                ] : null,
+                    'seat_mode' => $seatMode,
+                    'on_leaderboard' => $onLeaderboard,
+                    'confirmation_status' => $status,
+                    'confirmation_reason' => $row['confirmation_reason'] ?? ($status === 'confirmed' ? 'leaderboard' : 'not_on_leaderboard'),
+                ],
             ];
         }
 
@@ -247,6 +291,12 @@ class TournamentPrizeService
             $rankCmp = ($left['rank'] ?? 9999) <=> ($right['rank'] ?? 9999);
             if ($rankCmp !== 0) {
                 return $rankCmp;
+            }
+
+            $statusCmp = (($left['metadata']['confirmation_status'] ?? '') === 'unconfirmed')
+                <=> (($right['metadata']['confirmation_status'] ?? '') === 'unconfirmed');
+            if ($statusCmp !== 0) {
+                return $statusCmp;
             }
 
             return ($left['seat_number'] ?? 0) <=> ($right['seat_number'] ?? 0);
@@ -301,17 +351,26 @@ class TournamentPrizeService
             $locked->load(['entries.user', 'tournament']);
             $tournament = $locked->tournament;
             $budget = (float) ($tournament?->prize_pool ?? 0);
-            $total = round((float) $locked->entries->sum('prize_amount'), 0);
+            $payable = 0.0;
+            foreach ($locked->entries as $entry) {
+                $amount = (float) $entry->prize_amount;
+                $status = is_array($entry->metadata) ? ($entry->metadata['confirmation_status'] ?? 'confirmed') : 'confirmed';
+                if ($amount > 0 && $status !== 'unconfirmed') {
+                    $payable += $amount;
+                }
+            }
+            $payable = round($payable, 0);
 
-            if ($budget > 0 && abs($total - $budget) > 0.5) {
+            if ($budget > 0 && $payable - $budget > 0.5) {
                 throw new RuntimeException(
-                    'مجموع جوایز (' . number_format($total) . ' تومان) باید برابر بودجه مسابقه (' . number_format($budget) . ' تومان) باشد.'
+                    'مجموع جوایز قابل واریز (' . number_format($payable) . ' تومان) بیشتر از بودجه مسابقه (' . number_format($budget) . ' تومان) است.'
                 );
             }
 
             foreach ($locked->entries as $entry) {
                 $amount = (float) $entry->prize_amount;
-                if ($amount <= 0) {
+                $status = is_array($entry->metadata) ? ($entry->metadata['confirmation_status'] ?? 'confirmed') : 'confirmed';
+                if ($amount <= 0 || $status === 'unconfirmed') {
                     continue;
                 }
 

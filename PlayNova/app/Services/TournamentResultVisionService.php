@@ -283,14 +283,11 @@ class TournamentResultVisionService
 
     protected function resolveSystemPrompt(Tournament $tournament): string
     {
-        if (filled($tournament->result_ai_system_prompt)) {
-            return trim((string) $tournament->result_ai_system_prompt);
-        }
+        $base = filled($tournament->result_ai_system_prompt)
+            ? trim((string) $tournament->result_ai_system_prompt)
+            : Setting::getResultAiSystemPromptDefault();
 
-        $base = Setting::getResultAiSystemPromptDefault();
-        $modeHint = $this->seatModePromptHint($tournament);
-
-        return $base . "\n\n" . $modeHint;
+        return $base . "\n\n" . $this->seatModePromptHint($tournament);
     }
 
     /** @param  list<array{user_id:int,username:string,cod_id:?string,seat_number:?int,team_number:?int}>  $participants */
@@ -316,7 +313,7 @@ class TournamentResultVisionService
         $lastPrizeRank = $prizeTable !== [] && $prizeTable !== null ? max(array_keys($prizeTable)) : 0;
         $prizeRankCount = $prizeTable !== [] && $prizeTable !== null ? count($prizeTable) : 0;
 
-        return str_replace(
+        $prompt = str_replace(
             [
                 '{tournament_title}',
                 '{seat_mode_label}',
@@ -337,6 +334,12 @@ class TournamentResultVisionService
             ],
             $template,
         );
+
+        if ($lastPrizeRank > 0) {
+            $prompt .= "\n\nAlso return every visible rank AFTER {$lastPrizeRank}. Extra teams replace disqualified teams and keep the prize list the same length.";
+        }
+
+        return $prompt;
     }
 
     protected function seatModePromptHint(Tournament $tournament): string
@@ -347,7 +350,7 @@ class TournamentResultVisionService
             default => 'Tournament type: SOLO. Return one JSON row per player.',
         };
 
-        return $base . ' Extract every prize rank through the last configured rank — prizes are paid to all ranks, not only top 3.';
+        return $base . ' Extract every visible team on the scoreboard, including ranks AFTER the last prize rank, so disqualified teams can be replaced by the next placements. Do not stop at rank 3.';
     }
 
     /** @return list<array{0:string,1:string}> */
@@ -849,13 +852,6 @@ class TournamentResultVisionService
             $names = $team['player_names'];
             $uids = $team['uids'];
             $kills = $team['kills'];
-            $matchedThisTeam = [];
-            $teamParticipants = $teamNumber && $tournament->seatMode() > 1
-                ? array_values(array_filter(
-                    $participants,
-                    static fn (array $participant) => (int) ($participant['team_number'] ?? 0) === (int) $teamNumber,
-                ))
-                : [];
 
             foreach ($names as $index => $name) {
                 $player = [
@@ -887,7 +883,6 @@ class TournamentResultVisionService
                         'team_number' => $teamNumber,
                     ];
                     $matched[] = $entry;
-                    $matchedThisTeam[$user['user_id']] = $entry;
 
                     if ($rank === 1 && $suggestedWinnerUserId === null) {
                         $suggestedWinnerUserId = $user['user_id'];
@@ -900,45 +895,6 @@ class TournamentResultVisionService
                         'kills' => $player['kills'],
                         'team_number' => $teamNumber,
                     ];
-                }
-            }
-
-            if ($teamParticipants !== []) {
-                $killCursor = 0;
-                foreach ($teamParticipants as $participant) {
-                    $userId = (int) $participant['user_id'];
-                    if (isset($usedUserIds[$userId])) {
-                        continue;
-                    }
-
-                    $inferredKill = null;
-                    while ($killCursor < count($kills) && ($kills[$killCursor] ?? null) === null) {
-                        $killCursor++;
-                    }
-                    if ($killCursor < count($kills)) {
-                        $inferredKill = $kills[$killCursor];
-                        $killCursor++;
-                    }
-
-                    $usedUserIds[$userId] = true;
-                    $entry = [
-                        'rank' => $rank,
-                        'detected_name' => null,
-                        'detected_uid' => $participant['cod_id'],
-                        'kills' => $inferredKill,
-                        'user_id' => $userId,
-                        'username' => $participant['username'],
-                        'cod_id' => $participant['cod_id'],
-                        'match_method' => 'team_number',
-                        'match_score' => 1.0,
-                        'team_number' => $teamNumber,
-                    ];
-                    $matched[] = $entry;
-                    $matchedThisTeam[$userId] = $entry;
-
-                    if ($rank === 1 && $suggestedWinnerUserId === null) {
-                        $suggestedWinnerUserId = $userId;
-                    }
                 }
             }
         }

@@ -437,8 +437,10 @@ Read the RANK result screen from this media.
 - rank = placement badge (1=winner). TEAM11 is lobby team 11, not place 11.
 - Solo: 1 name per card. Duo: 2 names. Squad: up to 4 names.
 - For EACH player, read kills from the crosshair icon number beside their name.
-- Merge all scrolling frames into one complete ranked list from rank 1 to rank {last_prize_rank} at minimum.
+- Merge all scrolling frames into one complete ranked list from rank 1 to rank {last_prize_rank} at minimum, plus every visible team below that cutoff.
+- Extra ranks after {last_prize_rank} replace disqualified teams so the prize list stays the same length.
 - If a rank appears in any frame, include it in the final JSON exactly once.
+- If a team card shows only one player, return only that player. Do not invent the missing teammate.
 PROMPT;
     }
 

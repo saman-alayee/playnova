@@ -448,6 +448,9 @@ export interface TournamentPrizeEntry {
   seat_number?: number | null
   kills?: number | null
   prize_amount: number
+  on_leaderboard?: boolean
+  confirmation_status?: 'confirmed' | 'unconfirmed' | string
+  confirmation_label?: string
 }
 
 export interface TournamentPrizeBatch {

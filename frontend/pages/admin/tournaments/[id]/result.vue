@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TournamentResultAnalysis, TournamentResultParticipant } from '~/types/api'
-import { moveGroupTo, placementRankFor, teamIndexRange } from '~/utils/placementRanks'
+import { moveGroupTo, placementRankFor, rosterSlotShare, teamIndexRange } from '~/utils/placementRanks'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -20,6 +20,8 @@ const { data: promptConfig, refresh: refreshPromptConfig } = usePageData(
   () => api.admin.tournamentResultAiConfig(tournamentId.value),
 )
 
+const seatMode = computed(() => Math.max(1, tournament.value?.seat_mode ?? 1))
+
 useHead({
   title: computed(() =>
     tournament.value ? `ثبت نتیجه — ${tournament.value.title}` : 'ثبت نتیجه مسابقه',
@@ -37,6 +39,8 @@ interface RankRow {
   detected_uid?: string | null
   match_method?: string | null
   match_score?: number | null
+  seat_number?: number | null
+  on_leaderboard?: boolean
 }
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -165,9 +169,11 @@ function snapshotVideoFrame(video: HTMLVideoElement, filename: string): Promise<
 
 function buildRankedRows(result: TournamentResultAnalysis) {
   const rows: RankRow[] = []
+  const byUser = new Map((result.participants ?? []).map((p) => [p.user_id, p]))
 
   const matchedSorted = [...result.matched].sort((a, b) => a.rank - b.rank)
   for (const row of matchedSorted) {
+    if (row.match_method === 'team_number') continue
     rows.push({
       key: `m-${row.user_id}`,
       user_id: row.user_id,
@@ -179,6 +185,8 @@ function buildRankedRows(result: TournamentResultAnalysis) {
       detected_uid: row.detected_uid,
       match_method: row.match_method,
       match_score: row.match_score ?? null,
+      seat_number: byUser.get(row.user_id)?.seat_number ?? null,
+      on_leaderboard: true,
     })
   }
 
@@ -195,6 +203,8 @@ function buildRankedRows(result: TournamentResultAnalysis) {
       cod_id: p.cod_id,
       kills: null,
       rank: null,
+      seat_number: p.seat_number ?? null,
+      on_leaderboard: false,
     })
   }
 
@@ -318,28 +328,28 @@ function onDragStart(index: number) {
 
 function onDrop(index: number) {
   if (dragIndex.value === null) return
-  rankedRows.value = moveGroupTo(rankedRows.value, dragIndex.value, index)
+  rankedRows.value = moveGroupTo(rankedRows.value, dragIndex.value, index, seatMode.value)
   dragIndex.value = null
 }
 
 function canMoveUp(index: number): boolean {
-  return teamIndexRange(rankedRows.value, index).start > 0
+  return teamIndexRange(rankedRows.value, index, seatMode.value).start > 0
 }
 
 function canMoveDown(index: number): boolean {
-  return teamIndexRange(rankedRows.value, index).end < rankedRows.value.length - 1
+  return teamIndexRange(rankedRows.value, index, seatMode.value).end < rankedRows.value.length - 1
 }
 
 function moveUp(index: number) {
   if (!canMoveUp(index)) return
-  const previous = teamIndexRange(rankedRows.value, teamIndexRange(rankedRows.value, index).start - 1)
-  rankedRows.value = moveGroupTo(rankedRows.value, index, previous.start)
+  const previous = teamIndexRange(rankedRows.value, teamIndexRange(rankedRows.value, index, seatMode.value).start - 1, seatMode.value)
+  rankedRows.value = moveGroupTo(rankedRows.value, index, previous.start, seatMode.value)
 }
 
 function moveDown(index: number) {
   if (!canMoveDown(index)) return
-  const next = teamIndexRange(rankedRows.value, teamIndexRange(rankedRows.value, index).end + 1)
-  rankedRows.value = moveGroupTo(rankedRows.value, index, next.start)
+  const next = teamIndexRange(rankedRows.value, teamIndexRange(rankedRows.value, index, seatMode.value).end + 1, seatMode.value)
+  rankedRows.value = moveGroupTo(rankedRows.value, index, next.start, seatMode.value)
 }
 
 function addParticipant(participant: TournamentResultParticipant) {
@@ -355,6 +365,8 @@ function addParticipant(participant: TournamentResultParticipant) {
     cod_id: participant.cod_id,
     kills: null,
     rank: nextRank,
+    seat_number: participant.seat_number ?? null,
+    on_leaderboard: true,
   })
 }
 
@@ -405,29 +417,20 @@ const missingRanksLabel = computed(() => {
   return missing.length ? missing.join('، ') : ''
 })
 
-const totalPrizePreview = computed(() =>
-  rankedRows.value.reduce((sum, row, index) => sum + prizeAmountForRow(index, row), 0),
-)
-
-function splitTeamShares(total: number, count: number): number[] {
-  const safeTotal = Math.max(0, Math.round(total))
-  const safeCount = Math.max(1, count)
-  const base = Math.floor(safeTotal / safeCount)
-  const remainder = safeTotal % safeCount
-  const shares = Array.from({ length: safeCount }, () => base)
-  shares[safeCount - 1] += remainder
-  return shares
+function prizeRankForRow(index: number, _row?: RankRow): number {
+  return placementRankFor(rankedRows.value, index, seatMode.value)
 }
 
-function prizeRankForRow(index: number, row?: RankRow): number {
-  return placementRankFor(rankedRows.value, index)
+function isPayableRow(row: RankRow): boolean {
+  return !!row.user_id && row.match_method !== 'team_number'
 }
 
 function teammatesAtRank(rank: number): RankRow[] {
-  return rankedRows.value.filter((row, index) => row.user_id && prizeRankForRow(index, row) === rank)
+  return rankedRows.value.filter((row, index) => isPayableRow(row) && prizeRankForRow(index, row) === rank)
 }
 
 function teamPrizeTotal(rank: number): number {
+  if (lastPrizeRank.value > 0 && rank > lastPrizeRank.value) return 0
   const amount = prizeTable.value[rank]
   if (amount !== undefined && amount > 0) return amount
   if (!hasPrizeTable.value && rank === 1) {
@@ -437,18 +440,75 @@ function teamPrizeTotal(rank: number): number {
 }
 
 function prizeAmountForRow(index: number, row: RankRow): number {
+  if (!isPayableRow(row)) return 0
   const rank = prizeRankForRow(index, row)
   const teamTotal = teamPrizeTotal(rank)
   if (teamTotal <= 0) return 0
-
-  const seatMode = tournament.value?.seat_mode ?? 1
-  if (seatMode <= 1) return teamTotal
-
-  const teammates = teammatesAtRank(rank)
-  const shares = splitTeamShares(teamTotal, Math.max(1, teammates.length))
-  const position = teammates.findIndex((item) => item.user_id === row.user_id)
-  return shares[position >= 0 ? position : 0] ?? 0
+  return rosterSlotShare(teamTotal, seatMode.value)
 }
+
+interface PaymentPreviewRow {
+  key: string
+  rank: number
+  username: string
+  cod_id?: string | null
+  amount: number
+  status: 'confirmed' | 'unconfirmed'
+  statusLabel: string
+}
+
+const paymentPreview = computed<PaymentPreviewRow[]>(() => {
+  const rows: PaymentPreviewRow[] = []
+  const last = lastPrizeRank.value || rankedRows.value.length
+  const used = new Set<number>()
+
+  for (let rank = 1; rank <= last; rank++) {
+    const present = teammatesAtRank(rank)
+    if (present.length === 0) continue
+    const share = rosterSlotShare(teamPrizeTotal(rank), seatMode.value)
+    present.forEach((row) => {
+      if (row.user_id) used.add(row.user_id)
+      rows.push({
+        key: `p-${rank}-${row.user_id}`,
+        rank,
+        username: row.username,
+        cod_id: row.cod_id,
+        amount: share,
+        status: 'confirmed',
+        statusLabel: 'تأیید شده',
+      })
+    })
+
+    const missing = Math.max(0, seatMode.value - present.length)
+    for (let i = 0; i < missing; i++) {
+      const absent = unusedParticipants.value.find((p) => {
+        if (used.has(p.user_id)) return false
+        const presentSeat = present[0]?.seat_number
+        if (!presentSeat || !p.seat_number) return false
+        return Math.ceil(p.seat_number / seatMode.value) === Math.ceil(presentSeat / seatMode.value)
+      })
+      if (absent) used.add(absent.user_id)
+      rows.push({
+        key: `a-${rank}-${absent?.user_id ?? i}`,
+        rank,
+        username: absent?.username || 'غایب / خارج از لیدربرد',
+        cod_id: absent?.cod_id,
+        amount: 0,
+        status: 'unconfirmed',
+        statusLabel: 'عدم تأیید',
+      })
+    }
+  }
+
+  return rows
+})
+
+const payablePreviewTotal = computed(() =>
+  paymentPreview.value.reduce((sum, row) => sum + (row.status === 'confirmed' ? row.amount : 0), 0),
+)
+
+const prizeBudget = computed(() => Number(tournament.value?.prize_pool ?? 0))
+const unpaidLeftover = computed(() => Math.max(0, prizeBudget.value - payablePreviewTotal.value))
 
 function formatToman(amount: number): string {
   return Number(amount || 0).toLocaleString('fa-IR')
@@ -490,7 +550,7 @@ async function applyResult() {
     return
   }
 
-  if (!confirm('نتیجه مسابقه با رتبه‌بندی فعلی ثبت شود؟ جوایز پس از تأیید ادمین واریز می‌شوند.')) {
+  if (!confirm('پیش‌نمایش پرداخت ثبت شود؟ تا تأیید مدیر هیچ واریزی انجام نمی‌شود.')) {
     return
   }
 
@@ -499,11 +559,13 @@ async function applyResult() {
   success.value = null
 
   const playerStats = rankedRows.value.flatMap((row, index) => {
-    if (!row.user_id) return []
+    if (!isPayableRow(row) || !row.user_id) return []
     const rank = prizeRankForRow(index, row)
+    if (rank < 1) return []
+    if (lastPrizeRank.value > 0 && rank > lastPrizeRank.value) return []
     return [{
       user_id: row.user_id,
-      rank: rank > 0 ? rank : undefined,
+      rank,
       kills: row.kills ?? undefined,
     }]
   })
@@ -692,7 +754,7 @@ onBeforeUnmount(() => {
     <div v-if="analysis" class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6">
       <h2 class="font-bold text-white mb-2">۴. مرتب‌سازی رتبه‌ها و پیش‌نمایش جوایز</h2>
       <p class="text-sm text-gray-400 mb-2">
-        ردیف‌ها را بکشید یا با فلش جابه‌جا کنید. حذف تیم متخلف، تیم‌های بعدی را بالا می‌آورد و جایزه‌شان از جدول رتبه جدید خوانده می‌شود.
+        حذف تیم متخلف، همه تیم‌های پایین‌تر را به همان ترتیب بالا می‌آورد تا تعداد برنده‌ها کم نشود. جایزه نفر غایب صفر می‌ماند.
       </p>
       <p v-if="analysis.vision_model" class="text-xs text-gray-500 mb-2">
         مدل تحلیل:
@@ -729,8 +791,9 @@ onBeforeUnmount(() => {
         </span>
       </p>
       <p v-if="hasPrizeTable" class="text-sm text-secondary mb-4">
-        جوایز از توضیحات / جدول prize ranks خوانده می‌شود. در بازی تیمی هر مبلغ «جایزه کل تیم» است و بین هم‌تیمی‌ها تقسیم می‌شود.
-        مجموع پیش‌نمایش: <span class="font-bold">{{ formatToman(totalPrizePreview) }} تومان</span>
+        جایزه هر رتبه بین ظرفیت تیم تقسیم می‌شود. تیم تک‌نفره فقط سهم خودش را می‌گیرد (مثلاً نصف جایزه دو نفره).
+        مجموع قابل واریز: <span class="font-bold">{{ formatToman(payablePreviewTotal) }} تومان</span>
+        <span v-if="unpaidLeftover > 0" class="text-amber-300"> — باقیمانده: {{ formatToman(unpaidLeftover) }} تومان</span>
       </p>
       <p v-else class="text-sm text-amber-300/90 mb-4">
         جدول جایزه در توضیحات مسابقه پیدا نشد؛ فقط جایزه نفر اول (prize pool) پیش‌نمایش می‌شود.
@@ -811,6 +874,38 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <div v-if="paymentPreview.length" class="mb-6 rounded-xl border border-secondary/30 bg-secondary/5 overflow-x-auto">
+        <div class="px-4 py-3 border-b border-dark-600">
+          <h3 class="font-bold text-white text-sm">پیش‌نمایش نهایی پرداخت</h3>
+          <p class="text-xs text-gray-400 mt-1">تا تأیید مدیر در صفحه جوایز هیچ واریزی انجام نمی‌شود.</p>
+        </div>
+        <table class="w-full text-sm min-w-[640px]">
+          <thead>
+            <tr class="text-gray-400">
+              <th class="py-2 px-3 text-right">رتبه</th>
+              <th class="py-2 px-3 text-right">بازیکن</th>
+              <th class="py-2 px-3 text-right">وضعیت</th>
+              <th class="py-2 px-3 text-right">مبلغ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in paymentPreview" :key="row.key" class="border-t border-dark-700">
+              <td class="py-2 px-3 text-white">{{ row.rank }}</td>
+              <td class="py-2 px-3">
+                <div class="text-white">{{ row.username }}</div>
+                <div v-if="row.cod_id" class="text-xs text-gray-500 font-mono" dir="ltr">{{ row.cod_id }}</div>
+              </td>
+              <td class="py-2 px-3" :class="row.status === 'confirmed' ? 'text-green-300' : 'text-amber-300'">
+                {{ row.statusLabel }}
+              </td>
+              <td class="py-2 px-3 font-bold" :class="row.amount > 0 ? 'text-green-300' : 'text-gray-500'">
+                {{ formatToman(row.amount) }} ت
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div class="flex flex-wrap gap-3 items-center border-t border-dark-600 pt-4">
         <div v-if="winnerPreview" class="text-sm text-green-300">
           برنده: <span class="font-bold" dir="ltr">{{ winnerPreview.cod_id || winnerPreview.username }}</span> (رتبه ۱)
@@ -821,7 +916,7 @@ onBeforeUnmount(() => {
           :disabled="applying || !winnerPreview?.user_id"
           @click="applyResult"
         >
-          {{ applying ? 'در حال ثبت...' : 'ثبت نتیجه' }}
+          {{ applying ? 'در حال ثبت...' : 'ثبت پیش‌نمایش و انتظار تأیید' }}
         </button>
       </div>
     </div>
