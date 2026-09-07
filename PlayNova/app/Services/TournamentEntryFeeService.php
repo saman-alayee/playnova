@@ -33,11 +33,7 @@ class TournamentEntryFeeService
     public function charge(User $user, Tournament $tournament): void
     {
         $reference = $this->feeReference($tournament->id, $user->id);
-        $fee = (float) $tournament->entry_fee;
-
-        if ($fee <= 0) {
-            return;
-        }
+        $fee = max(0, (float) $tournament->entry_fee);
 
         if ($this->hasPaid($user, $tournament)) {
             return;

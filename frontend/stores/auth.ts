@@ -19,12 +19,18 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (state) => !!state.user && !!state.token,
     isAdmin: (state) => !!state.user?.is_admin,
     isSeatAdmin: (state) => !!state.user?.is_seat_admin,
+    isSeatOnlyAdmin: (state) => !!state.user?.is_seat_admin && !state.user?.is_admin,
+    staffHome: (state) => {
+      if (state.user?.is_admin) return '/admin'
+      if (state.user?.is_seat_admin) return '/admin/tournament-seats'
+      return '/'
+    },
     displayName: (state) => state.user?.username || state.user?.name || '',
     walletBalance: (state) => parseAmount(state.user?.wallet),
     logoUrl: (state) => state.settings?.logo_url || null,
     needsKycRedirect: (state) => {
       const user = state.user
-      if (!user || user.is_admin) return false
+      if (!user || user.is_admin || user.is_seat_admin) return false
       if (user.kyc_verified || user.kyc_verified_at) return false
 
       const status = user.kyc_submission_status

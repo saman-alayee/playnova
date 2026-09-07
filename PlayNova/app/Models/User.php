@@ -175,6 +175,83 @@ class User extends Authenticatable
         return $value === '' ? null : mb_strtolower($value);
     }
 
+    public static function asciiDigits(string $value): string
+    {
+        return strtr($value, [
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+        ]);
+    }
+
+    /** @param  \Illuminate\Database\Eloquent\Builder<self>  $query */
+    public function scopeMatchingAdminSearch($query, string $term)
+    {
+        $term = trim($term);
+        if ($term === '') {
+            return $query;
+        }
+
+        $ascii = trim(self::asciiDigits($term));
+        $compact = preg_replace('/\s+/u', '', $ascii) ?: $ascii;
+        $needle = mb_strtolower($ascii);
+        $like = '%' . addcslashes($ascii, '%_\\') . '%';
+        $likeLower = '%' . addcslashes($needle, '%_\\') . '%';
+
+        return $query->where(function ($q) use ($ascii, $compact, $like, $likeLower, $needle) {
+            $q->where('username', 'like', $like)
+                ->orWhere('name', 'like', $like)
+                ->orWhere('email', 'like', $like)
+                ->orWhere('mobile', 'like', $like)
+                ->orWhere('cod_id', 'like', $like)
+                ->orWhere('referral_code', 'like', $like)
+                ->orWhereRaw('LOWER(TRIM(username)) LIKE ?', [$likeLower])
+                ->orWhereRaw('LOWER(TRIM(cod_id)) LIKE ?', [$likeLower])
+                ->orWhereRaw('LOWER(TRIM(name)) LIKE ?', [$likeLower]);
+
+            if (preg_match('/^\d+$/', $compact)) {
+                $q->orWhere('id', (int) $compact);
+
+                foreach (self::mobileSearchVariants($compact) as $mobile) {
+                    $q->orWhere('mobile', 'like', '%' . addcslashes($mobile, '%_\\') . '%');
+                }
+            }
+
+            $codKey = self::normalizeCodIdKey($ascii);
+            if ($codKey !== null && $codKey !== $needle) {
+                $q->orWhereRaw('LOWER(TRIM(cod_id)) LIKE ?', ['%' . addcslashes($codKey, '%_\\') . '%']);
+            }
+        });
+    }
+
+    /** @return list<string> */
+    public static function mobileSearchVariants(string $digits): array
+    {
+        $digits = ltrim(preg_replace('/\D+/', '', self::asciiDigits($digits)) ?: '', '+');
+        if ($digits === '') {
+            return [];
+        }
+
+        $variants = [$digits];
+
+        if (str_starts_with($digits, '98') && strlen($digits) >= 12) {
+            $national = '0' . substr($digits, 2);
+            $withoutZero = substr($digits, 2);
+            $variants[] = $national;
+            $variants[] = $withoutZero;
+        } elseif (str_starts_with($digits, '0') && strlen($digits) >= 10) {
+            $withoutZero = ltrim($digits, '0');
+            $variants[] = $withoutZero;
+            $variants[] = '98' . $withoutZero;
+        } elseif (str_starts_with($digits, '9') && strlen($digits) === 10) {
+            $variants[] = '0' . $digits;
+            $variants[] = '98' . $digits;
+        }
+
+        return array_values(array_unique(array_filter($variants)));
+    }
+
     public static function usernameIsTaken(?string $username, ?int $exceptUserId = null): bool
     {
         $normalized = self::normalizeUsernameKey($username);

@@ -104,8 +104,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('tournaments/{tournament}/select-seat', [TournamentController::class, 'storeSeat'])->middleware('throttle:register');
     Route::get('tournaments/{tournament}/game-login', [TournamentController::class, 'gameLoginInfo']);
 
-    Route::get('admin/tournament-seats', [TournamentSeatAdminController::class, 'index']);
-    Route::get('admin/tournament-seats/{tournament}', [TournamentSeatAdminController::class, 'show']);
+    Route::get('admin/tournament-seats', [TournamentSeatAdminController::class, 'index'])->middleware('seat_admin');
+    Route::get('admin/tournament-seats/{tournament}', [TournamentSeatAdminController::class, 'show'])->middleware('seat_admin');
 
     Route::prefix('admin')->middleware(['admin', 'admin.cache.invalidate'])->group(function () {
         Route::get('dashboard', [AdminDashboardController::class, 'index']);

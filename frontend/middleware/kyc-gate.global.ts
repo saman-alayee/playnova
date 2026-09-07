@@ -5,7 +5,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     await auth.init()
   }
 
-  if (!auth.isAuthenticated || auth.isAdmin) {
+  if (!auth.isAuthenticated || auth.isAdmin || auth.isSeatAdmin) {
     return
   }
 

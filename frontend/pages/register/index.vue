@@ -36,7 +36,7 @@ if (!auth.initialized) {
 }
 
 if (auth.isAuthenticated) {
-  await navigateTo(auth.isAdmin ? '/admin' : '/profile')
+  await navigateTo(auth.isAdmin ? '/admin' : (auth.isSeatAdmin ? '/admin/tournament-seats' : '/profile'))
 }
 
 async function submit() {

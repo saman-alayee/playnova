@@ -1,10 +1,17 @@
 <script setup lang="ts">
 const route = useRoute()
+const auth = useAuthStore()
 const { help } = useAdminHelp()
 
 const storageKey = computed(() => `admin-help-collapsed:${route.path}`)
 
 const collapsed = ref(false)
+
+const visibleLinks = computed(() => {
+  const links = help.value?.links ?? []
+  if (auth.isAdmin || !auth.isSeatOnlyAdmin) return links
+  return links.filter(link => link.to === '/admin/tournament-seats' || link.to.startsWith('/admin/tournament-seats/'))
+})
 
 onMounted(() => {
   if (import.meta.client) {
@@ -43,9 +50,9 @@ function toggle() {
       <ul class="admin-help__list">
         <li v-for="(tip, i) in help.tips" :key="i">{{ tip }}</li>
       </ul>
-      <div v-if="help.links?.length" class="admin-help__links">
+      <div v-if="visibleLinks.length" class="admin-help__links">
         <NuxtLink
-          v-for="link in help.links"
+          v-for="link in visibleLinks"
           :key="link.to"
           :to="link.to"
           class="admin-help__link"

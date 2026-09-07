@@ -13,13 +13,7 @@ class UserController extends BaseAdminController
     {
         $query = User::query();
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('username', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('cod_id', 'like', "%{$search}%");
-            });
+            $query->matchingAdminSearch(trim((string) $request->search));
         }
         $users = $query
             ->with(['registrations' => function ($q) {

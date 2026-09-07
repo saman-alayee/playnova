@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Tournament } from '~/types/api'
+import { toApiDateTime } from '~/utils/jalali'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -49,7 +50,7 @@ watch(tournament, (t) => {
     prize_pool: t.prize_pool,
     capacity: t.capacity,
     seat_mode: t.seat_mode || 2,
-    start_date: t.start_date || '',
+    start_date: toApiDateTime(t.start_date) || t.start_date || '',
     end_date: t.end_date ? t.end_date.slice(0, 16) : '',
     status: t.status,
     winner_id: t.winner_id ?? null,

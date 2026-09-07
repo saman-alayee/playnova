@@ -35,9 +35,8 @@ watch(pickerValue, (value) => {
   if (syncing.value) return
 
   const apiValue = pickerValueToApiDateTime(value)
-  if (apiValue !== props.modelValue) {
-    emit('update:modelValue', apiValue)
-  }
+  if (!apiValue || apiValue === props.modelValue) return
+  emit('update:modelValue', apiValue)
 })
 
 const preview = computed(() => {
@@ -54,9 +53,9 @@ const preview = computed(() => {
         type="datetime"
         mode="single"
         locale="fa"
-        format="jYYYY/jMM/jDD HH:mm"
+        format="YYYY-MM-DD HH:mm"
         input-format="jYYYY/jMM/jDD HH:mm"
-        display-format="?D ?MMMM ?YYYY — HH:mm"
+        display-format="jD jMMMM jYYYY — HH:mm"
         :clearable="!required"
         :shortcut="true"
         icon-inside

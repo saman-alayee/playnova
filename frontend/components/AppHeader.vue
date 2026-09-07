@@ -44,6 +44,13 @@ function isActive(path: string) {
             <NuxtLink v-if="auth.isAdmin" to="/admin" :class="{ 'is-active': isActive('/admin') }">
               پنل مدیریت
             </NuxtLink>
+            <NuxtLink
+              v-else-if="auth.isSeatAdmin"
+              to="/admin/tournament-seats"
+              :class="{ 'is-active': isActive('/admin/tournament-seats') }"
+            >
+              جایگاه‌ها
+            </NuxtLink>
           </template>
         </nav>
 

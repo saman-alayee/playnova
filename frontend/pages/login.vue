@@ -18,7 +18,7 @@ if (!auth.initialized) {
 }
 
 if (auth.isAuthenticated) {
-  await navigateTo(auth.isAdmin ? '/admin' : '/profile')
+  await navigateTo(auth.isAdmin ? '/admin' : (auth.isSeatAdmin ? '/admin/tournament-seats' : '/profile'))
 }
 
 async function submit() {
@@ -36,8 +36,15 @@ async function submit() {
       answer: captchaAnswer.value,
     })
     flash.value = { success: 'با موفقیت وارد شدید.' }
-    const redirect = (route.query.redirect as string) || '/'
-    await navigateTo(redirect)
+    const requested = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const safeRequested = requested.startsWith('/') && !requested.startsWith('//') ? requested : ''
+    const seatOnlyBlocked = auth.isSeatOnlyAdmin
+      && safeRequested.startsWith('/admin')
+      && !safeRequested.startsWith('/admin/tournament-seats')
+    const dest = (!safeRequested || safeRequested === '/' || seatOnlyBlocked)
+      ? (auth.isAdmin ? '/admin' : (auth.isSeatAdmin ? '/admin/tournament-seats' : '/'))
+      : safeRequested
+    await navigateTo(dest)
   } catch (e: unknown) {
     const err = e as { message?: string; data?: { errors?: Record<string, string[]> } }
     if (err.data?.errors) {

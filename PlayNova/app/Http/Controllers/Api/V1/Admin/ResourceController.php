@@ -78,19 +78,7 @@ class ResourceController extends BaseApiController
             ->withCount('registrations');
 
         if ($request->filled('search')) {
-            $search = trim((string) $request->search);
-            $query->where(function ($q) use ($search) {
-                if (ctype_digit($search)) {
-                    $q->orWhere('id', (int) $search);
-                }
-
-                $q->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('cod_id', 'like', "%{$search}%")
-                    ->orWhere('username', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('referral_code', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%");
-            });
+            $query->matchingAdminSearch(trim((string) $request->search));
         }
 
         $role = (string) $request->query('role', 'all');
@@ -149,11 +137,7 @@ class ResourceController extends BaseApiController
 
         if ($request->filled('user_search')) {
             $search = trim((string) $request->user_search);
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('username', 'like', "%{$search}%")
-                    ->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('cod_id', 'like', "%{$search}%");
-            });
+            $query->whereHas('user', fn ($q) => $q->matchingAdminSearch($search));
         }
 
         $withdrawals = $query->orderByDesc('created_at')->paginate(30);
@@ -205,11 +189,7 @@ class ResourceController extends BaseApiController
 
         if ($request->filled('user_search')) {
             $search = trim((string) $request->user_search);
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('username', 'like', "%{$search}%")
-                    ->orWhere('mobile', 'like', "%{$search}%")
-                    ->orWhere('cod_id', 'like', "%{$search}%");
-            });
+            $query->whereHas('user', fn ($q) => $q->matchingAdminSearch($search));
         }
 
         if ($request->filled('tx_type') && $request->tx_type !== 'all') {
