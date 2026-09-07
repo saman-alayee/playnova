@@ -9,6 +9,7 @@ use App\Models\TournamentPrizeEntry;
 use App\Models\User;
 use App\Modules\Audit\Services\ActivityLogService;
 use App\Services\TournamentPrizeTableParser;
+use App\Support\PlacementRankCompactor;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -120,6 +121,7 @@ class TournamentPrizeService
                 ->all();
         }
 
+        $rows = PlacementRankCompactor::compact($rows);
         $rows = $this->expandTeammates($tournament, $rows, $registrations);
 
         return $this->assignPrizeAmounts($tournament, $rows, $prizeTable);
@@ -172,31 +174,23 @@ class TournamentPrizeService
             $teamRank[$team] = isset($teamRank[$team]) ? min($teamRank[$team], $rank) : $rank;
         }
 
-        foreach ($registrations as $reg) {
-            $team = $tournament->teamNumberForSeat((int) $reg->seat_number);
+        foreach ($byUser as $userId => $row) {
+            $seat = isset($row['seat_number']) ? (int) $row['seat_number'] : null;
+            if (! $seat) {
+                $reg = $registrations->get($userId);
+                $seat = $reg?->seat_number ? (int) $reg->seat_number : null;
+            }
+
+            $team = $tournament->teamNumberForSeat($seat);
             if (! $team || ! isset($teamRank[$team])) {
                 continue;
             }
 
-            $userId = (int) $reg->user_id;
-            $seatNumber = (int) $reg->seat_number;
-            $label = $tournament->seatDisplayLabel($seatNumber);
-
-            if (! isset($byUser[$userId])) {
-                $byUser[$userId] = [
-                    'user_id' => $userId,
-                    'rank' => $teamRank[$team],
-                    'kills' => null,
-                    'team_label' => $label,
-                    'seat_number' => $seatNumber,
-                ];
-
-                continue;
-            }
-
             $byUser[$userId]['rank'] = $teamRank[$team];
-            $byUser[$userId]['seat_number'] = $byUser[$userId]['seat_number'] ?: $seatNumber;
-            $byUser[$userId]['team_label'] = $byUser[$userId]['team_label'] ?: $label;
+            if ($seat && empty($byUser[$userId]['seat_number'])) {
+                $byUser[$userId]['seat_number'] = $seat;
+                $byUser[$userId]['team_label'] = $byUser[$userId]['team_label'] ?: $tournament->seatDisplayLabel($seat);
+            }
         }
 
         return array_values($byUser);

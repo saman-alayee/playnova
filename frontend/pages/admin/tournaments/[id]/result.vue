@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TournamentResultAnalysis, TournamentResultParticipant } from '~/types/api'
+import { moveGroupTo, placementRankFor, teamIndexRange } from '~/utils/placementRanks'
 
 definePageMeta({ middleware: 'admin', layout: 'admin' })
 
@@ -311,46 +312,69 @@ async function analyze(mode: 'image' | 'video-frame' | 'video-multi' = 'image') 
   }
 }
 
-function moveRow(from: number, to: number) {
-  if (from === to || from < 0 || to < 0 || from >= rankedRows.value.length || to >= rankedRows.value.length) {
-    return
-  }
-  const rows = [...rankedRows.value]
-  const [item] = rows.splice(from, 1)
-  rows.splice(to, 0, item)
-  rankedRows.value = rows
-}
-
 function onDragStart(index: number) {
   dragIndex.value = index
 }
 
 function onDrop(index: number) {
   if (dragIndex.value === null) return
-  moveRow(dragIndex.value, index)
+  rankedRows.value = moveGroupTo(rankedRows.value, dragIndex.value, index)
   dragIndex.value = null
 }
 
+function canMoveUp(index: number): boolean {
+  return teamIndexRange(rankedRows.value, index).start > 0
+}
+
+function canMoveDown(index: number): boolean {
+  return teamIndexRange(rankedRows.value, index).end < rankedRows.value.length - 1
+}
+
 function moveUp(index: number) {
-  moveRow(index, index - 1)
+  if (!canMoveUp(index)) return
+  const previous = teamIndexRange(rankedRows.value, teamIndexRange(rankedRows.value, index).start - 1)
+  rankedRows.value = moveGroupTo(rankedRows.value, index, previous.start)
 }
 
 function moveDown(index: number) {
-  moveRow(index, index + 1)
+  if (!canMoveDown(index)) return
+  const next = teamIndexRange(rankedRows.value, teamIndexRange(rankedRows.value, index).end + 1)
+  rankedRows.value = moveGroupTo(rankedRows.value, index, next.start)
 }
 
 function addParticipant(participant: TournamentResultParticipant) {
+  const used = rankedRows.value
+    .map((row) => row.rank)
+    .filter((rank): rank is number => typeof rank === 'number' && rank > 0)
+  const nextRank = used.length ? Math.max(...used) + 1 : rankedRows.value.length + 1
+
   rankedRows.value.push({
     key: `add-${participant.user_id}-${Date.now()}`,
     user_id: participant.user_id,
     username: participant.username,
     cod_id: participant.cod_id,
     kills: null,
-    rank: null,
+    rank: nextRank,
   })
 }
 
 function removeRow(index: number) {
+  const row = rankedRows.value[index]
+  if (!row) return
+
+  const seatMode = tournament.value?.seat_mode ?? 1
+  const teamSize = row.rank && row.rank > 0
+    ? rankedRows.value.filter((item) => item.rank === row.rank).length
+    : 1
+
+  if (seatMode > 1 && teamSize > 1) {
+    if (!confirm('کل این تیم از رتبه‌بندی حذف شود؟ تیم‌های بعدی بالا می‌آیند و جایزه‌شان به‌روز می‌شود.')) {
+      return
+    }
+    rankedRows.value = rankedRows.value.filter((item) => item.rank !== row.rank)
+    return
+  }
+
   rankedRows.value.splice(index, 1)
 }
 
@@ -395,9 +419,8 @@ function splitTeamShares(total: number, count: number): number[] {
   return shares
 }
 
-function prizeRankForRow(index: number, row: RankRow): number {
-  if (row.rank && row.rank > 0) return row.rank
-  return index + 1
+function prizeRankForRow(index: number, row?: RankRow): number {
+  return placementRankFor(rankedRows.value, index)
 }
 
 function teammatesAtRank(rank: number): RankRow[] {
@@ -475,13 +498,15 @@ async function applyResult() {
   error.value = null
   success.value = null
 
-  const playerStats = rankedRows.value
-    .filter((row) => row.user_id)
-    .map((row, index) => ({
-      user_id: row.user_id!,
-      rank: row.rank ?? prizeRankForRow(index, row),
+  const playerStats = rankedRows.value.flatMap((row, index) => {
+    if (!row.user_id) return []
+    const rank = prizeRankForRow(index, row)
+    return [{
+      user_id: row.user_id,
+      rank: rank > 0 ? rank : undefined,
       kills: row.kills ?? undefined,
-    }))
+    }]
+  })
 
   try {
     const result = await api.admin.applyTournamentResult(tournamentId.value, {
@@ -667,7 +692,7 @@ onBeforeUnmount(() => {
     <div v-if="analysis" class="bg-dark-800 border border-dark-600 rounded-xl p-6 mb-6">
       <h2 class="font-bold text-white mb-2">۴. مرتب‌سازی رتبه‌ها و پیش‌نمایش جوایز</h2>
       <p class="text-sm text-gray-400 mb-2">
-        ردیف‌ها را بکشید یا با دکمه‌ها جابه‌جا کنید. رتبه ۱ = برنده.
+        ردیف‌ها را بکشید یا با فلش جابه‌جا کنید. حذف تیم متخلف، تیم‌های بعدی را بالا می‌آورد و جایزه‌شان از جدول رتبه جدید خوانده می‌شود.
       </p>
       <p v-if="analysis.vision_model" class="text-xs text-gray-500 mb-2">
         مدل تحلیل:
@@ -732,7 +757,7 @@ onBeforeUnmount(() => {
           @drop.prevent="onDrop(index)"
         >
           <span class="w-8 h-8 flex items-center justify-center rounded-full bg-secondary text-white text-sm font-bold shrink-0">
-            {{ prizeRankForRow(index, row) }}
+            {{ prizeRankForRow(index, row) || '—' }}
           </span>
           <span class="text-gray-500 text-lg shrink-0">⠿</span>
           <div class="flex-1 min-w-[180px]">
@@ -761,9 +786,14 @@ onBeforeUnmount(() => {
             class="w-20 bg-dark-800 border border-dark-600 rounded px-2 py-1 text-white text-sm"
           >
           <div class="flex gap-1 shrink-0">
-            <button type="button" class="px-2 py-1 text-xs bg-dark-600 rounded" :disabled="index === 0" @click="moveUp(index)">↑</button>
-            <button type="button" class="px-2 py-1 text-xs bg-dark-600 rounded" :disabled="index === rankedRows.length - 1" @click="moveDown(index)">↓</button>
-            <button type="button" class="px-2 py-1 text-xs bg-red-900/50 text-red-300 rounded" @click="removeRow(index)">×</button>
+            <button type="button" class="px-2 py-1 text-xs bg-dark-600 rounded" :disabled="!canMoveUp(index)" @click="moveUp(index)">↑</button>
+            <button type="button" class="px-2 py-1 text-xs bg-dark-600 rounded" :disabled="!canMoveDown(index)" @click="moveDown(index)">↓</button>
+            <button
+              type="button"
+              class="px-2 py-1 text-xs bg-red-900/50 text-red-300 rounded"
+              :title="(tournament?.seat_mode ?? 1) > 1 ? 'حذف تیم' : 'حذف'"
+              @click="removeRow(index)"
+            >×</button>
           </div>
         </div>
       </div>
