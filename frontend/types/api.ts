@@ -219,6 +219,7 @@ export interface TournamentShowData {
   tournament: Tournament
   is_registered: boolean
   pending_seat: boolean
+  pending_team?: boolean
   registration?: Registration | null
   occupied_seats?: Record<string, OccupiedSeatInfo>
   teams_grid?: SeatGridTeam[]

@@ -6,14 +6,33 @@ const api = useApi()
 
 const pending = ref<TeamInvite[]>([])
 const sent = ref<TeamInvite[]>([])
+const sentTournamentIds = useState<number[]>('team-invite-sent-tournament-ids', () => [])
+const bannerSynced = useState('team-invite-banner-synced', () => false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function inviteSignature(items: TeamInvite[]) {
+  return items.map((invite) => invite.id).join(',')
+}
 
 async function refresh(force = false) {
   if (!auth.isAuthenticated || (import.meta.client && document.hidden && !force)) return
   try {
     const data = await api.teamInvites.banner()
-    pending.value = data.pending || []
-    sent.value = data.sent || []
+    const nextPending = data.pending || []
+    const nextSent = data.sent || []
+    const previousSignature = `${inviteSignature(pending.value)}|${inviteSignature(sent.value)}`
+    const nextSignature = `${inviteSignature(nextPending)}|${inviteSignature(nextSent)}`
+
+    pending.value = nextPending
+    sent.value = nextSent
+    sentTournamentIds.value = nextSent
+      .map((invite) => Number(invite.tournament_id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+    bannerSynced.value = true
+
+    if (previousSignature !== nextSignature) {
+      void refreshNuxtData('home')
+    }
   } catch {
     if (force) {
       pending.value = []
@@ -72,6 +91,8 @@ watch(() => auth.isAuthenticated, (val) => {
     stopPolling()
     pending.value = []
     sent.value = []
+    sentTournamentIds.value = []
+    bannerSynced.value = false
   }
 })
 </script>

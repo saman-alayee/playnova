@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Registration;
+use App\Models\TeamInvite;
 use App\Models\Tournament;
 use App\Models\User;
 use App\Modules\Content\Services\ContentCacheService;
 use App\Modules\Tournament\Services\TournamentListingService;
+use App\Services\TeamInviteService;
 use App\Services\TournamentEntryFeeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -104,8 +106,18 @@ class TournamentController extends Controller
         }
 
         if ($registration->seat_number === null && ($registration->reservation_type ?? 'solo') === 'team') {
-            return redirect()->route('home')
-                ->with('info', 'درخواست رزرو تیمی شما در انتظار تأیید هم‌تیمی است.');
+            app(TeamInviteService::class)->expireOverdueForUser((int) $user->id);
+
+            $hasPendingTeamInvite = TeamInvite::query()
+                ->activePending()
+                ->where('inviter_id', $user->id)
+                ->where('tournament_id', $tournament->id)
+                ->exists();
+
+            if ($hasPendingTeamInvite) {
+                return redirect()->route('home')
+                    ->with('info', 'درخواست رزرو تیمی شما در انتظار تأیید هم‌تیمی است.');
+            }
         }
 
         if ($registration->seat_number !== null) {

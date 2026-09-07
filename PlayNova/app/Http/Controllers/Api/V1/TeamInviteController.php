@@ -132,6 +132,11 @@ class TeamInviteController extends BaseApiController
 
         $participantIds = array_merge([$userId], $inviteeIds);
 
+        $this->teamInvites->expireOverdueForUser($userId);
+        foreach ($inviteeIds as $inviteeId) {
+            $this->teamInvites->expireOverdueForUser((int) $inviteeId);
+        }
+
         $existingReg = Registration::where('tournament_id', $tournament->id)
             ->whereIn('user_id', $participantIds)
             ->where(function ($q) use ($userId) {
@@ -154,8 +159,9 @@ class TeamInviteController extends BaseApiController
             ->where('status', TeamInvite::STATUS_PENDING)
             ->update(['status' => TeamInvite::STATUS_CANCELLED]);
 
-        $pendingInvite = TeamInvite::where('tournament_id', $tournament->id)
-            ->where('status', TeamInvite::STATUS_PENDING)
+        $pendingInvite = TeamInvite::query()
+            ->activePending()
+            ->where('tournament_id', $tournament->id)
             ->where(function ($q) use ($participantIds) {
                 $q->whereIn('inviter_id', $participantIds)
                     ->orWhereIn('invitee_id', $participantIds);
@@ -268,7 +274,7 @@ class TeamInviteController extends BaseApiController
     {
         $user = $request->user();
 
-        if ((int) $invite->invitee_id !== (int) $user->id || ! $invite->isPending()) {
+        if ((int) $invite->invitee_id !== (int) $user->id || ! $invite->isOpen()) {
             return $this->error('دسترسی غیرمجاز.', 403);
         }
 
@@ -311,7 +317,7 @@ class TeamInviteController extends BaseApiController
     {
         $user = $request->user();
 
-        if ((int) $invite->inviter_id !== (int) $user->id || ! $invite->isPending()) {
+        if ((int) $invite->inviter_id !== (int) $user->id || ! $invite->isOpen()) {
             return $this->error('دسترسی غیرمجاز.', 403);
         }
 

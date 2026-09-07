@@ -18,6 +18,7 @@ const { data, pending, error, refresh } = usePageData(
 const tournament = computed(() => data.value?.tournament)
 const isRegistered = computed(() => data.value?.is_registered ?? false)
 const pendingSeat = computed(() => data.value?.pending_seat ?? false)
+const pendingTeam = computed(() => data.value?.pending_team ?? false)
 const registration = computed(() => data.value?.registration)
 const teamsGrid = computed(() => data.value?.teams_grid || [])
 const occupiedSeats = computed(() => (data.value?.occupied_seats || {}) as Record<number, OccupiedSeatInfo>)
@@ -138,6 +139,13 @@ const statusColor: Record<string, string> = {
               — جایگاه: <strong dir="ltr">{{ registration.seat_label || registration.seat_number }}</strong>
             </span>
             <span v-if="myTeamLabel"> — {{ myTeamLabel }}</span>
+          </div>
+
+          <div
+            v-else-if="pendingTeam"
+            class="bg-dark-700 border border-dark-500 text-gray-300 rounded-lg p-3 text-center text-sm mb-4"
+          >
+            در انتظار تأیید هم‌تیمی
           </div>
 
           <div v-else-if="pendingSeat" class="space-y-3 mb-4">

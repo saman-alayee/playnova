@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class TeamInvite extends Model
@@ -58,9 +59,22 @@ class TeamInvite extends Model
         return $this->belongsTo(User::class, 'invitee_id');
     }
 
+    public function isOpen(): bool
+    {
+        return $this->status === self::STATUS_PENDING;
+    }
+
     public function isPending(): bool
     {
-        return $this->status === self::STATUS_PENDING && ! $this->isExpired();
+        return $this->isOpen() && ! $this->isExpired();
+    }
+
+    public function scopeActivePending(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_PENDING)
+            ->where(function (Builder $expires) {
+                $expires->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            });
     }
 
     public function isExpired(): bool

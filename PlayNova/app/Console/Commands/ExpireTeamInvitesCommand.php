@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\ExpireTeamInviteJob;
 use App\Models\TeamInvite;
+use App\Services\TeamInviteService;
 use Illuminate\Console\Command;
 
 class ExpireTeamInvitesCommand extends Command
@@ -12,19 +12,19 @@ class ExpireTeamInvitesCommand extends Command
 
     protected $description = 'Expire pending team invites past their deadline';
 
-    public function handle(): int
+    public function handle(TeamInviteService $teamInvites): int
     {
-        $ids = TeamInvite::query()
+        $invites = TeamInvite::query()
             ->where('status', TeamInvite::STATUS_PENDING)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
-            ->pluck('id');
+            ->get();
 
-        foreach ($ids as $id) {
-            ExpireTeamInviteJob::dispatch($id);
+        foreach ($invites as $invite) {
+            $teamInvites->expireIfOverdue($invite);
         }
 
-        $this->info('Queued expiry for ' . $ids->count() . ' invites.');
+        $this->info('Expired ' . $invites->count() . ' invites.');
 
         return self::SUCCESS;
     }

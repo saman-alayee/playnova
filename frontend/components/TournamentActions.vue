@@ -13,6 +13,29 @@ const props = withDefaults(defineProps<{
 const auth = useAuthStore()
 const { closeDescriptionModal, openDescriptionModal, openGameLoginModalById, openRegisterModal, armDescriptionSuppression } = useModals()
 
+const sentTournamentIds = useState<number[]>('team-invite-sent-tournament-ids', () => [])
+const bannerSynced = useState('team-invite-banner-synced', () => false)
+
+const waitingForTeammate = computed(() => {
+  if (bannerSynced.value) {
+    return sentTournamentIds.value.includes(props.tournament.id)
+  }
+
+  return !!props.tournament.pending_team
+})
+
+const canSelectSeat = computed(() => {
+  if (waitingForTeammate.value) {
+    return false
+  }
+
+  if (props.tournament.pending_seat) {
+    return true
+  }
+
+  return bannerSynced.value && !!props.tournament.pending_team
+})
+
 const regCount = computed(() => {
   if (props.regCount !== undefined) return props.regCount
   const count = props.tournament.registrations_count ?? props.tournament.registered_count ?? 0
@@ -72,13 +95,13 @@ function onRegisterClick() {
         </button>
       </template>
       <span
-        v-else-if="tournament.pending_team"
+        v-else-if="waitingForTeammate"
         class="tournament-actions__btn tournament-actions__btn--muted"
       >
         در انتظار تأیید هم‌تیمی
       </span>
       <NuxtLink
-        v-else-if="tournament.pending_seat"
+        v-else-if="canSelectSeat"
         :to="`/tournaments/${tournament.id}/select-seat`"
         class="tournament-actions__btn tournament-actions__btn--primary tournament-actions__btn--success"
       >

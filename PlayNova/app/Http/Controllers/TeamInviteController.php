@@ -190,7 +190,7 @@ class TeamInviteController extends Controller
     {
         $user = Auth::user();
 
-        if ((int) $invite->invitee_id !== (int) $user->id || ! $invite->isPending()) {
+        if ((int) $invite->invitee_id !== (int) $user->id || ! $invite->isOpen()) {
             abort(403);
         }
 
@@ -217,7 +217,7 @@ class TeamInviteController extends Controller
     {
         $user = Auth::user();
 
-        if ((int) $invite->inviter_id !== (int) $user->id || ! $invite->isPending()) {
+        if ((int) $invite->inviter_id !== (int) $user->id || ! $invite->isOpen()) {
             abort(403);
         }
 

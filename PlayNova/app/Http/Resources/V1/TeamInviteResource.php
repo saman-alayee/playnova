@@ -11,6 +11,7 @@ class TeamInviteResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'tournament_id' => $this->tournament_id,
             'status' => $this->status,
             'failure_reason' => $this->failure_reason,
             'seat_number_inviter' => $this->seat_number_inviter,

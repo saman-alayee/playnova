@@ -15,6 +15,7 @@ use App\Modules\Content\Services\ContentCacheService;
 use App\Modules\Tournament\Services\TournamentListingService;
 use App\Modules\Tournament\Services\TournamentRegistrationGuard;
 use App\Modules\Tournament\Services\TournamentRegistrationService;
+use App\Services\TeamInviteService;
 use App\Services\TournamentEntryFeeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,10 @@ use Illuminate\Support\Facades\DB;
 
 class TournamentController extends BaseApiController
 {
+    public function __construct(protected TeamInviteService $teamInvites)
+    {
+    }
+
     public function home(TournamentListingService $listing): JsonResponse
     {
         $payload = $listing->homePayload();
@@ -65,6 +70,8 @@ class TournamentController extends BaseApiController
             return;
         }
 
+        $this->teamInvites->expireOverdueForUser($userId);
+
         $registeredIds = Registration::query()
             ->where('user_id', $userId)
             ->whereIn('tournament_id', $tournamentIds)
@@ -81,9 +88,9 @@ class TournamentController extends BaseApiController
             ->flip();
 
         $pendingTeamIds = TeamInvite::query()
+            ->activePending()
             ->where('inviter_id', $userId)
             ->whereIn('tournament_id', $tournamentIds)
-            ->where('status', TeamInvite::STATUS_PENDING)
             ->pluck('tournament_id')
             ->flip();
 
@@ -104,8 +111,11 @@ class TournamentController extends BaseApiController
         $registration = null;
         $isRegistered = false;
         $pendingSeat = false;
+        $pendingTeam = false;
 
         if (Auth::check()) {
+            $this->teamInvites->expireOverdueForUser((int) Auth::id());
+
             $registration = Registration::where('user_id', Auth::id())
                 ->where('tournament_id', $tournament->id)
                 ->first();
@@ -114,11 +124,12 @@ class TournamentController extends BaseApiController
                 $registration->setRelation('tournament', $tournament);
 
                 $hasPendingTeamInvite = TeamInvite::query()
+                    ->activePending()
                     ->where('inviter_id', Auth::id())
                     ->where('tournament_id', $tournament->id)
-                    ->where('status', TeamInvite::STATUS_PENDING)
                     ->exists();
 
+                $pendingTeam = $registration->seat_number === null && $hasPendingTeamInvite;
                 $pendingSeat = $registration->seat_number === null && ! $hasPendingTeamInvite;
                 $isRegistered = $registration->seat_number !== null;
             }
@@ -130,6 +141,7 @@ class TournamentController extends BaseApiController
             'tournament' => new TournamentResource($tournament),
             'is_registered' => $isRegistered,
             'pending_seat' => $pendingSeat,
+            'pending_team' => $pendingTeam,
             'registration' => $registration ? new RegistrationResource($registration->load('tournament')) : null,
             'occupied_seats' => $occupiedSeats,
         ];
@@ -208,10 +220,12 @@ class TournamentController extends BaseApiController
             return $this->error('ثبت‌نام این مسابقه بسته شده است.', 422);
         }
 
+        $this->teamInvites->expireOverdueForUser((int) $user->id);
+
         $hasPendingTeamInvite = TeamInvite::query()
+            ->activePending()
             ->where('inviter_id', $user->id)
             ->where('tournament_id', $tournament->id)
-            ->where('status', TeamInvite::STATUS_PENDING)
             ->exists();
 
         if ($hasPendingTeamInvite) {
