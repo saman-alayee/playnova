@@ -444,7 +444,7 @@ export function useApi() {
       adjustUserWallet: (
         userId: number,
         data: { action: 'add' | 'subtract' | 'set'; amount: number; description?: string; allow_negative?: boolean },
-      ) => api.put<void>(`/admin/users/${userId}/wallet`, data),
+      ) => api.put<import('~/types/api').User>(`/admin/users/${userId}/wallet`, data),
 
       userActivity: (
         userId: number,

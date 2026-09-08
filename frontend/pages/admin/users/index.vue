@@ -66,6 +66,51 @@ const hasActiveFilters = computed(
   () => !!search.value.trim() || role.value !== 'all' || kyc.value !== 'all' || deposit.value !== 'all' || sort.value !== 'newest',
 )
 
+type WalletAction = 'add' | 'subtract' | 'set'
+type WalletDraft = {
+  action: WalletAction
+  amount: string
+  description: string
+  allowNegative: boolean
+}
+
+function emptyWalletDraft(): WalletDraft {
+  return {
+    action: 'add',
+    amount: '',
+    description: '',
+    allowNegative: false,
+  }
+}
+
+const walletDrafts = ref<Record<number, WalletDraft>>({})
+const walletBusyId = ref<number | null>(null)
+
+function walletDraft(userId: number): WalletDraft {
+  if (!walletDrafts.value[userId]) {
+    walletDrafts.value[userId] = emptyWalletDraft()
+  }
+  return walletDrafts.value[userId]
+}
+
+function resetWalletDraft(userId: number) {
+  walletDrafts.value[userId] = emptyWalletDraft()
+}
+
+watch(
+  () => users.value.map(user => user.id).join(','),
+  (ids, previousIds) => {
+    if (ids === previousIds) return
+
+    const next: Record<number, WalletDraft> = {}
+    for (const user of users.value) {
+      next[user.id] = emptyWalletDraft()
+    }
+    walletDrafts.value = next
+  },
+  { immediate: true },
+)
+
 function syncRoute() {
   const query: Record<string, string> = {}
   if (search.value.trim()) query.search = search.value.trim()
@@ -78,6 +123,7 @@ function syncRoute() {
 }
 
 function applyFilters() {
+  walletDrafts.value = {}
   page.value = 1
   syncRoute()
   refresh()
@@ -90,6 +136,7 @@ function resetFilters() {
   deposit.value = 'all'
   sort.value = 'newest'
   page.value = 1
+  walletDrafts.value = {}
   syncRoute()
   refresh()
 }
@@ -152,19 +199,45 @@ async function saveCodId(user: User, codId: string) {
   }
 }
 
-async function adjustWallet(
-  user: User,
-  action: 'add' | 'subtract' | 'set',
-  amount: number,
-  description?: string,
-  allowNegative?: boolean,
-) {
+function patchUser(updated: User) {
+  const items = data.value?.items
+  if (!items) return
+
+  const index = items.findIndex(item => item.id === updated.id)
+  if (index === -1) return
+
+  items[index] = { ...items[index], ...updated }
+}
+
+async function adjustWallet(user: User) {
+  const draft = walletDraft(user.id)
+  const amount = Number(draft.amount)
+
+  if (!Number.isFinite(amount) || amount < 0 || draft.amount.trim() === '') {
+    flash.value = { error: 'مبلغ معتبر وارد کنید.' }
+    return
+  }
+
+  walletBusyId.value = user.id
   try {
-    await api.admin.adjustUserWallet(user.id, { action, amount, description, allow_negative: allowNegative })
+    const updated = await api.admin.adjustUserWallet(user.id, {
+      action: draft.action,
+      amount,
+      description: draft.description.trim() || undefined,
+      allow_negative: draft.allowNegative,
+    })
+
+    if (updated) {
+      patchUser(updated)
+    }
+
+    resetWalletDraft(user.id)
     flash.value = { success: 'کیف پول به‌روز شد.' }
     await refresh()
   } catch (e: unknown) {
     flash.value = { error: (e as Error).message }
+  } finally {
+    walletBusyId.value = null
   }
 }
 
@@ -319,24 +392,48 @@ async function removeUser(user: User) {
           </form>
 
           <form
+            v-if="walletDrafts[u.id]"
+            :key="`wallet-form-${u.id}`"
             class="user-card__action-row user-card__action-row--wide user-card__wallet-form"
-            @submit.prevent="adjustWallet(u, ($event.target as HTMLFormElement).action.value as 'add' | 'subtract' | 'set', Number(($event.target as HTMLFormElement).amount.value), ($event.target as HTMLFormElement).description.value, ($event.target as HTMLFormElement).allow_negative?.checked)"
+            autocomplete="off"
+            @submit.prevent="adjustWallet(u)"
           >
             <span class="user-card__action-label">تنظیم کیف پول:</span>
-            <select name="action" class="user-card__select user-card__select--action">
+            <select v-model="walletDrafts[u.id].action" class="user-card__select user-card__select--action">
               <option value="add">+ افزایش</option>
               <option value="subtract">− کاهش</option>
               <option value="set">= تنظیم</option>
             </select>
             <span class="user-card__action-label user-card__action-label--sub">مبلغ:</span>
-            <input name="amount" type="number" min="0" placeholder="مبلغ" required class="user-card__input user-card__input--amount">
+            <input
+              v-model="walletDrafts[u.id].amount"
+              type="number"
+              min="0"
+              step="any"
+              placeholder="مبلغ"
+              required
+              autocomplete="off"
+              class="user-card__input user-card__input--amount"
+            >
             <span class="user-card__action-label user-card__action-label--sub">توضیح:</span>
-            <input name="description" type="text" placeholder="توضیح" class="user-card__input user-card__input--desc">
+            <input
+              v-model="walletDrafts[u.id].description"
+              type="text"
+              placeholder="توضیح"
+              autocomplete="off"
+              class="user-card__input user-card__input--desc"
+            >
             <label class="user-card__checkbox">
-              <input name="allow_negative" type="checkbox" class="accent-primary">
+              <input v-model="walletDrafts[u.id].allowNegative" type="checkbox" class="accent-primary">
               اجازه منفی
             </label>
-            <button type="submit" class="user-card__mini-btn user-card__mini-btn--success">اعمال</button>
+            <button
+              type="submit"
+              class="user-card__mini-btn user-card__mini-btn--success"
+              :disabled="walletBusyId === u.id"
+            >
+              {{ walletBusyId === u.id ? '...' : 'اعمال' }}
+            </button>
           </form>
         </div>
 
