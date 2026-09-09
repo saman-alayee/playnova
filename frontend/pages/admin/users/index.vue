@@ -67,49 +67,8 @@ const hasActiveFilters = computed(
 )
 
 type WalletAction = 'add' | 'subtract' | 'set'
-type WalletDraft = {
-  action: WalletAction
-  amount: string
-  description: string
-  allowNegative: boolean
-}
-
-function emptyWalletDraft(): WalletDraft {
-  return {
-    action: 'add',
-    amount: '',
-    description: '',
-    allowNegative: false,
-  }
-}
-
-const walletDrafts = ref<Record<number, WalletDraft>>({})
 const walletBusyId = ref<number | null>(null)
-
-function walletDraft(userId: number): WalletDraft {
-  if (!walletDrafts.value[userId]) {
-    walletDrafts.value[userId] = emptyWalletDraft()
-  }
-  return walletDrafts.value[userId]
-}
-
-function resetWalletDraft(userId: number) {
-  walletDrafts.value[userId] = emptyWalletDraft()
-}
-
-watch(
-  () => users.value.map(user => user.id).join(','),
-  (ids, previousIds) => {
-    if (ids === previousIds) return
-
-    const next: Record<number, WalletDraft> = {}
-    for (const user of users.value) {
-      next[user.id] = emptyWalletDraft()
-    }
-    walletDrafts.value = next
-  },
-  { immediate: true },
-)
+const walletOverrides = ref<Record<number, number>>({})
 
 function syncRoute() {
   const query: Record<string, string> = {}
@@ -123,7 +82,6 @@ function syncRoute() {
 }
 
 function applyFilters() {
-  walletDrafts.value = {}
   page.value = 1
   syncRoute()
   refresh()
@@ -136,7 +94,6 @@ function resetFilters() {
   deposit.value = 'all'
   sort.value = 'newest'
   page.value = 1
-  walletDrafts.value = {}
   syncRoute()
   refresh()
 }
@@ -199,43 +156,36 @@ async function saveCodId(user: User, codId: string) {
   }
 }
 
-function patchUser(updated: User) {
-  const items = data.value?.items
-  if (!items) return
-
-  const index = items.findIndex(item => item.id === updated.id)
-  if (index === -1) return
-
-  items[index] = { ...items[index], ...updated }
+function displayedWallet(user: User) {
+  return walletOverrides.value[user.id] ?? user.wallet
 }
 
-async function adjustWallet(user: User) {
-  const draft = walletDraft(user.id)
-  const amount = Number(draft.amount)
-
-  if (!Number.isFinite(amount) || amount < 0 || draft.amount.trim() === '') {
-    flash.value = { error: 'مبلغ معتبر وارد کنید.' }
-    return
-  }
-
+async function adjustWallet(
+  user: User,
+  payload: { action: WalletAction; amount: number; description?: string; allowNegative: boolean },
+) {
   walletBusyId.value = user.id
   try {
     const updated = await api.admin.adjustUserWallet(user.id, {
-      action: draft.action,
-      amount,
-      description: draft.description.trim() || undefined,
-      allow_negative: draft.allowNegative,
+      action: payload.action,
+      amount: payload.amount,
+      description: payload.description,
+      allow_negative: payload.allowNegative,
     })
 
-    if (updated) {
-      patchUser(updated)
+    const nextWallet = updated && 'wallet' in updated ? Number(updated.wallet) : Number.NaN
+    if (Number.isFinite(nextWallet)) {
+      walletOverrides.value = { ...walletOverrides.value, [user.id]: nextWallet }
     }
 
-    resetWalletDraft(user.id)
     flash.value = { success: 'کیف پول به‌روز شد.' }
     await refresh()
+    const rest = { ...walletOverrides.value }
+    delete rest[user.id]
+    walletOverrides.value = rest
   } catch (e: unknown) {
     flash.value = { error: (e as Error).message }
+    throw e
   } finally {
     walletBusyId.value = null
   }
@@ -313,7 +263,7 @@ async function removeUser(user: User) {
       </div>
     </form>
 
-    <div v-if="pending" class="admin-users-page__state">در حال بارگذاری...</div>
+    <div v-if="pending && users.length === 0" class="admin-users-page__state">در حال بارگذاری...</div>
     <div v-else-if="error" class="admin-users-page__state admin-users-page__state--error">
       {{ (error as Error).message }}
     </div>
@@ -334,7 +284,7 @@ async function removeUser(user: User) {
             <span class="user-card__badge" :class="kycClass(u)">{{ kycLabel(u) }}</span>
             <span v-if="u.first_deposit_done" class="user-card__badge is-deposit">واریز اول ✓</span>
           </div>
-          <div class="user-card__wallet">{{ formatToman(u.wallet) }}</div>
+          <div class="user-card__wallet">{{ formatToman(displayedWallet(u)) }}</div>
         </div>
 
         <div class="user-card__info">
@@ -391,50 +341,11 @@ async function removeUser(user: User) {
             <button type="submit" class="user-card__mini-btn">ذخیره</button>
           </form>
 
-          <form
-            v-if="walletDrafts[u.id]"
-            :key="`wallet-form-${u.id}`"
-            class="user-card__action-row user-card__action-row--wide user-card__wallet-form"
-            autocomplete="off"
-            @submit.prevent="adjustWallet(u)"
-          >
-            <span class="user-card__action-label">تنظیم کیف پول:</span>
-            <select v-model="walletDrafts[u.id].action" class="user-card__select user-card__select--action">
-              <option value="add">+ افزایش</option>
-              <option value="subtract">− کاهش</option>
-              <option value="set">= تنظیم</option>
-            </select>
-            <span class="user-card__action-label user-card__action-label--sub">مبلغ:</span>
-            <input
-              v-model="walletDrafts[u.id].amount"
-              type="number"
-              min="0"
-              step="any"
-              placeholder="مبلغ"
-              required
-              autocomplete="off"
-              class="user-card__input user-card__input--amount"
-            >
-            <span class="user-card__action-label user-card__action-label--sub">توضیح:</span>
-            <input
-              v-model="walletDrafts[u.id].description"
-              type="text"
-              placeholder="توضیح"
-              autocomplete="off"
-              class="user-card__input user-card__input--desc"
-            >
-            <label class="user-card__checkbox">
-              <input v-model="walletDrafts[u.id].allowNegative" type="checkbox" class="accent-primary">
-              اجازه منفی
-            </label>
-            <button
-              type="submit"
-              class="user-card__mini-btn user-card__mini-btn--success"
-              :disabled="walletBusyId === u.id"
-            >
-              {{ walletBusyId === u.id ? '...' : 'اعمال' }}
-            </button>
-          </form>
+          <AdminUserWalletForm
+            :key="u.id"
+            :busy="walletBusyId === u.id"
+            :apply="payload => adjustWallet(u, payload)"
+          />
         </div>
 
         <div class="user-card__footer">
