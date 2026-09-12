@@ -19,9 +19,9 @@ class AuthRegistrationService
         $username = trim((string) $request->input('username', ''));
         $request->merge(['username' => $username]);
 
-        $normalizedMobile = $this->normalizeMobileForLookup((string) $request->input('mobile', ''));
+        $normalizedMobile = $this->normalizeMobileForRegistration((string) $request->input('mobile', ''));
         if (! $normalizedMobile) {
-            return ['mobile' => 'شماره موبایل معتبر نیست.'];
+            return ['mobile' => $this->registrationMobileError((string) $request->input('mobile', ''))];
         }
         $request->merge(['mobile' => $normalizedMobile]);
 
@@ -215,7 +215,7 @@ class AuthRegistrationService
 
     public function normalizeMobileForLookup(string $mobile): ?string
     {
-        $digits = preg_replace('/\D+/', '', $mobile);
+        $digits = $this->mobileDigits($mobile);
         if ($digits === '') {
             return null;
         }
@@ -230,6 +230,47 @@ class AuthRegistrationService
         }
 
         return $digits;
+    }
+
+    /**
+     * Registration requires an explicit leading zero (or +98 / 98 country code).
+     * Numbers like 9123456789 are rejected so users must type 09123456789.
+     */
+    public function normalizeMobileForRegistration(string $mobile): ?string
+    {
+        $digits = $this->mobileDigits($mobile);
+        if ($digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($digits, '98') && strlen($digits) === 12) {
+            $digits = '0' . substr($digits, 2);
+        }
+
+        if (! str_starts_with($digits, '0')) {
+            return null;
+        }
+
+        if (! preg_match('/^09\d{9}$/', $digits)) {
+            return null;
+        }
+
+        return $digits;
+    }
+
+    public function registrationMobileError(string $mobile): string
+    {
+        $digits = $this->mobileDigits($mobile);
+        if ($digits !== '' && str_starts_with($digits, '9') && strlen($digits) === 10) {
+            return 'شماره موبایل باید با صفر شروع شود (مثال: 09123456789).';
+        }
+
+        return 'شماره موبایل معتبر نیست. شماره باید ۱۱ رقم و با ۰۹ شروع شود.';
+    }
+
+    private function mobileDigits(string $mobile): string
+    {
+        return preg_replace('/\D+/', '', User::asciiDigits($mobile)) ?: '';
     }
 
     public function markOtpResendCooldown(string $kind, string $token): void

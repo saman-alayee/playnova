@@ -39,11 +39,35 @@ if (auth.isAuthenticated) {
   await navigateTo(auth.isAdmin ? '/admin' : (auth.isSeatAdmin ? '/admin/tournament-seats' : '/profile'))
 }
 
+function toAsciiDigits(value: string): string {
+  return value.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+}
+
+function validateMobile(): string | null {
+  const digits = toAsciiDigits(form.mobile).replace(/\D+/g, '')
+  if (!digits) return 'شماره موبایل الزامی است.'
+  if (digits.startsWith('9') && digits.length === 10) {
+    return 'شماره موبایل باید با صفر شروع شود (مثال: 09123456789).'
+  }
+  if (!/^09\d{9}$/.test(digits) && !(digits.startsWith('98') && digits.length === 12 && /^989\d{9}$/.test(digits))) {
+    return 'شماره موبایل معتبر نیست. شماره باید ۱۱ رقم و با ۰۹ شروع شود.'
+  }
+  return null
+}
+
 async function submit() {
   loading.value = true
   errors.value = []
   fieldErrors.value = {}
   try {
+    const mobileError = validateMobile()
+    if (mobileError) {
+      fieldErrors.value = { mobile: [mobileError] }
+      errors.value = [mobileError]
+      return
+    }
+
     const captchaKey = captchaRef.value?.key
     if (!captchaKey || captchaAnswer.value === '') {
       errors.value = ['لطفاً پاسخ کد امنیتی را وارد کنید.']
@@ -106,9 +130,12 @@ async function submit() {
           required
           inputmode="numeric"
           autocomplete="tel"
+          maxlength="14"
           placeholder="09123456789"
+          dir="ltr"
         >
-        <p class="text-xs text-gray-500 mt-1">با همین شماره موبایل وارد حساب کاربری می‌شوید.</p>
+        <p v-if="fieldErrors.mobile?.[0]" class="text-xs text-danger mt-1">{{ fieldErrors.mobile[0] }}</p>
+        <p class="text-xs text-gray-500 mt-1">شماره باید با صفر شروع شود (مثال: 09123456789). با همین شماره وارد می‌شوید.</p>
       </div>
       <div>
         <label class="block text-sm mb-1 text-gray-400">آیدی کالاف <span class="text-gray-500">(نام شما در بازی کالاف دیوتی)</span></label>
